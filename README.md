@@ -1,46 +1,88 @@
 # Zyphvert
 
-All-in-one offline media converter and editor for Android, powered by FFmpeg.
-Native Kotlin + Jetpack Compose. Zero ads, zero tracking, fully offline.
+All-in-one **offline media converter and editor** for Android, powered by FFmpeg.
+Native Kotlin and Jetpack Compose. No ads, no tracking, no account. The app does not
+request the `INTERNET` permission, so your files never leave your phone.
 
-## Status: Milestone 1 — setup, signing, CI
+> **Status:** early development. The app shell and release pipeline are done; the
+> tools below are the planned feature set and are **not usable yet** (see
+> [Roadmap](#roadmap)).
 
-- [x] Project scaffold (Kotlin/Compose, Hilt, Room, WorkManager, Media3 deps wired)
-- [x] Signing: keystore generated, encrypted backup pushed to private vault repo,
-      signer script reused from vault (`scripts/sign-apk.sh`)
-- [x] `ci.yml` — lint, unit tests, debug build on every push/PR
-- [x] `release.yml` — signed per-ABI + universal APKs, AAB, apksigner
-      verification, SHA256 checksums, GitHub Release on `v*.*.*` tags
-- [ ] FFmpeg native build pipeline — see [docs/FFMPEG.md](docs/FFMPEG.md) for
-      current status; this is the blocker before any conversion feature work
-      starts
+## Features
+
+### Convert
+| Tool | What it does |
+|---|---|
+| **Image → Video** | Turn photos into a video or slideshow |
+| **Video → Images** | Export frames from a video as images |
+| **Video → Audio** | Extract the soundtrack from a video |
+| **Video → GIF/WebP** | Make animated GIF or WebP from a clip |
+| **Audio → Video** | Combine audio with a picture or clip into a video |
+| **Live/Motion Photos** | Convert Live Photos and Motion Photos to regular video or images |
+| **HEIC/AVIF Convert** | Convert HEIC and AVIF images to common formats |
+
+### Edit
+| Tool | What it does |
+|---|---|
+| **Trim & Cut** | Cut a clip to the part you want |
+| **Crop & Rotate** | Crop the frame and rotate or flip |
+| **Speed & Reverse** | Slow down, speed up or reverse playback |
+| **Filters** | Apply visual filters to video and images |
+| **Watermark** | Overlay a logo or text on your media |
+
+### Metadata and privacy
+| Tool | What it does |
+|---|---|
+| **Metadata Editor** | View and edit media metadata |
+| **Privacy Scrub** | Strip location and device info before sharing |
+
+### Create
+| Tool | What it does |
+|---|---|
+| **Sticker Maker** | Make stickers from images and clips |
+| **Ringtone Maker** | Cut audio into a ringtone |
+
+### Power tools
+| Tool | What it does |
+|---|---|
+| **Batch Queue** | Queue many conversions and run them in the background |
+| **Custom FFmpeg** | Run your own FFmpeg command for anything not covered above |
+
+### Principles
+- **Fully offline:** all processing happens on the device.
+- **No ads, no tracking, no analytics.**
+- **Scoped storage only:** files come from the Photo Picker, the Storage Access
+  Framework or MediaStore. No broad storage permission.
+- **Per-ABI builds:** `arm64-v8a`, `armeabi-v7a`, `x86_64`, plus a universal APK. Android 7.0+ (minSdk 24).
+
+## Roadmap
+
+- [x] App shell: Material 3 Compose UI with the tool-grid home screen (all tools are placeholders)
+- [x] CI: lint, unit tests and debug build on every push and PR
+- [x] Release pipeline: signed per-ABI and universal APKs, AAB, signature verification, SHA256 checksums, GitHub Release on `v*.*.*` tags
+- [ ] FFmpeg native build pipeline, the blocker for every conversion feature. Status in [docs/FFMPEG.md](docs/FFMPEG.md)
+- [ ] First real tool: media info (ffprobe) as the integration test
+- [ ] Convert tools, then edit tools, then metadata/privacy, create, batch and custom FFmpeg
 
 ## Tech stack
 
 Kotlin, Jetpack Compose, Material 3, MVVM, Hilt, Coroutines/Flow, Room,
-WorkManager + foreground service, Media3, scoped storage only (Photo Picker /
-SAF / MediaStore). minSdk 24.
+WorkManager, Media3, FFmpegKitNext (planned).
 
-## Building locally
+## Building
 
 ```
 ./gradlew assembleDebug
 ```
 
-Release builds require `key.properties` at the repo root (gitignored, never
-commit it) pointing at a local copy of the signing keystore. In CI this is
-generated at runtime from GitHub Actions secrets — see `release.yml`.
-
-## Required GitHub Actions secrets (for release builds)
+Release builds need a `key.properties` at the repo root (gitignored, never commit
+it). CI generates it at runtime from these GitHub Actions secrets:
 
 | Secret | Value |
 |---|---|
-| `KEYSTORE_BASE64` | base64-encoded `com.mounsokdara.zyphvert.p12` |
+| `KEYSTORE_BASE64` | base64 of `com.mounsokdara.zyphvert.p12` |
 | `KEYSTORE_PASSWORD` | keystore password |
 | `KEY_ALIAS` | `com.mounsokdara.zyphvert` |
 | `KEY_PASSWORD` | same as `KEYSTORE_PASSWORD` (PKCS12 requirement) |
 
-Add these under **Settings → Secrets and variables → Actions → New repository
-secret** on this repo. The keystore itself is backed up, encrypted, in the
-private vault repo — see that repo's `backups/zyphvert/` for the encrypted
-bundle and its README for the restore command.
+The signing key is backed up in the private vault repo under `zyphvert/`.
