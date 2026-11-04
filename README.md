@@ -68,21 +68,3 @@ request the `INTERNET` permission, so your files never leave your phone.
 
 Kotlin, Jetpack Compose, Material 3, MVVM, Hilt, Coroutines/Flow, Room,
 WorkManager, Media3, FFmpegKitNext (planned).
-
-## Building
-
-```
-./gradlew assembleDebug
-```
-
-Release builds need a `key.properties` at the repo root (gitignored, never commit
-it). CI generates it at runtime from these GitHub Actions secrets:
-
-| Secret | Value |
-|---|---|
-| `KEYSTORE_BASE64` | base64 of `com.mounsokdara.zyphvert.p12` |
-| `KEYSTORE_PASSWORD` | keystore password |
-| `KEY_ALIAS` | `com.mounsokdara.zyphvert` |
-| `KEY_PASSWORD` | same as `KEYSTORE_PASSWORD` (PKCS12 requirement) |
-
-The signing key is backed up in the private vault repo under `zyphvert/`.
