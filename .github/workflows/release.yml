@@ -6,10 +6,83 @@ on:
   workflow_dispatch:
 
 jobs:
-  release:
+
+  # ── One job per ABI, run in parallel ─────────────────────────────────────
+  build-apk:
+    name: APK · ${{ matrix.abi }}
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - abi: arm64-v8a
+            task: assembleRelease
+          - abi: armeabi-v7a
+            task: assembleRelease
+          - abi: x86_64
+            task: assembleRelease
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Fetch FFmpeg AAR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/fetch-ffmpeg-aar.sh
+
+      - name: Decode keystore
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/release.p12"
+
+      - name: Write key.properties
+        run: |
+          cat > key.properties <<PROPS
+          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
+          keyPassword=${{ secrets.KEY_PASSWORD }}
+          keyAlias=${{ secrets.KEY_ALIAS }}
+          storeFile=$RUNNER_TEMP/release.p12
+          PROPS
+
+      - name: Build ${{ matrix.abi }} APK
+        # -Pandroid.injected.build.abi restricts the ABI split to one arch only,
+        # so Gradle skips packaging the other .so files and the build is faster.
+        run: >
+          ./gradlew ${{ matrix.task }}
+          -Pandroid.injected.build.abi=${{ matrix.abi }}
+          --no-daemon
+
+      - name: Remove key.properties
+        if: always()
+        run: rm -f key.properties
+
+      - name: Shred keystore
+        if: always()
+        run: shred -u "$RUNNER_TEMP/release.p12" 2>/dev/null || rm -f "$RUNNER_TEMP/release.p12"
+
+      - name: Upload ${{ matrix.abi }} APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-${{ matrix.abi }}
+          # ABI splits produce files like *-arm64-v8a-release.apk
+          path: app/build/outputs/apk/release/*${{ matrix.abi }}*.apk
+          if-no-files-found: error
+
+  # ── Universal APK + AAB (no ABI filter — includes all architectures) ──────
+  build-universal:
+    name: APK · universal + AAB
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -31,30 +104,74 @@ jobs:
         run: scripts/fetch-ffmpeg-aar.sh
 
       - name: Decode keystore
-        run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/release.p12"
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/release.p12"
 
-      - name: Write key.properties (not committed — runtime only)
+      - name: Write key.properties
         run: |
-          cat > key.properties <<EOF
+          cat > key.properties <<PROPS
           storePassword=${{ secrets.KEYSTORE_PASSWORD }}
           keyPassword=${{ secrets.KEY_PASSWORD }}
           keyAlias=${{ secrets.KEY_ALIAS }}
           storeFile=$RUNNER_TEMP/release.p12
-          EOF
+          PROPS
 
-      - name: Build signed release APKs (per-ABI + universal) and AAB
+      - name: Build universal APK + AAB
         run: ./gradlew assembleRelease bundleRelease --no-daemon
 
-      - name: Remove key.properties (secrets no longer needed on disk)
+      - name: Remove key.properties
         if: always()
         run: rm -f key.properties
 
-      - name: Verify every APK with apksigner (reused signer script)
+      - name: Shred keystore
+        if: always()
+        run: shred -u "$RUNNER_TEMP/release.p12" 2>/dev/null || rm -f "$RUNNER_TEMP/release.p12"
+
+      - name: Upload universal APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-universal
+          path: app/build/outputs/apk/release/*universal*.apk
+          if-no-files-found: error
+
+      - name: Upload AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: aab-release
+          path: app/build/outputs/bundle/release/*.aab
+          if-no-files-found: error
+
+  # ── Collect, verify signatures, checksum, publish ─────────────────────────
+  publish:
+    name: Verify & Publish
+    needs: [build-apk, build-universal]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Android SDK build-tools (for apksigner)
+        uses: android-actions/setup-android@v3
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Collect into dist/
         run: |
+          mkdir -p dist
+          find artifacts -name "*.apk" -exec cp {} dist/ \;
+          find artifacts -name "*.aab" -exec cp {} dist/ \;
+          echo "── dist contents ──"
+          ls -lh dist/
+
+      - name: Verify every APK with apksigner
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/release.p12"
           chmod +x scripts/sign-apk.sh
           mkdir -p verified
-          for apk in app/build/outputs/apk/release/*.apk; do
+          for apk in dist/*.apk; do
             name="$(basename "$apk")"
             echo "::group::Verifying $name"
             KS_FILE="$RUNNER_TEMP/release.p12" \
@@ -64,29 +181,24 @@ jobs:
             scripts/sign-apk.sh "$apk" "verified/$name"
             echo "::endgroup::"
           done
-
-      - name: Shred decoded keystore
-        if: always()
-        run: shred -u "$RUNNER_TEMP/release.p12" 2>/dev/null || rm -f "$RUNNER_TEMP/release.p12"
+          shred -u "$RUNNER_TEMP/release.p12" 2>/dev/null || rm -f "$RUNNER_TEMP/release.p12"
+          cp dist/*.aab verified/ 2>/dev/null || true
 
       - name: Generate SHA256 checksums
         run: |
-          mkdir -p dist
-          cp verified/*.apk dist/
-          cp app/build/outputs/bundle/release/*.aab dist/
-          cd dist
+          cd verified
           sha256sum * > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
-      - name: Upload build artifacts
+      - name: Upload combined release artifacts
         uses: actions/upload-artifact@v4
         with:
           name: release-build
-          path: dist/*
+          path: verified/*
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
-          files: dist/*
+          files: verified/*
