@@ -20,7 +20,15 @@ if (keystorePropsFile.exists()) {
     keystoreProps.load(FileInputStream(keystorePropsFile))
 }
 
+val ffmpegAar = file("libs/ffmpeg-kit-next.aar")
+
 android {
+    // Real FFmpeg engine only when the AAR is present; otherwise a stub so the app still builds.
+    sourceSets {
+        getByName("main") {
+            java.srcDir(if (ffmpegAar.exists()) "src/engineReal/kotlin" else "src/engineStub/kotlin")
+        }
+    }
     namespace = "com.mounsokdara.zyphvert"
     compileSdk = 35
 
@@ -106,6 +114,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("androidx.navigation:navigation-compose:2.8.4")
 
     // Hilt
@@ -132,8 +141,8 @@ dependencies {
     // has produced libs/ffmpeg-kit-next-release.aar in CI.
     // Built by .github/workflows/ffmpeg-aar.yml, fetched by scripts/fetch-ffmpeg-aar.sh.
     // Only wired in once the file exists, so builds stay green before the first AAR is published.
-    if (file("libs/ffmpeg-kit-next.aar").exists()) {
-        implementation(files("libs/ffmpeg-kit-next.aar"))
+    if (ffmpegAar.exists()) {
+        implementation(files(ffmpegAar))
         implementation("com.arthenica:smart-exception-java:0.2.1")
     }
 

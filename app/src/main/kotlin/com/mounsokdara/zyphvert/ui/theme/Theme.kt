@@ -73,9 +73,10 @@ fun amoledColorScheme(base: ColorScheme = DarkColors) = base.copy(
 fun ZyphvertTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = true,
+    amoled: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = when {
+    val base = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
@@ -83,6 +84,8 @@ fun ZyphvertTheme(
         darkTheme -> DarkColors
         else -> LightColors
     }
+
+    val colorScheme = if (darkTheme && amoled) amoledColorScheme(base) else base
 
     MaterialTheme(
         colorScheme = colorScheme,
