@@ -9,6 +9,11 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
+// Single source of truth for the app version: /version.txt (bump it, nothing else).
+val versionProps = Properties().apply {
+    rootProject.file("version.txt").inputStream().use { load(it) }
+}
+
 val keystorePropsFile = rootProject.file("key.properties")
 val keystoreProps = Properties()
 if (keystorePropsFile.exists()) {
@@ -23,8 +28,8 @@ android {
         applicationId = "com.mounsokdara.zyphvert"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = versionProps.getProperty("VERSION_CODE").trim().toInt()
+        versionName = versionProps.getProperty("VERSION_NAME").trim()
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }

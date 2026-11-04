@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Framework parent: no Material Components / AppCompat dependency needed.
+         Compose draws the real UI theme (ui/theme/Theme.kt). -->
+    <style name="Theme.Zyphvert" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>
