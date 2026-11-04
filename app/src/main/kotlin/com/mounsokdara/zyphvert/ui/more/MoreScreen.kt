@@ -16,12 +16,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.mounsokdara.zyphvert.ui.components.CenteredContent
 import com.mounsokdara.zyphvert.ui.components.MoreCard
 
 enum class MoreRoute { Settings, Terminal, About, Licenses }
 
 @Composable
 fun MoreScreen(bottomPadding: Dp, onOpen: (MoreRoute) -> Unit, modifier: Modifier = Modifier) {
+    CenteredContent(maxWidth = 720.dp) {
     Column(
         modifier = modifier
             .statusBarsPadding()
@@ -37,5 +39,6 @@ fun MoreScreen(bottomPadding: Dp, onOpen: (MoreRoute) -> Unit, modifier: Modifie
         MoreCard(Icons.Rounded.Settings, "Settings", "Theme, color, permissions, and data", { onOpen(MoreRoute.Settings) })
         MoreCard(Icons.Rounded.Terminal, "FFmpeg terminal", "Run ffmpeg and ffprobe commands", { onOpen(MoreRoute.Terminal) })
         MoreCard(Icons.Rounded.Info, "About", "Version, license, and source", { onOpen(MoreRoute.About) })
+    }
     }
 }

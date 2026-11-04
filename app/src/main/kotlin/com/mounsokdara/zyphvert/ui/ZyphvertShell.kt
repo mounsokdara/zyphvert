@@ -8,6 +8,14 @@ import androidx.compose.material.icons.rounded.Queue
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Modifier
+import com.mounsokdara.zyphvert.ui.components.isWideLayout
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -53,10 +61,11 @@ fun ZyphvertShell(settingsVm: SettingsViewModel, hapticsEnabled: Boolean) {
     }
 
     val inSub = (current == Destination.More && sub != null) || openToolId != null
+    val wide = isWideLayout()
 
     Scaffold(
         bottomBar = {
-            if (!inSub) {
+            if (!inSub && !wide) {
                 NavigationBar {
                     Destination.entries.forEach { dest ->
                         NavigationBarItem(
@@ -71,6 +80,20 @@ fun ZyphvertShell(settingsVm: SettingsViewModel, hapticsEnabled: Boolean) {
         },
     ) { padding ->
         val bottom = padding.calculateBottomPadding()
+        Row(Modifier.fillMaxSize()) {
+        if (wide && !inSub) {
+            NavigationRail {
+                Destination.entries.forEach { dest ->
+                    NavigationRailItem(
+                        selected = current == dest,
+                        onClick = { tick(); current = dest },
+                        icon = { Icon(dest.icon, contentDescription = null) },
+                        label = { Text(dest.label) },
+                    )
+                }
+            }
+        }
+        Box(Modifier.weight(1f).fillMaxSize()) {
 
         // Tool screen overlays everything when a tool card is tapped
         val activeTool = openToolId?.let { id -> allTools.find { it.id == id } }
@@ -81,10 +104,7 @@ fun ZyphvertShell(settingsVm: SettingsViewModel, hapticsEnabled: Boolean) {
             } else {
                 ToolScreen(tool = activeTool, onBack = { openToolId = null })
             }
-            return@Scaffold
-        }
-
-        when (current) {
+        } else when (current) {
             Destination.Tools -> HomeScreen(
                 bottomPadding = bottom,
                 onToolClick = { tool ->
@@ -100,6 +120,8 @@ fun ZyphvertShell(settingsVm: SettingsViewModel, hapticsEnabled: Boolean) {
                 MoreRoute.About -> AboutScreen(onBack = { sub = null }, onLicenses = { sub = MoreRoute.Licenses })
                 MoreRoute.Licenses -> LicensesScreen(onBack = { sub = MoreRoute.About })
             }
+        }
+        }
         }
     }
 }

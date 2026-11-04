@@ -72,7 +72,7 @@ fun HeroCard(modifier: Modifier = Modifier) {
                 Text(
                     "No ads, no tracking, no account. Zyphvert doesn’t even ask for the internet permission.",
                     style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.fillMaxWidth(0.82f),
+                    modifier = Modifier.fillMaxWidth(if (isWideLayout()) 0.6f else 0.82f),
                 )
             }
         }

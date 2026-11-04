@@ -22,6 +22,12 @@ if (keystorePropsFile.exists()) {
 
 val ffmpegAar = file("libs/ffmpeg-kit-next.aar")
 
+// CI builds one APK per job: ./gradlew assembleX -PtargetAbi=arm64-v8a
+// Unset (local builds, universal job) keeps the normal 3 ABIs + universal split setup.
+val targetAbi: String? = (findProperty("targetAbi") as String?)?.takeIf { it.isNotBlank() }
+val allAbis = listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+require(targetAbi == null || targetAbi in allAbis) { "targetAbi must be one of $allAbis, got $targetAbi" }
+
 android {
     // Real FFmpeg engine only when the AAR is present; otherwise a stub so the app still builds.
     sourceSets {
@@ -42,10 +48,10 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
 
-        ndk {
-            // arm64-v8a first-class (FFmpegKitNext build target); others added
-            // once scripts/build-ffmpeg-kit.sh produces their .so sets.
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+        // AGP forbids ndk.abiFilters together with ABI splits. So: single-ABI build (targetAbi set)
+        // filters here and disables splits below; the default build uses splits only.
+        if (targetAbi != null) {
+            ndk { abiFilters += targetAbi }
         }
     }
 
@@ -77,9 +83,10 @@ android {
 
     splits {
         abi {
-            isEnable = true
+            // Single-ABI build (targetAbi set): no splits, one APK that contains just that ABI.
+            isEnable = targetAbi == null
             reset()
-            include("arm64-v8a", "armeabi-v7a", "x86_64")
+            include(*allAbis.toTypedArray())
             isUniversalApk = true
         }
     }

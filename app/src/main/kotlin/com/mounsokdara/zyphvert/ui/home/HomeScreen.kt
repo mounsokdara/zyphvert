@@ -38,7 +38,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.mounsokdara.zyphvert.ui.components.CenteredContent
 import com.mounsokdara.zyphvert.ui.components.HeroCard
+import com.mounsokdara.zyphvert.ui.components.isWideLayout
 import com.mounsokdara.zyphvert.ui.components.SearchField
 import com.mounsokdara.zyphvert.ui.components.ToolCard
 
@@ -80,17 +82,20 @@ fun HomeScreen(
             )
         },
     ) { inner ->
+        val wide = isWideLayout()
+        val gutter = if (wide) 24.dp else 16.dp
+        CenteredContent(maxWidth = 1200.dp) {
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 156.dp),
+            columns = GridCells.Adaptive(minSize = if (wide) 200.dp else 156.dp),
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
-                start = 16.dp,
-                end = 16.dp,
+                start = gutter,
+                end = gutter,
                 top = inner.calculateTopPadding() + 4.dp,
                 bottom = bottomPadding + 24.dp,
             ),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(if (wide) 16.dp else 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(if (wide) 16.dp else 12.dp),
         ) {
             item(key = "search", span = { GridItemSpan(maxLineSpan) }) {
                 SearchField(
@@ -136,6 +141,7 @@ fun HomeScreen(
                     ToolCard(tool = tool, onClick = { onToolClick(tool) })
                 }
             }
+        }
         }
     }
 }

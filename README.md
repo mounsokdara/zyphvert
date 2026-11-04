@@ -53,7 +53,8 @@ request the `INTERNET` permission, so your files never leave your phone.
 - **No ads, no tracking, no analytics.**
 - **Scoped storage only:** files come from the Photo Picker, the Storage Access
   Framework or MediaStore. No broad storage permission.
-- **Per-ABI builds:** `arm64-v8a`, `armeabi-v7a`, `x86_64`, plus a universal APK. Android 7.0+ (minSdk 24).
+- **Per-ABI builds:** `arm64-v8a`, `armeabi-v7a`, `x86_64`, plus a universal APK, each built by its own CI job so every artifact zip holds a single APK. Android 7.0+ (minSdk 24).
+- **Adaptive layout:** bottom bar on phones, navigation rail and width-capped content on tablets.
 
 ## Roadmap
 

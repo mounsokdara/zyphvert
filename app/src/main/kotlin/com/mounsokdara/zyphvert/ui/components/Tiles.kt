@@ -134,6 +134,7 @@ fun SubScreenScaffold(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
             )
         },
-        content = content,
-    )
+    ) { pad ->
+        CenteredContent { content(pad) }
+    }
 }
