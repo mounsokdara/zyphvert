@@ -130,7 +130,12 @@ dependencies {
     // FFmpegKitNext — built locally from source (official arthenica continuation).
     // See docs/FFMPEG.md. Placeholder module ref until scripts/build-ffmpeg-kit.sh
     // has produced libs/ffmpeg-kit-next-release.aar in CI.
-    // implementation(files("libs/ffmpeg-kit-next-release.aar"))
+    // Built by .github/workflows/ffmpeg-aar.yml, fetched by scripts/fetch-ffmpeg-aar.sh.
+    // Only wired in once the file exists, so builds stay green before the first AAR is published.
+    if (file("libs/ffmpeg-kit-next.aar").exists()) {
+        implementation(files("libs/ffmpeg-kit-next.aar"))
+        implementation("com.arthenica:smart-exception-java:0.2.1")
+    }
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")

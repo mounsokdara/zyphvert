@@ -1,0 +1,131 @@
+name: Build FFmpegKitNext AAR
+
+# One-time (or on version bump) build of the FFmpeg native library from source.
+# Publishes ffmpeg-kit-next.aar as an asset on release "ffmpeg-kit-aar-<version>";
+# ci.yml and release.yml download it instead of rebuilding.
+# LGPL-only build: no --enable-gpl, so no x264/x265. H.264/HEVC encoding uses Android MediaCodec.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "ffmpeg-kit-next tag"
+        default: "v9.0.2"
+        required: true
+
+env:
+  ANDROID_PLATFORM_VERSION: "34"
+  ANDROID_BUILD_TOOLS_VERSION: "35.0.0"
+  ANDROID_NDK_VERSION: "27.3.13750724"
+  ANDROID_CMAKE_VERSION: "3.22.1"
+
+jobs:
+  build:
+    name: ${{ matrix.arch }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64-v8a, arm-v7a-neon, x86-64]
+    steps:
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            autoconf automake libtool pkg-config gettext autopoint \
+            cmake bison meson ninja-build nasm yasm gperf ragel texinfo autogen \
+            groff gtk-doc-tools libtasn1-6-dev tcl doxygen \
+            gcc g++ make patch file findutils gawk rsync \
+            python3 perl ruby curl wget git zip unzip xz-utils tar gzip sed grep diffutils bash which
+
+      - name: Android SDK and NDK
+        run: |
+          set -e
+          SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          SDK_MANAGER="${SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
+          yes 2>/dev/null | "${SDK_MANAGER}" --licenses >/dev/null || true
+          "${SDK_MANAGER}" --install "platform-tools" "platforms;android-${ANDROID_PLATFORM_VERSION}" \
+            "build-tools;${ANDROID_BUILD_TOOLS_VERSION}" "ndk;${ANDROID_NDK_VERSION}" "cmake;${ANDROID_CMAKE_VERSION}"
+          {
+            echo "ANDROID_SDK_ROOT=${SDK_ROOT}"
+            echo "ANDROID_HOME=${SDK_ROOT}"
+            echo "ANDROID_NDK_ROOT=${SDK_ROOT}/ndk/${ANDROID_NDK_VERSION}"
+          } >> "$GITHUB_ENV"
+
+      - name: Fetch FFmpegKitNext source
+        run: git clone --depth 1 --branch "${{ inputs.version }}" https://github.com/arthenica/ffmpeg-kit-next.git fkn
+
+      - name: Build (${{ matrix.arch }})
+        working-directory: fkn
+        run: ./android.sh --arch=${{ matrix.arch }} --enable-lib-all --disable-lib-gnutls --enable-lib-android-media-codec
+
+      - name: Show build log
+        if: always()
+        working-directory: fkn
+        run: tail -n 200 build.log || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aar-${{ matrix.arch }}
+          path: fkn/prebuilt/bundle-android-aar-24-maven/**/*.aar
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: parts
+
+      - name: Merge per-ABI AARs into one
+        run: |
+          python3 - <<'PY'
+          import glob, zipfile
+          parts = {p.split('/')[1]: glob.glob(p + '/**/*.aar', recursive=True)[0]
+                   for p in glob.glob('parts/aar-*')}
+          print(parts)
+          base = parts['aar-arm64-v8a']
+          with zipfile.ZipFile(base) as z, zipfile.ZipFile('ffmpeg-kit-next.aar', 'w', zipfile.ZIP_DEFLATED) as out:
+              have = set()
+              for i in z.infolist():
+                  out.writestr(i, z.read(i.filename)); have.add(i.filename)
+              for name, path in parts.items():
+                  if name == 'aar-arm64-v8a': continue
+                  with zipfile.ZipFile(path) as o:
+                      for i in o.infolist():
+                          if i.filename.startswith('jni/') and not i.is_dir() and i.filename not in have:
+                              out.writestr(i, o.read(i.filename)); have.add(i.filename)
+          PY
+          unzip -l ffmpeg-kit-next.aar | grep -E "jni/.*\.so" | awk '{print $4}'
+
+      - name: Verify 16 KB page alignment (arm64-v8a, x86_64)
+        run: |
+          mkdir x && cd x && unzip -q ../ffmpeg-kit-next.aar 'jni/*'
+          bad=0
+          for f in jni/arm64-v8a/*.so jni/x86_64/*.so; do
+            a=$(readelf -lW "$f" | awk '/LOAD/ {print $NF}' | sort -u | tr '\n' ' ')
+            echo "$f: $a"
+            for v in $a; do [ "$v" = "0x4000" ] || [ "$v" = "0x10000" ] || bad=1; done
+          done
+          [ $bad = 0 ] || { echo "::error::native libs not 16 KB aligned"; exit 1; }
+
+      - name: Publish release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="ffmpeg-kit-aar-${{ inputs.version }}"
+          sha256sum ffmpeg-kit-next.aar | tee ffmpeg-kit-next.aar.sha256
+          gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create "$TAG" -R "$GITHUB_REPOSITORY" --prerelease \
+              --title "FFmpegKitNext ${{ inputs.version }} (LGPL, MediaCodec)" \
+              --notes "Native FFmpeg library built from arthenica/ffmpeg-kit-next ${{ inputs.version }} by ffmpeg-aar.yml. LGPL v3 build, no GPL codecs."
+          gh release upload "$TAG" ffmpeg-kit-next.aar ffmpeg-kit-next.aar.sha256 --clobber -R "$GITHUB_REPOSITORY"
