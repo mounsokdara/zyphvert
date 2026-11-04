@@ -1,0 +1,28 @@
+# Keystore / signing — NEVER commit these
+*.jks
+*.keystore
+*.p12
+key.properties
+credentials.env
+*.keystore.b64
+
+# Gradle / Android build output
+.gradle/
+build/
+app/build/
+local.properties
+*.apk
+*.aab
+.cxx/
+
+# FFmpeg native libs built locally (fetched/built in CI, not committed)
+app/libs/*.aar
+libs/*.aar
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+
+# Logs
+*.log
