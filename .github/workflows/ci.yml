@@ -8,6 +8,11 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
 
@@ -21,13 +26,23 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Lint
-        run: ./gradlew lint --no-daemon
+        run: ./gradlew lint --no-daemon 2>&1 | tee -a /tmp/build.log
 
       - name: Unit tests
-        run: ./gradlew testDebugUnitTest --no-daemon
+        run: ./gradlew testDebugUnitTest --no-daemon 2>&1 | tee -a /tmp/build.log
 
       - name: Assemble debug
-        run: ./gradlew assembleDebug --no-daemon
+        run: ./gradlew assembleDebug --no-daemon 2>&1 | tee -a /tmp/build.log
+
+      - name: Publish build log to ci-logs branch (on failure)
+        if: failure()
+        run: |
+          mkdir /tmp/logs && cp /tmp/build.log /tmp/logs/ || true
+          cp app/build/reports/lint-results-debug.xml /tmp/logs/ 2>/dev/null || true
+          cd /tmp/logs && git init -q && git checkout -q -b ci-logs
+          git config user.name github-actions && git config user.email actions@users.noreply.github.com
+          git add . && git commit -qm "build log for ${{ github.sha }}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ci-logs
 
       - name: Upload lint report
         if: always()
