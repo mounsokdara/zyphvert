@@ -141,7 +141,7 @@ val allTools: List<Tool> = listOf(
         "Convert any video to whatever you need — another video, audio, a GIF, or images.",
         Icons.Rounded.Movie,
         ToolCategory.Convert,
-        formats = listOf("MP4", "MKV", "MOV", "WebM", "AVI", "GIF", "WebP", "APNG", "Images", "Remux"),
+        formats = listOf("MP4", "MKV", "MOV", "WebM", "AVI", "WMV", "3GP", "TS", "FLV", "MPG", "GIF", "WebP", "APNG", "Live Photo", "Images", "Remux"),
     ),
     Tool(
         "audio",
@@ -149,7 +149,7 @@ val allTools: List<Tool> = listOf(
         "Convert any audio to whatever you need — MP3, AAC, WAV, FLAC, OGG, OPUS, or a video.",
         Icons.Rounded.GraphicEq,
         ToolCategory.Convert,
-        formats = listOf("MP3", "AAC", "M4A", "M4B", "OPUS", "OGG", "FLAC", "WAV", "ALAC", "AIFF", "WMA", "AC3"),
+        formats = listOf("MP3", "AAC", "M4A", "M4B", "OPUS", "OGG", "TG VOICE", "OGA", "MKA", "FLAC", "WAV", "ALAC", "AIFF", "WMA", "WV", "AC3"),
     ),
     Tool(
         "image",
@@ -157,7 +157,7 @@ val allTools: List<Tool> = listOf(
         "Convert any image, including HEIC and Live Photos, to JPG, PNG, WebP, GIF, or a video.",
         Icons.Rounded.Image,
         ToolCategory.Convert,
-        formats = listOf("JPG", "PNG", "WebP", "BMP", "TIFF", "GIF"),
+        formats = listOf("JPG", "PNG", "WebP", "BMP", "TIFF", "GIF", "JP2", "TGA", "ICO", "QOI", "Live Photo"),
     ),
 
     Tool("trim", "Trim & Cut", "Cut a clip down to the part you want", Icons.Rounded.ContentCut, ToolCategory.Edit),

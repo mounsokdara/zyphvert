@@ -90,6 +90,14 @@ private fun videoJobs(r: ToolRequest, files: List<PickedFile>, fmtKey: String, s
                 val out = r.out("Video", f, fmt.ext, slot = slot)
                 r.job(f, out, "$inp -map ${q("0:v?")} -map ${q("0:a?")} -c copy ${out.path}")
             }
+            VFmt.Kind.LivePair -> {
+                // iPhone-style pair: Zyphvert/Live Photos/<name>.mov (max 3 s) next to <name>.jpg
+                val out = r.out("Video", f, "mov", slot = slot, dir = OutputPaths.dir(r.ctx, "Live Photos"))
+                val id = java.util.UUID.randomUUID().toString().uppercase()
+                val vf = listOfNotNull(scale, if (fps > 0) "fps=$fps" else null, VID_TAIL).joinToString(",")
+                r.job(f, out, "$inp -t 3 -vf ${q(vf)} -c:v h264_mediacodec -b:v 6M -c:a aac -b:a 128k " +
+                    "-movflags use_metadata_tags -metadata com.apple.quicktime.content.identifier=$id -f mov ${out.path}")
+            }
             VFmt.Kind.Gif -> {
                 val out = r.out("Images", f, "gif", slot = slot)
                 val vf = "fps=${if (fps > 0) fps else 12},${scale?.replace("scale=-2", "scale=-1") ?: "scale=480:-1"}:flags=lanczos," +
@@ -127,6 +135,8 @@ private fun videoJobs(r: ToolRequest, files: List<PickedFile>, fmtKey: String, s
                 val crf = when (qual) { "high" -> 28; "low" -> 40; "tiny" -> 48; else -> 34 }
                 val v = when (fmt.kind) {
                     VFmt.Kind.HwHevc -> "-c:v hevc_mediacodec -b:v ${vk ?: (hw * 6 / 10)}k"
+                    VFmt.Kind.Wmv -> "-c:v wmv2 " + (if (vk != null) "-b:v ${vk}k" else "-q:v $mq")
+                    VFmt.Kind.Mpeg2 -> "-c:v mpeg2video " + (if (vk != null) "-b:v ${vk}k" else "-q:v $mq")
                     VFmt.Kind.Mpeg4 -> "-c:v mpeg4 " + (if (vk != null) "-b:v ${vk}k" else "-q:v $mq")
                     VFmt.Kind.Vp9 -> "-c:v libvpx-vp9 -deadline realtime -cpu-used 8 -row-mt 1 " + (if (vk != null) "-b:v ${vk}k" else "-crf $crf -b:v 0")
                     VFmt.Kind.Vp8 -> "-c:v libvpx -deadline realtime -cpu-used 8 " + (if (vk != null) "-b:v ${vk}k" else "-crf ${crf / 3 + 4} -b:v 2M")
@@ -134,8 +144,10 @@ private fun videoJobs(r: ToolRequest, files: List<PickedFile>, fmtKey: String, s
                 }
                 val a = when {
                     aKey == "mute" -> "-an"
-                    fmt.ext == "webm" -> "-c:a libopus -b:a ${abr}k"
+                    fmt.ext == "webm" || (fmt.ext == "mkv" && fmt.kind == VFmt.Kind.Vp9) -> "-c:a libopus -b:a ${abr}k"
                     fmt.ext == "avi" -> "-c:a libmp3lame -b:a ${abr}k"
+                    fmt.ext == "wmv" -> "-c:a wmav2 -b:a ${abr}k"
+                    fmt.ext == "mpg" -> "-c:a mp2 -b:a ${abr}k"
                     else -> "-c:a aac -b:a ${abr}k"
                 }
                 r.job(f, out, "$inp -vf ${q(vf)} $v $a ${out.path}")
@@ -149,7 +161,7 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
     // ================================================================ CONVERT
     ToolSpec(
         id = "video",
-        intro = "Convert any video to any format: MP4, MKV, WebM, MOV, AVI, GIF, images and more. Pick a preset for WhatsApp, Discord, TikTok or YouTube, or tune every setting yourself.",
+        intro = "Convert any video to any format: MP4, MKV, WebM, MOV, AVI, WMV, GIF, images, even a Live Photo pair and more. Pick a preset for WhatsApp, Discord, TikTok or YouTube, or tune every setting yourself.",
         inputs = listOf(InputSlot("media", "Videos", InKind.Video, multiple = true)),
         options = listOf(
             Opt.Name(),
@@ -157,12 +169,23 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
             Opt.Choice("vfmt", "Format", videoItems),
             Opt.Choice("res", "Resolution", resItems),
             Opt.Choice("fps", "Frame rate", fpsItems),
-            Opt.Choice("vq", "Quality", qualityItems, showIf = { videoKind(it) in setOf(VFmt.Kind.Hw264, VFmt.Kind.HwHevc, VFmt.Kind.Mpeg4, VFmt.Kind.Vp9, VFmt.Kind.Vp8) }),
-            Opt.Choice("vaud", "Audio", vAudioItems, showIf = { videoKind(it) in setOf(VFmt.Kind.Hw264, VFmt.Kind.HwHevc, VFmt.Kind.Mpeg4, VFmt.Kind.Vp9, VFmt.Kind.Vp8) }),
+            Opt.Choice("vq", "Quality", qualityItems, showIf = { videoKind(it) in setOf(VFmt.Kind.Hw264, VFmt.Kind.HwHevc, VFmt.Kind.Mpeg4, VFmt.Kind.Vp9, VFmt.Kind.Vp8, VFmt.Kind.Wmv, VFmt.Kind.Mpeg2, VFmt.Kind.LivePair) }),
+            Opt.Choice("vaud", "Audio", vAudioItems, showIf = { videoKind(it) in setOf(VFmt.Kind.Hw264, VFmt.Kind.HwHevc, VFmt.Kind.Mpeg4, VFmt.Kind.Vp9, VFmt.Kind.Vp8, VFmt.Kind.Wmv, VFmt.Kind.Mpeg2, VFmt.Kind.LivePair) }),
             Opt.Range("range", "Start time / End time"),
-            Opt.Text("target", "Target file size (MB)", "Empty = no limit", showIf = { videoKind(it) in setOf(VFmt.Kind.Hw264, VFmt.Kind.HwHevc, VFmt.Kind.Mpeg4, VFmt.Kind.Vp9, VFmt.Kind.Vp8) }, advanced = true),
+            Opt.Text("target", "Target file size (MB)", "Empty = no limit", showIf = { videoKind(it) in setOf(VFmt.Kind.Hw264, VFmt.Kind.HwHevc, VFmt.Kind.Mpeg4, VFmt.Kind.Vp9, VFmt.Kind.Vp8, VFmt.Kind.Wmv, VFmt.Kind.Mpeg2, VFmt.Kind.LivePair) }, advanced = true),
         ),
-        build = { r -> videoJobs(r, r.files("media"), r.str("vfmt").ifEmpty { "mp4_h264" }) },
+        build = { r ->
+            val key = r.str("vfmt").ifEmpty { "mp4_h264" }
+            val files = r.files("media")
+            val jobs = videoJobs(r, files, key)
+            if (videoFmt(key).kind != VFmt.Kind.LivePair) jobs
+            else jobs.flatMapIndexed { i, j ->
+                // the matching still, saved beside the clip so the two stay a pair
+                val mov = File(j.output!!)
+                val still = File(mov.parentFile, mov.nameWithoutExtension + ".jpg")
+                listOf(j, ToolJob(r.toolTitle, files[i].name, still.path, "-i ${r.saf(files[i])} -frames:v 1 -q:v 2 ${still.path}"))
+            }
+        },
     ),
 
     ToolSpec(
@@ -190,7 +213,8 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
 
     ToolSpec(
         id = "image",
-        intro = "Convert any image to JPG, PNG, WebP, BMP, TIFF or GIF. Handles HEIC, HEIF, AVIF and everything else your phone can open. Resize while you convert.",
+        intro = "Convert any image to JPG, PNG, WebP, BMP, TIFF, GIF and more. Handles HEIC, HEIF, AVIF and everything else your phone can open. Live Photos can become a video, GIF or animated WebP. Resize while you convert.",
+        hint = "For a Live Photo, pick the picture that has its MOV next to it, or an Android Motion Photo.",
         inputs = listOf(InputSlot("media", "Images", InKind.Image, multiple = true)),
         options = listOf(
             Opt.Name(),
@@ -204,12 +228,34 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
             val qual = r.int("iq").coerceIn(1, 100)
             val w = r.int("iw")
             r.files("media").map { f ->
+                if (fmt.startsWith("live_")) {
+                    val src = r.saf(resolveLive(r.ctx, f))
+                    return@map when (fmt) {
+                        "live_gif" -> {
+                            val out = r.out("Images", f, "gif")
+                            val g = "fps=15,scale=480:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse"
+                            r.job(f, out, "-i $src -vf ${q(g)} -loop 0 -an ${out.path}")
+                        }
+                        "live_webp" -> {
+                            val out = r.out("Images", f, "webp")
+                            r.job(f, out, "-i $src -vf ${q("fps=15,scale=480:-2:flags=lanczos")} -c:v libwebp -q:v 70 -loop 0 -an ${out.path}")
+                        }
+                        else -> {
+                            val out = r.out("Video", f, "mp4")
+                            r.job(f, out, "-i $src -c copy ${out.path}")
+                        }
+                    }
+                }
                 val ext = if (fmt == "tiff") "tif" else fmt
                 val out = r.out("Images", f, ext)
                 val qv = when (fmt) { "jpg" -> "-q:v ${2 + (100 - qual) * 29 / 99} "; "webp" -> "-q:v $qual "; else -> "" }
-                val vf = if (w > 0) "-vf ${q("scale=w=(iw+$w-abs(iw-$w))/2:h=-2")} " else ""
+                val vf = when {
+                    fmt == "ico" -> "-vf ${q("scale=w=256:h=256:force_original_aspect_ratio=decrease")} "
+                    w > 0 -> "-vf ${q("scale=w=(iw+$w-abs(iw-$w))/2:h=-2")} "
+                    else -> ""
+                }
                 val strip = if (r.bool("istrip")) "-map_metadata -1 " else ""
-                val one = if (fmt in setOf("jpg", "png", "bmp", "tiff")) "-frames:v 1 " else ""
+                val one = if (fmt in setOf("jpg", "png", "bmp", "tiff", "jp2", "tga", "ppm", "ico", "qoi")) "-frames:v 1 " else ""
                 val cmd = "-i ${r.saf(f)} $vf$one$qv$strip${out.path}"
                 val nativeOk = fmt in setOf("jpg", "png", "webp") && w == 0
                 ToolJob(r.toolTitle, f.name, out.path, cmd,
@@ -601,7 +647,7 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
             Opt.Choice("t", "Convert everything to", listOf(
                 Item("mp4", "Video · MP4 (H.264)"), Item("webm", "Video · WebM (VP9)"), Item("gif", "Video · GIF"),
                 Item("mp3", "Audio · MP3"), Item("m4a", "Audio · AAC (M4A)"), Item("flac", "Audio · FLAC"),
-                Item("wav", "Audio · WAV"), Item("opus", "Audio · Opus"),
+                Item("wav", "Audio · WAV"), Item("opus", "Audio · Opus"), Item("tgvoice", "Audio · Telegram voice (OGG)"),
                 Item("jpg", "Image · JPG"), Item("png", "Image · PNG"), Item("webp", "Image · WebP"),
             )),
         ),
@@ -617,7 +663,7 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
                             "-i ${r.saf(f)} -frames:v 1${if (t == "jpg") " -q:v 2" else ""} ${out.path}",
                             native = { convertImageNative(r.ctx, f.uri, out, t, 92) })
                     }
-                    "mp3", "m4a", "flac", "wav", "opus" -> {
+                    "mp3", "m4a", "flac", "wav", "opus", "tgvoice" -> {
                         val a = audioFmt(t)
                         val out = r.out("Audio", f, a.ext)
                         r.job(f, out, "-i ${r.saf(f)} -vn -map 0:a:0 ${audioCodecArgs(a, "auto", "auto", "auto", "auto")} ${a.mux} ${out.path}")

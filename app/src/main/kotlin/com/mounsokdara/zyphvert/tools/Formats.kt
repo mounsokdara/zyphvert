@@ -16,7 +16,10 @@ internal val audioTable = listOf(
     AFmt("m4b", "M4B (audiobook)", "m4b", "aac", cover = true, mux = "-f ipod"),
     AFmt("m4r", "M4R (iPhone ringtone)", "m4r", "aac", mux = "-f ipod"),
     AFmt("opus", "Opus", "opus", "libopus"),
+    AFmt("tgvoice", "Telegram voice (OGG Opus)", "ogg", "libopus", mux = "-application voip -f ogg"),
     AFmt("ogg", "OGG Vorbis", "ogg", "libvorbis"),
+    AFmt("oga", "OGA (Ogg audio)", "oga", "libvorbis", mux = "-f ogg"),
+    AFmt("mka", "MKA (Matroska audio)", "mka", "libopus", mux = "-f matroska"),
     AFmt("wav", "WAV", "wav", "pcm_s16le", lossy = false),
     AFmt("flac", "FLAC", "flac", "flac", lossy = false, cover = true),
     AFmt("alac", "ALAC (Apple Lossless)", "m4a", "alac", lossy = false, cover = true),
@@ -29,6 +32,7 @@ internal val audioTable = listOf(
     AFmt("caf", "CAF", "caf", "pcm_s16le", lossy = false, mux = "-f caf"),
     AFmt("w64", "W64 (Wave64)", "w64", "pcm_s16le", lossy = false, mux = "-f w64"),
     AFmt("tta", "TTA", "tta", "tta", lossy = false),
+    AFmt("wv", "WavPack", "wv", "wavpack", lossy = false),
     AFmt("spx", "Speex", "spx", "libspeex"),
 )
 
@@ -67,17 +71,21 @@ internal fun audioCodecArgs(fmt: AFmt, br: String, sr: String, ch: String, comp:
             "abr" -> { a += "-b:a ${v}k"; if (fmt.key == "mp3") a += "-abr 1" }
             "vbr" -> when (fmt.key) {
                 "mp3" -> a += "-q:a $v"
-                "ogg" -> a += "-q:a ${(10 - v).coerceIn(2, 10) / 1}"
+                "ogg", "oga" -> a += "-q:a ${(10 - v).coerceIn(2, 10) / 1}"
                 else -> a += "-b:a ${vbrKbps[v] ?: 160}k"
             }
             else -> a += when (fmt.key) {
-                "mp3" -> "-q:a 2"; "ogg" -> "-q:a 5"; "opus" -> "-b:a 128k"; "spx" -> "-q:a 6"; else -> "-b:a 192k"
+                "mp3" -> "-q:a 2"; "ogg", "oga" -> "-q:a 5"; "opus", "mka" -> "-b:a 128k"; "tgvoice" -> "-b:a 32k"; "spx" -> "-q:a 6"; else -> "-b:a 192k"
             }
         }
     }
+    // Telegram voice notes are mono Opus at 48 kHz, so those are the defaults for that format.
+    val voice = fmt.key == "tgvoice"
+    val srUse = if (sr == "auto" && voice) "48000" else sr
+    val chUse = if (ch == "auto" && voice) "1" else ch
     // Opus only supports a few sample rates; let the encoder pick when asked for another.
-    if (sr != "auto" && !(fmt.key == "opus" && sr.toInt() !in setOf(8000, 12000, 16000, 24000, 48000))) a += "-ar $sr"
-    if (ch != "auto") a += "-ac $ch"
+    if (srUse != "auto" && !(fmt.codec == "libopus" && srUse.toInt() !in setOf(8000, 12000, 16000, 24000, 48000))) a += "-ar $srUse"
+    if (chUse != "auto") a += "-ac $chUse"
     if (comp != "auto" && (fmt.key == "flac" || fmt.key == "mp3")) a += "-compression_level $comp"
     return a.joinToString(" ")
 }
@@ -91,6 +99,7 @@ internal val audioPresets = listOf(
     Preset("audiobook", "Audiobook", "Optimized for long spoken audio", mapOf("afmt" to "m4b", "br" to "cbr:64", "sr" to "22050", "ch" to "1")),
     Preset("voice", "Voice recording", "Ideal for meetings and notes", mapOf("afmt" to "m4a", "br" to "cbr:96", "sr" to "44100", "ch" to "1")),
     Preset("whatsapp", "WhatsApp voice", "Small files for voice sharing", mapOf("afmt" to "opus", "br" to "cbr:32", "sr" to "16000", "ch" to "1")),
+    Preset("telegram", "Telegram voice message", "Mono Opus in OGG, plays as a voice note", mapOf("afmt" to "tgvoice", "br" to "cbr:32", "sr" to "48000", "ch" to "1")),
     Preset("tiny", "Ultra small file", "Minimize file size", mapOf("afmt" to "opus", "br" to "cbr:24", "sr" to "24000", "ch" to "1")),
     Preset("ring", "Ringtone", "Ideal for phone ringtones", mapOf("afmt" to "m4a", "br" to "cbr:128", "sr" to "44100", "ch" to "2")),
     Preset("lossless", "Lossless archive", "Preserves the original audio quality", mapOf("afmt" to "flac", "sr" to "auto", "ch" to "auto")),
@@ -99,7 +108,7 @@ internal val audioPresets = listOf(
 // ---------------------------------------------------------------- video
 
 internal class VFmt(val key: String, val label: String, val desc: String?, val ext: String, val kind: Kind) {
-    enum class Kind { Hw264, HwHevc, Mpeg4, Vp9, Vp8, Gif, Webp, Apng, FramesJpg, FramesPng, Remux }
+    enum class Kind { Hw264, HwHevc, Mpeg4, Vp9, Vp8, Wmv, Mpeg2, Gif, Webp, Apng, FramesJpg, FramesPng, Remux, LivePair }
 }
 
 internal val videoTable = listOf(
@@ -112,6 +121,14 @@ internal val videoTable = listOf(
     VFmt("webm_vp9", "WebM · VP9", "Open format, great for the web", "webm", VFmt.Kind.Vp9),
     VFmt("webm_vp8", "WebM · VP8", null, "webm", VFmt.Kind.Vp8),
     VFmt("avi_mpeg4", "AVI · MPEG-4", "Old players and TVs", "avi", VFmt.Kind.Mpeg4),
+    VFmt("mkv_vp9", "MKV · VP9", null, "mkv", VFmt.Kind.Vp9),
+    VFmt("m4v_h264", "M4V · H.264", "Apple video", "m4v", VFmt.Kind.Hw264),
+    VFmt("3gp_h264", "3GP · H.264", "Old phones", "3gp", VFmt.Kind.Hw264),
+    VFmt("ts_h264", "TS · H.264", "MPEG transport stream", "ts", VFmt.Kind.Hw264),
+    VFmt("flv_h264", "FLV · H.264", "Flash video", "flv", VFmt.Kind.Hw264),
+    VFmt("wmv", "WMV", "Windows Media Video", "wmv", VFmt.Kind.Wmv),
+    VFmt("mpg_mpeg2", "MPG · MPEG-2", "DVD-style video", "mpg", VFmt.Kind.Mpeg2),
+    VFmt("live_pair", "Live Photo (JPG + MOV)", "A still and a 3 s clip with the same name", "mov", VFmt.Kind.LivePair),
     VFmt("gif", "GIF animation", null, "gif", VFmt.Kind.Gif),
     VFmt("webp", "Animated WebP", null, "webp", VFmt.Kind.Webp),
     VFmt("apng", "Animated PNG", null, "png", VFmt.Kind.Apng),
@@ -155,6 +172,10 @@ internal val videoPresets = listOf(
 internal val imageTargets = listOf(
     Item("jpg", "JPG"), Item("png", "PNG"), Item("webp", "WebP"),
     Item("bmp", "BMP"), Item("tiff", "TIFF"), Item("gif", "GIF"),
+    Item("jp2", "JPEG 2000"), Item("tga", "TGA"), Item("ppm", "PPM"), Item("ico", "ICO", "Scaled to fit 256 px"), Item("qoi", "QOI"),
+    Item("live_mp4", "Live Photo to video (MP4)", "Pick a Live or Motion Photo"),
+    Item("live_gif", "Live Photo to GIF", "Pick a Live or Motion Photo"),
+    Item("live_webp", "Live Photo to animated WebP", "Pick a Live or Motion Photo"),
 )
 internal val maxWidthItems = listOf(Item("0", "Original size")) + listOf(3840, 2560, 1920, 1280, 1024, 800, 640).map { Item("$it", "$it px wide") }
 
