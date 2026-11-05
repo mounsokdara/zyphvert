@@ -16,6 +16,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import java.io.File
 import javax.inject.Inject
 
 enum class LogKind { Command, Output, Error, Info }
@@ -27,9 +28,14 @@ class ToolViewModel @Inject constructor() : ViewModel() {
 
     var inputUri by mutableStateOf<Uri?>(null)
         private set
+    /** Absolute filesystem path when opened from File Manager (preferred over SAF). */
+    var inputPath by mutableStateOf<String?>(null)
+        private set
     var inputLabel by mutableStateOf<String?>(null)
         private set
     var outputUri by mutableStateOf<Uri?>(null)
+        private set
+    var outputPath by mutableStateOf<String?>(null)
         private set
     var outputLabel by mutableStateOf<String?>(null)
         private set
@@ -38,9 +44,8 @@ class ToolViewModel @Inject constructor() : ViewModel() {
         private set
     val lines = mutableStateListOf<LogLine>()
 
-    // Shared options
-    var quality by mutableStateOf("high") // low / medium / high / custom
-    var scale by mutableStateOf("original") // original / 1080 / 720 / 480 / 360
+    var quality by mutableStateOf("high")
+    var scale by mutableStateOf("original")
     var fps by mutableStateOf("original")
     var codec by mutableStateOf("auto")
     var startTime by mutableStateOf("")
@@ -50,9 +55,9 @@ class ToolViewModel @Inject constructor() : ViewModel() {
     var audioBitrate by mutableStateOf("192k")
     var gifFps by mutableStateOf("12")
     var gifWidth by mutableStateOf("480")
-    var outputFormat by mutableStateOf("") // tool-specific default if blank
+    var outputFormat by mutableStateOf("")
     var stripMetadata by mutableStateOf(true)
-    var rotate by mutableStateOf("0") // 0, 90, 180, 270
+    var rotate by mutableStateOf("0")
     var flipH by mutableStateOf(false)
     var flipV by mutableStateOf(false)
 
@@ -60,37 +65,56 @@ class ToolViewModel @Inject constructor() : ViewModel() {
 
     fun setInput(uri: Uri?, label: String?) {
         inputUri = uri
+        inputPath = null
         inputLabel = label
+    }
+
+    fun setInputPath(path: String) {
+        val f = File(path)
+        inputPath = path
+        inputUri = Uri.fromFile(f)
+        inputLabel = f.name
     }
 
     fun setOutput(uri: Uri?, label: String?) {
         outputUri = uri
+        outputPath = null
         outputLabel = label
+    }
+
+    fun setOutputPath(path: String) {
+        val f = File(path)
+        outputPath = path
+        outputUri = Uri.fromFile(f)
+        outputLabel = f.name
     }
 
     fun clearLog() = lines.clear()
 
     fun stop() = engine.cancel()
 
+    private fun quote(path: String): String =
+        if (path.any { it.isWhitespace() || it == '"' }) "\"${path.replace("\"", "\\\"")}\"" else path
+
     fun run(tool: Tool, context: Context) {
         if (running) return
-        val inUri = inputUri ?: return
-        val outUri = outputUri
 
-        val inPath = engine.safRead(context, inUri)
-            ?: run {
-                add(LogLine("Cannot open input (needs FFmpeg engine + file permission)", LogKind.Error))
-                return
-            }
-        val outPath = if (outUri != null) {
-            engine.safWrite(context, outUri)
-                ?: run {
-                    add(LogLine("Cannot open output path", LogKind.Error))
-                    return
-                }
-        } else null
+        val inArg = when {
+            inputPath != null -> quote(inputPath!!)
+            inputUri != null -> engine.safRead(context, inputUri!!)
+            else -> null
+        } ?: run {
+            add(LogLine("Cannot open input (needs FFmpeg engine + file permission)", LogKind.Error))
+            return
+        }
 
-        val cmd = buildCommand(tool, inPath, outPath)
+        val outArg = when {
+            outputPath != null -> quote(outputPath!!)
+            outputUri != null -> engine.safWrite(context, outputUri!!)
+            else -> null
+        }
+
+        val cmd = buildCommand(tool, inArg, outArg)
         if (cmd == null) {
             add(LogLine("This tool needs more options or an output file", LogKind.Error))
             return
@@ -158,10 +182,12 @@ class ToolViewModel @Inject constructor() : ViewModel() {
 
         return when (tool.id) {
             "vid2aud" -> {
-                val fmt = outputFormat.ifBlank { "mp3" }
                 val ab = audioBitrate.ifBlank { "192k" }
-                "${ss}${to}-i $input -vn -c:a libmp3lame -b:a $ab $meta$out".trim()
-                    .let { if (fmt == "aac" || out.endsWith(".m4a")) "${ss}${to}-i $input -vn -c:a aac -b:a $ab $meta$out".trim() else it }
+                if (out.contains(".m4a", true) || outputFormat == "aac") {
+                    "${ss}${to}-i $input -vn -c:a aac -b:a $ab $meta$out".trim()
+                } else {
+                    "${ss}${to}-i $input -vn -c:a libmp3lame -b:a $ab $meta$out".trim()
+                }
             }
             "vid2gif" -> {
                 val f = gifFps.ifBlank { "12" }
@@ -173,41 +199,28 @@ class ToolViewModel @Inject constructor() : ViewModel() {
                 }
             }
             "vid2img" -> {
-                // Export frames as image sequence; user should pick a pattern like frame_%04d.jpg
                 val f = fps.takeIf { it != "original" && it.isNotBlank() } ?: "1"
                 "${ss}${to}-i $input -vf fps=$f $meta$out".trim()
             }
-            "heic", "img2vid" -> {
-                // Single image → short video, or convert still
-                if (tool.id == "heic") {
-                    "-i $input -q:v 2 $meta$out".trim()
-                } else {
-                    val dur = endTime.trim().ifBlank { "5" }
-                    val vf = scaleFilter()?.let { "-vf $it " } ?: ""
-                    "-loop 1 -i $input -c:v ${videoCodec()} -t $dur ${vf}-pix_fmt yuv420p $meta$out".trim()
-                }
+            "heic" -> "-i $input -q:v 2 $meta$out".trim()
+            "img2vid" -> {
+                val dur = endTime.trim().ifBlank { "5" }
+                val vf = scaleFilter()?.let { "-vf $it " } ?: ""
+                "-loop 1 -i $input -c:v ${videoCodec()} -t $dur ${vf}-pix_fmt yuv420p $meta$out".trim()
             }
-            "aud2vid" -> {
-                // Needs a second image input later; for now use color source + audio
+            "aud2vid" ->
                 "-f lavfi -i color=c=black:s=1280x720:d=1 -i $input -shortest -c:v libx264 -c:a aac -pix_fmt yuv420p $meta$out".trim()
-            }
-            "live" -> {
-                // Treat as video extract
+            "live" ->
                 "-i $input -c:v ${videoCodec()} -crf ${crf()} -c:a aac $meta$out".trim()
-            }
             "trim" -> {
-                val copy = codec == "copy"
-                if (copy) {
-                    "${ss}${to}-i $input -c copy $meta$out".trim()
-                } else {
-                    "${ss}${to}-i $input -c:v ${videoCodec()} -crf ${crf()} -c:a aac $meta$out".trim()
-                }
+                if (codec == "copy") "${ss}${to}-i $input -c copy $meta$out".trim()
+                else "${ss}${to}-i $input -c:v ${videoCodec()} -crf ${crf()} -c:a aac $meta$out".trim()
             }
             "speed" -> {
                 val factor = speed.toDoubleOrNull()?.coerceIn(0.25, 4.0) ?: 1.0
                 val vset = if (reverse) "reverse,setpts=PTS/$factor" else "setpts=PTS/$factor"
-                val aset = if (reverse) "areverse,atempo=${factor.coerceIn(0.5, 2.0)}" else "atempo=${factor.coerceIn(0.5, 2.0)}"
-                // atempo only supports 0.5–2.0; chain if needed is left simple for now
+                val at = factor.coerceIn(0.5, 2.0)
+                val aset = if (reverse) "areverse,atempo=$at" else "atempo=$at"
                 "-i $input -filter_complex \"[0:v]$vset[v];[0:a]$aset[a]\" -map \"[v]\" -map \"[a]\" -c:v ${videoCodec()} -crf ${crf()} $meta$out".trim()
             }
             "crop" -> {
@@ -228,14 +241,9 @@ class ToolViewModel @Inject constructor() : ViewModel() {
                 val vf = scaleFilter() ?: "null"
                 "-i $input -vf $vf -c:v ${videoCodec()} -crf ${crf()} -c:a copy $meta$out".trim()
             }
-            "scrub" -> {
-                "-i $input -map_metadata -1 -c copy $out".trim()
-            }
-            "meta" -> {
-                // Read-only style: just re-mux with optional strip
-                if (stripMetadata) "-i $input -map_metadata -1 -c copy $out".trim()
-                else "-i $input -c copy $out".trim()
-            }
+            "scrub" -> "-i $input -map_metadata -1 -c copy $out".trim()
+            "meta" -> if (stripMetadata) "-i $input -map_metadata -1 -c copy $out".trim()
+            else "-i $input -c copy $out".trim()
             "ringtone" -> {
                 val ab = audioBitrate.ifBlank { "128k" }
                 "${ss}${to}-i $input -vn -c:a libmp3lame -b:a $ab $meta$out".trim()
@@ -244,11 +252,7 @@ class ToolViewModel @Inject constructor() : ViewModel() {
                 val w = gifWidth.ifBlank { "512" }
                 "-i $input -vf scale=$w:-1:flags=lanczos $meta$out".trim()
             }
-            "wm" -> {
-                // Without a second image, just re-encode (placeholder for full watermark)
-                "-i $input -c:v ${videoCodec()} -crf ${crf()} -c:a copy $meta$out".trim()
-            }
-            "batch" -> null // queue UI separate
+            "wm" -> "-i $input -c:v ${videoCodec()} -crf ${crf()} -c:a copy $meta$out".trim()
             else -> null
         }
     }

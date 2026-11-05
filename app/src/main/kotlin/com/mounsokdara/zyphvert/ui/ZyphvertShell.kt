@@ -42,8 +42,6 @@ import com.mounsokdara.zyphvert.ui.terminal.TerminalScreen
 import com.mounsokdara.zyphvert.ui.terminal.TerminalViewModel
 import com.mounsokdara.zyphvert.ui.tool.ToolScreen
 import com.mounsokdara.zyphvert.ui.tool.ToolViewModel
-import androidx.core.net.toUri
-import java.io.File
 
 private enum class Destination(val label: String, val icon: ImageVector) {
     Tools("Tools", Icons.Rounded.Apps),
@@ -52,7 +50,6 @@ private enum class Destination(val label: String, val icon: ImageVector) {
     More("More", Icons.Rounded.Menu),
 }
 
-/** App shell: bottom navigation, tool overlays, file manager, media info. */
 @Composable
 fun ZyphvertShell(settingsVm: SettingsViewModel, hapticsEnabled: Boolean) {
     var current by rememberSaveable { mutableStateOf(Destination.Tools) }
@@ -117,7 +114,6 @@ fun ZyphvertShell(settingsVm: SettingsViewModel, hapticsEnabled: Boolean) {
                 if (activeTool != null) {
                     if (activeTool.id == "ffmpeg") {
                         val tvm = hiltViewModel<TerminalViewModel>()
-                        // Seed path into terminal if coming from file manager
                         pendingFilePath?.let { path ->
                             tvm.insert("\"$path\"")
                             pendingFilePath = null
@@ -126,13 +122,14 @@ fun ZyphvertShell(settingsVm: SettingsViewModel, hapticsEnabled: Boolean) {
                     } else {
                         val tvm = hiltViewModel<ToolViewModel>()
                         pendingFilePath?.let { path ->
-                            val f = File(path)
-                            if (f.exists()) {
-                                tvm.setInput(f.toUri(), f.name)
-                            }
+                            tvm.setInputPath(path)
                             pendingFilePath = null
                         }
-                        ToolScreen(tool = activeTool, onBack = { openToolId = null; pendingFilePath = null }, vm = tvm)
+                        ToolScreen(
+                            tool = activeTool,
+                            onBack = { openToolId = null; pendingFilePath = null },
+                            vm = tvm,
+                        )
                     }
                 } else when (current) {
                     Destination.Tools -> HomeScreen(
@@ -158,7 +155,7 @@ fun ZyphvertShell(settingsVm: SettingsViewModel, hapticsEnabled: Boolean) {
                     Destination.More -> when (sub) {
                         null -> MoreScreen(bottomPadding = bottom, onOpen = { tick(); sub = it })
                         MoreRoute.Settings -> SettingsScreen(settingsVm, onBack = { sub = null })
-                        MoreRoute.Terminal -> TerminalScreen(hiltViewModel<TerminalViewModel>(), onBack = { sub = null })
+                        MoreRoute.Terminal -> TerminalScreen(hiltViewModel(), onBack = { sub = null })
                         MoreRoute.About -> AboutScreen(onBack = { sub = null }, onLicenses = { sub = MoreRoute.Licenses })
                         MoreRoute.Licenses -> LicensesScreen(onBack = { sub = MoreRoute.About })
                         MoreRoute.Files -> FileManagerScreen(
