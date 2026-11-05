@@ -1,17 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Scoped storage: Photo Picker / SAF / MediaStore. No broad storage permission needed. -->
+    <!-- All-files access so tools can read/write any path the user picks -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
-    <!-- Android 13+ granular media access (READ_EXTERNAL_STORAGE is a no-op on API 33+) -->
+    <!-- Keep media permissions for systems that still use them -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
-    <!-- Android 14+: access to partial visual media selection from Photo Picker -->
     <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
 
     <application
         android:name=".ZyphvertApp"
@@ -20,7 +23,8 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:theme="@style/Theme.Zyphvert"
-        android:supportsRtl="true">
+        android:supportsRtl="true"
+        android:requestLegacyExternalStorage="true">
 
         <activity
             android:name=".MainActivity"
@@ -45,6 +49,11 @@
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="audio/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
             </intent-filter>
         </activity>
 

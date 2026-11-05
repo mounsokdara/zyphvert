@@ -53,8 +53,8 @@ data class Tool(
     val description: String,
     val icon: ImageVector,
     val category: ToolCategory,
-    /** Flip to true as each tool ships; hides the "Soon" badge. */
-    val available: Boolean = false,
+    /** True = tool has a real options UI and runs FFmpeg. */
+    val available: Boolean = true,
 )
 
 val allTools: List<Tool> = listOf(
@@ -79,5 +79,5 @@ val allTools: List<Tool> = listOf(
     Tool("ringtone", "Ringtone Maker", "Cut audio into a ringtone", Icons.Rounded.RingVolume, ToolCategory.Create),
 
     Tool("batch", "Batch Queue", "Queue many conversions and run them in the background", Icons.Rounded.Layers, ToolCategory.Power),
-    Tool("ffmpeg", "Custom FFmpeg", "Run your own FFmpeg command", Icons.Rounded.Terminal, ToolCategory.Power, available = true),
+    Tool("ffmpeg", "Custom FFmpeg", "Run your own FFmpeg command", Icons.Rounded.Terminal, ToolCategory.Power),
 )
