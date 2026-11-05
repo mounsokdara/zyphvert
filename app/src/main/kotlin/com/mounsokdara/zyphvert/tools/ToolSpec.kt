@@ -100,6 +100,8 @@ class ToolJob(
     val command: String? = null,
     val probe: Boolean = false,
     val native: (suspend () -> Unit)? = null,
+    /** Runs after the command succeeds, to finish the output (for example, joining two files into one). */
+    val after: (suspend () -> Unit)? = null,
 )
 
 class ToolRequest(

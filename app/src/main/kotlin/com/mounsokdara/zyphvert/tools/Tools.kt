@@ -98,6 +98,19 @@ private fun videoJobs(r: ToolRequest, files: List<PickedFile>, fmtKey: String, s
                 r.job(f, out, "$inp -t 3 -vf ${q(vf)} -c:v h264_mediacodec -b:v 6M -c:a aac -b:a 128k " +
                     "-movflags use_metadata_tags -metadata com.apple.quicktime.content.identifier=$id -f mov ${out.path}")
             }
+            VFmt.Kind.MotionPhoto -> {
+                // One FFmpeg run makes the 3 s clip and the still; then both are joined into a single Motion Photo JPG.
+                val out = r.out("Images", f, "jpg", slot = slot, dir = OutputPaths.dir(r.ctx, "Live Photos"))
+                val tmpClip = File(r.ctx.cacheDir, "mp_${out.nameWithoutExtension}.mp4").also { it.delete() }
+                val tmpStill = File(r.ctx.cacheDir, "mp_${out.nameWithoutExtension}.jpg").also { it.delete() }
+                val vf = listOfNotNull(scale, if (fps > 0) "fps=$fps" else null, VID_TAIL).joinToString(",")
+                ToolJob(r.toolTitle, f.name, out.path,
+                    "$inp -t 3 -vf ${q(vf)} -c:v h264_mediacodec -b:v 6M -c:a aac -b:a 128k -movflags +faststart ${tmpClip.path} " +
+                        "-frames:v 1 -q:v 2 ${tmpStill.path}",
+                    after = {
+                        try { buildMotionPhoto(tmpStill, tmpClip, out) } finally { tmpClip.delete(); tmpStill.delete() }
+                    })
+            }
             VFmt.Kind.Gif -> {
                 val out = r.out("Images", f, "gif", slot = slot)
                 val vf = "fps=${if (fps > 0) fps else 12},${scale?.replace("scale=-2", "scale=-1") ?: "scale=480:-1"}:flags=lanczos," +
@@ -169,10 +182,10 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
             Opt.Choice("vfmt", "Format", videoItems),
             Opt.Choice("res", "Resolution", resItems),
             Opt.Choice("fps", "Frame rate", fpsItems),
-            Opt.Choice("vq", "Quality", qualityItems, showIf = { videoKind(it) in setOf(VFmt.Kind.Hw264, VFmt.Kind.HwHevc, VFmt.Kind.Mpeg4, VFmt.Kind.Vp9, VFmt.Kind.Vp8, VFmt.Kind.Wmv, VFmt.Kind.Mpeg2, VFmt.Kind.LivePair) }),
-            Opt.Choice("vaud", "Audio", vAudioItems, showIf = { videoKind(it) in setOf(VFmt.Kind.Hw264, VFmt.Kind.HwHevc, VFmt.Kind.Mpeg4, VFmt.Kind.Vp9, VFmt.Kind.Vp8, VFmt.Kind.Wmv, VFmt.Kind.Mpeg2, VFmt.Kind.LivePair) }),
+            Opt.Choice("vq", "Quality", qualityItems, showIf = { videoKind(it) in setOf(VFmt.Kind.Hw264, VFmt.Kind.HwHevc, VFmt.Kind.Mpeg4, VFmt.Kind.Vp9, VFmt.Kind.Vp8, VFmt.Kind.Wmv, VFmt.Kind.Mpeg2, VFmt.Kind.LivePair, VFmt.Kind.MotionPhoto) }),
+            Opt.Choice("vaud", "Audio", vAudioItems, showIf = { videoKind(it) in setOf(VFmt.Kind.Hw264, VFmt.Kind.HwHevc, VFmt.Kind.Mpeg4, VFmt.Kind.Vp9, VFmt.Kind.Vp8, VFmt.Kind.Wmv, VFmt.Kind.Mpeg2, VFmt.Kind.LivePair, VFmt.Kind.MotionPhoto) }),
             Opt.Range("range", "Start time / End time"),
-            Opt.Text("target", "Target file size (MB)", "Empty = no limit", showIf = { videoKind(it) in setOf(VFmt.Kind.Hw264, VFmt.Kind.HwHevc, VFmt.Kind.Mpeg4, VFmt.Kind.Vp9, VFmt.Kind.Vp8, VFmt.Kind.Wmv, VFmt.Kind.Mpeg2, VFmt.Kind.LivePair) }, advanced = true),
+            Opt.Text("target", "Target file size (MB)", "Empty = no limit", showIf = { videoKind(it) in setOf(VFmt.Kind.Hw264, VFmt.Kind.HwHevc, VFmt.Kind.Mpeg4, VFmt.Kind.Vp9, VFmt.Kind.Vp8, VFmt.Kind.Wmv, VFmt.Kind.Mpeg2, VFmt.Kind.LivePair, VFmt.Kind.MotionPhoto) }, advanced = true),
         ),
         build = { r ->
             val key = r.str("vfmt").ifEmpty { "mp4_h264" }

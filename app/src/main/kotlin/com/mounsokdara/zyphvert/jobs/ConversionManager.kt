@@ -119,6 +119,12 @@ class ConversionManager @Inject constructor(@ApplicationContext private val ctx:
                         is EngineEvent.Done -> { ok = ev.success; wasCancelled = ev.cancelled }
                     }
                 }
+                val finish = job.after
+                if (ok && !wasCancelled && finish != null) {
+                    try { finish() }
+                    catch (e: CancellationException) { throw e }
+                    catch (e: Throwable) { ok = false; error = e.message ?: "Couldn't finish the file" }
+                }
             }
         } catch (e: CancellationException) {
             throw e

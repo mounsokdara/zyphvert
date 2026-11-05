@@ -60,6 +60,20 @@ internal fun mediaSize(ctx: Context, uri: Uri, image: Boolean): Pair<Int, Int>? 
 /** Android Motion Photo: a JPEG with an MP4 appended. Returns false if no embedded video is found. */
 internal fun extractMotionVideo(ctx: Context, uri: Uri, out: File): Boolean {
     val bytes = ctx.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return false
+    // Newer files say exactly where the video starts: XMP MicroVideoOffset or the Container item length, counted from the end.
+    val head = String(bytes, 0, minOf(bytes.size, 262144), Charsets.ISO_8859_1)
+    val declared = Regex("MicroVideoOffset=\"(\\d+)\"").find(head)?.groupValues?.get(1)?.toLongOrNull()
+        ?: Regex("<Container:Item[^>]*video/mp4[^>]*>").find(head)?.value
+            ?.let { Regex("Item:Length=\"(\\d+)\"").find(it)?.groupValues?.get(1)?.toLongOrNull() }
+    if (declared != null && declared in 16 until bytes.size.toLong()) {
+        val s = bytes.size - declared.toInt()
+        if (s + 8 <= bytes.size && bytes[s + 4] == 'f'.code.toByte() && bytes[s + 5] == 't'.code.toByte() &&
+            bytes[s + 6] == 'y'.code.toByte() && bytes[s + 7] == 'p'.code.toByte()) {
+            out.parentFile?.mkdirs()
+            out.outputStream().use { it.write(bytes, s, bytes.size - s) }
+            return true
+        }
+    }
     val sig = byteArrayOf('f'.code.toByte(), 't'.code.toByte(), 'y'.code.toByte(), 'p'.code.toByte())
     var from = 100
     while (from < bytes.size - 8) {
@@ -145,4 +159,35 @@ internal fun resolveLive(ctx: Context, f: PickedFile): PickedFile {
         }
     }
     return PickedFile(Uri.fromFile(tmp), f.name.substringBeforeLast('.') + ".mp4")
+}
+
+/**
+ * Android Motion Photo: the JPEG still, with Google's XMP (Motion Photo + the older MicroVideo tags) inserted
+ * after the JPEG start marker, and the MP4 clip appended. Google Photos and most Android galleries then play it as a live photo.
+ */
+internal fun buildMotionPhoto(still: File, clip: File, out: File, presentationUs: Long = 0L) {
+    val jpg = still.readBytes()
+    if (jpg.size < 4 || jpg[0] != 0xFF.toByte() || jpg[1] != 0xD8.toByte()) throw IllegalStateException("The still frame isn't a JPEG.")
+    val n = clip.length()
+    if (n <= 0L) throw IllegalStateException("The video part is empty.")
+    val xml = "<?xpacket begin=\"\uFEFF\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>" +
+        "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"><rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">" +
+        "<rdf:Description rdf:about=\"\" xmlns:GCamera=\"http://ns.google.com/photos/1.0/camera/\" " +
+        "xmlns:Container=\"http://ns.google.com/photos/1.0/container/\" xmlns:Item=\"http://ns.google.com/photos/1.0/container/item/\" " +
+        "GCamera:MotionPhoto=\"1\" GCamera:MotionPhotoVersion=\"1\" GCamera:MotionPhotoPresentationTimestampUs=\"$presentationUs\" " +
+        "GCamera:MicroVideo=\"1\" GCamera:MicroVideoVersion=\"1\" GCamera:MicroVideoOffset=\"$n\" GCamera:MicroVideoPresentationTimestampUs=\"$presentationUs\">" +
+        "<Container:Directory><rdf:Seq>" +
+        "<rdf:li rdf:parseType=\"Resource\"><Container:Item Item:Mime=\"image/jpeg\" Item:Semantic=\"Primary\" Item:Length=\"0\" Item:Padding=\"0\"/></rdf:li>" +
+        "<rdf:li rdf:parseType=\"Resource\"><Container:Item Item:Mime=\"video/mp4\" Item:Semantic=\"MotionPhoto\" Item:Length=\"$n\" Item:Padding=\"0\"/></rdf:li>" +
+        "</rdf:Seq></Container:Directory></rdf:Description></rdf:RDF></x:xmpmeta><?xpacket end=\"w\"?>"
+    val payload = "http://ns.adobe.com/xap/1.0/".toByteArray(Charsets.ISO_8859_1) + byteArrayOf(0) + xml.toByteArray(Charsets.UTF_8)
+    val len = payload.size + 2
+    out.parentFile?.mkdirs()
+    out.outputStream().buffered().use { o ->
+        o.write(jpg, 0, 2)
+        o.write(0xFF); o.write(0xE1); o.write(len shr 8); o.write(len and 0xFF)
+        o.write(payload)
+        o.write(jpg, 2, jpg.size - 2)
+        clip.inputStream().use { it.copyTo(o) }
+    }
 }

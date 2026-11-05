@@ -108,7 +108,7 @@ internal val audioPresets = listOf(
 // ---------------------------------------------------------------- video
 
 internal class VFmt(val key: String, val label: String, val desc: String?, val ext: String, val kind: Kind) {
-    enum class Kind { Hw264, HwHevc, Mpeg4, Vp9, Vp8, Wmv, Mpeg2, Gif, Webp, Apng, FramesJpg, FramesPng, Remux, LivePair }
+    enum class Kind { Hw264, HwHevc, Mpeg4, Vp9, Vp8, Wmv, Mpeg2, Gif, Webp, Apng, FramesJpg, FramesPng, Remux, LivePair, MotionPhoto }
 }
 
 internal val videoTable = listOf(
@@ -128,6 +128,7 @@ internal val videoTable = listOf(
     VFmt("flv_h264", "FLV · H.264", "Flash video", "flv", VFmt.Kind.Hw264),
     VFmt("wmv", "WMV", "Windows Media Video", "wmv", VFmt.Kind.Wmv),
     VFmt("mpg_mpeg2", "MPG · MPEG-2", "DVD-style video", "mpg", VFmt.Kind.Mpeg2),
+    VFmt("motion_photo", "Motion Photo (JPG with video)", "One file for Google Photos and Android galleries", "jpg", VFmt.Kind.MotionPhoto),
     VFmt("live_pair", "Live Photo (JPG + MOV)", "A still and a 3 s clip with the same name", "mov", VFmt.Kind.LivePair),
     VFmt("gif", "GIF animation", null, "gif", VFmt.Kind.Gif),
     VFmt("webp", "Animated WebP", null, "webp", VFmt.Kind.Webp),

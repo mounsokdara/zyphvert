@@ -9,7 +9,7 @@ request the `INTERNET` permission, so your files never leave your phone.
 ### Convert: any file to any format
 | Tool | What it does |
 |---|---|
-| **Video converter** | Any video to MP4, M4V, MKV, MOV, WebM, AVI, WMV, 3GP, TS, FLV, MPG, GIF, animated WebP/PNG, image frames, a Live Photo pair (JPG + MOV), or a lossless remux. Presets for WhatsApp, Discord (8 MB), TikTok, YouTube, Instagram and Telegram. Resolution, frame rate, quality, audio, trim and target file size. |
+| **Video converter** | Any video to MP4, M4V, MKV, MOV, WebM, AVI, WMV, 3GP, TS, FLV, MPG, GIF, animated WebP/PNG, image frames, a Live Photo pair (JPG + MOV), an Android Motion Photo (one JPG with the video inside), or a lossless remux. Presets for WhatsApp, Discord (8 MB), TikTok, YouTube, Instagram and Telegram. Resolution, frame rate, quality, audio, trim and target file size. |
 | **Audio converter** | Any audio or video to MP3, AAC, M4A, M4B, M4R, Opus, OGG, OGA, **Telegram voice (OGG Opus, mono 48 kHz)**, MKA, WAV, WavPack, FLAC, ALAC, AIFF, WMA, AC3, EAC3, MP2, AU, CAF, W64, TTA or Speex. Conversion templates, CBR/ABR/VBR bitrate, sample rate, channels, trim or cut out a section, normalize, fades, full tag editor and cover art. |
 | **Image converter** | Any image (HEIC, HEIF, AVIF, JPG, PNG, WebP, BMP, TIFF, GIF) to JPG, PNG, WebP, BMP, TIFF, GIF, JPEG 2000, TGA, PPM, ICO or QOI, with quality and resize. Live and Motion Photos can become an MP4, GIF or animated WebP. |
 

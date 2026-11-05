@@ -141,7 +141,7 @@ val allTools: List<Tool> = listOf(
         "Convert any video to whatever you need — another video, audio, a GIF, or images.",
         Icons.Rounded.Movie,
         ToolCategory.Convert,
-        formats = listOf("MP4", "MKV", "MOV", "WebM", "AVI", "WMV", "3GP", "TS", "FLV", "MPG", "GIF", "WebP", "APNG", "Live Photo", "Images", "Remux"),
+        formats = listOf("MP4", "MKV", "MOV", "WebM", "AVI", "WMV", "3GP", "TS", "FLV", "MPG", "GIF", "WebP", "APNG", "Live Photo", "Motion Photo", "Images", "Remux"),
     ),
     Tool(
         "audio",
