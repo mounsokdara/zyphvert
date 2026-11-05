@@ -1,8 +1,5 @@
 package com.mounsokdara.zyphvert.ui.files
 
-import android.content.Intent
-import android.net.Uri
-import android.webkit.MimeTypeMap
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,9 +23,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.InsertDriveFile
+import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.AudioFile
 import androidx.compose.material.icons.rounded.ChevronRight
-import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Image
@@ -64,14 +61,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.mounsokdara.zyphvert.ui.components.CenteredContent
 import com.mounsokdara.zyphvert.ui.components.SearchField
-import com.mounsokdara.zyphvert.ui.home.Tool
 import com.mounsokdara.zyphvert.ui.home.allTools
 import com.mounsokdara.zyphvert.util.StorageAccess
-import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -92,19 +85,19 @@ fun FileManagerScreen(
             .statusBarsPadding()
             .padding(bottom = bottomPadding),
     ) {
-        // Top bar
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 4.dp),
+                .padding(horizontal = 4.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            IconButton(onClick = vm::goUp) {
+                Icon(Icons.Rounded.ArrowUpward, contentDescription = "Up")
+            }
             Text(
                 "Files",
                 style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(start = 8.dp),
+                modifier = Modifier.weight(1f),
             )
             IconButton(onClick = { vm.showHidden = !vm.showHidden }) {
                 Icon(
@@ -153,7 +146,6 @@ fun FileManagerScreen(
             }
         }
 
-        // Quick places
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -167,7 +159,6 @@ fun FileManagerScreen(
             }
         }
 
-        // Breadcrumbs
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -248,8 +239,11 @@ fun FileManagerScreen(
     if (sortMenu) {
         ModalBottomSheet(onDismissRequest = { sortMenu = false }, sheetState = sheetState) {
             Column(Modifier.padding(bottom = 32.dp)) {
-                Text("Sort by", style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+                Text(
+                    "Sort by",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                )
                 SortMode.entries.forEach { mode ->
                     val label = when (mode) {
                         SortMode.NameAsc -> "Name (A–Z)"
@@ -282,8 +276,12 @@ fun FileManagerScreen(
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         ) {
             Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
-                Text(selected.name, style = MaterialTheme.typography.titleMedium,
-                    maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(
+                    selected.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
                 Text(
                     "${selected.sizeLabel} · ${selected.dateLabel}",
                     style = MaterialTheme.typography.bodySmall,
@@ -295,7 +293,6 @@ fun FileManagerScreen(
                     vm.selected = null
                 }
                 ActionRow(Icons.Rounded.Transform, "Open in converter…") {
-                    // pick first sensible convert tool
                     val id = when (selected.extension) {
                         in listOf("mp4", "mkv", "webm", "mov", "avi", "m4v") -> "vid2aud"
                         in listOf("mp3", "aac", "flac", "wav", "ogg", "m4a") -> "ringtone"
@@ -309,10 +306,12 @@ fun FileManagerScreen(
                     onOpenInTool("ffmpeg", selected.file.absolutePath)
                     vm.selected = null
                 }
-                // Suggest all tools
-                Text("Tools", style = MaterialTheme.typography.labelLarge,
+                Text(
+                    "Tools",
+                    style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 12.dp, bottom = 4.dp))
+                    modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+                )
                 allTools.filter { it.id != "batch" }.forEach { tool ->
                     ActionRow(tool.icon, tool.title) {
                         onOpenInTool(tool.id, selected.file.absolutePath)
@@ -360,8 +359,7 @@ private fun FileListItem(entry: FileEntry, onClick: () -> Unit) {
         )
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Text(entry.name, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodyLarge)
+            Text(entry.name, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
             Text(
                 buildString {
                     if (entry.isDirectory) append("Folder")
@@ -390,10 +388,7 @@ private fun FileGridItem(entry: FileEntry, onClick: () -> Unit) {
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
-        Column(
-            Modifier.padding(12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
+        Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(
                 iconFor(entry),
                 null,
@@ -402,12 +397,7 @@ private fun FileGridItem(entry: FileEntry, onClick: () -> Unit) {
                 else MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(8.dp))
-            Text(
-                entry.name,
-                style = MaterialTheme.typography.labelMedium,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Text(entry.name, style = MaterialTheme.typography.labelMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
     }
 }
