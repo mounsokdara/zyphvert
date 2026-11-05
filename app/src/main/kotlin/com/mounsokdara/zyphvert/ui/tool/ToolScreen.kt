@@ -363,11 +363,9 @@ private fun clock(sec: Double): String {
 private fun RangeCard(opt: Opt.Range, vm: ToolViewModel) {
     val ctx = LocalContext.current
     val first = vm.picked[opt.slot].orEmpty().firstOrNull()
-    val dur by produceState(0.0, first?.uri) {
-        value = 0.0
-        if (first != null) {
-            value = withContext(Dispatchers.IO) { durationSec(ctx, first.uri) } ?: 0.0
-        }
+    var dur by remember(first?.uri) { mutableStateOf(0.0) }
+    LaunchedEffect(first?.uri) {
+        dur = if (first == null) 0.0 else withContext(Dispatchers.IO) { durationSec(ctx, first.uri) } ?: 0.0
     }
     Surface(shape = CardShape, color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
