@@ -42,6 +42,7 @@ import com.mounsokdara.zyphvert.ui.components.CenteredContent
 import com.mounsokdara.zyphvert.ui.components.HeroCard
 import com.mounsokdara.zyphvert.ui.components.isWideLayout
 import com.mounsokdara.zyphvert.ui.components.SearchField
+import com.mounsokdara.zyphvert.ui.components.ConverterCard
 import com.mounsokdara.zyphvert.ui.components.ToolCard
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -61,7 +62,8 @@ fun HomeScreen(
             (selected == null || tool.category == selected) &&
                 (query.isBlank() ||
                     tool.title.contains(query, ignoreCase = true) ||
-                    tool.description.contains(query, ignoreCase = true))
+                    tool.description.contains(query, ignoreCase = true) ||
+                    tool.formats.any { it.contains(query, ignoreCase = true) })
         }
     }
     val groups = remember(visible) { visible.groupBy { it.category } }
@@ -135,10 +137,20 @@ fun HomeScreen(
 
             groups.forEach { (category, tools) ->
                 item(key = "header-${category.name}", span = { GridItemSpan(maxLineSpan) }) {
-                    SectionHeader(category.label, tools.size)
+                    SectionHeader(category, tools.size)
                 }
-                items(tools, key = { it.id }) { tool ->
-                    ToolCard(tool = tool, onClick = { onToolClick(tool) })
+                items(
+                    items = tools,
+                    key = { it.id },
+                    span = { tool ->
+                        if (tool.category == ToolCategory.Convert) GridItemSpan(maxLineSpan) else GridItemSpan(1)
+                    },
+                ) { tool ->
+                    if (tool.category == ToolCategory.Convert) {
+                        ConverterCard(tool = tool, onClick = { onToolClick(tool) })
+                    } else {
+                        ToolCard(tool = tool, onClick = { onToolClick(tool) })
+                    }
                 }
             }
         }
@@ -160,15 +172,16 @@ private fun CategoryChip(label: String, selected: Boolean, onClick: () -> Unit) 
 }
 
 @Composable
-private fun SectionHeader(title: String, count: Int) {
+private fun SectionHeader(category: ToolCategory, count: Int) {
     Column(Modifier.padding(top = 12.dp, start = 4.dp)) {
         Text(
-            title,
+            category.label,
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
-            if (count == 1) "1 tool" else "$count tools",
+            if (category == ToolCategory.Convert) "Each one converts to any format"
+            else if (count == 1) "1 tool" else "$count tools",
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

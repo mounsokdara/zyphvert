@@ -9,13 +9,9 @@ request the `INTERNET` permission, so your files never leave your phone.
 ### Convert
 | Tool | What it does |
 |---|---|
-| **Image → Video** | Turn photos into a video or slideshow |
-| **Video → Images** | Export frames from a video as images |
-| **Video → Audio** | Extract the soundtrack from a video |
-| **Video → GIF/WebP** | Make animated GIF or WebP from a clip |
-| **Audio → Video** | Combine audio with a picture or clip into a video |
-| **Live/Motion Photos** | Convert Live Photos and Motion Photos to regular video or images |
-| **HEIC/AVIF Convert** | Convert HEIC and AVIF images to common formats |
+| **Video converter** | Convert any video to MP4, MKV, WebM, MOV, AVI, GIF, WebP, MP3, M4A, WAV, FLAC, or an image sequence |
+| **Audio converter** | Convert any audio to MP3, M4A, AAC, WAV, FLAC, OGG, OPUS, or a video |
+| **Image converter** | Convert any image, including HEIC and Live Photos, to JPG, PNG, WebP, BMP, GIF, or a short video |
 
 ### Edit
 | Tool | What it does |
@@ -23,6 +19,10 @@ request the `INTERNET` permission, so your files never leave your phone.
 | **Trim & Cut** | Cut a clip to the part you want |
 | **Crop & Rotate** | Crop the frame and rotate or flip |
 | **Speed & Reverse** | Slow down, speed up or reverse playback |
+| **Compress** | Shrink a video, audio file, or image |
+| **Merge** | Join two videos or two audio files |
+| **Volume** | Make a clip louder, quieter, or silent |
+| **Subtitles** | Extract the first subtitle track as SRT |
 | **Filters** | Apply visual filters to video and images |
 | **Watermark** | Overlay a logo or text on your media |
 

@@ -14,6 +14,9 @@ import com.mounsokdara.zyphvert.data.JobStatus
 import com.mounsokdara.zyphvert.engine.EngineEvent
 import com.mounsokdara.zyphvert.engine.EngineFactory
 import com.mounsokdara.zyphvert.engine.MediaEngine
+import com.mounsokdara.zyphvert.ui.home.Formats
+import com.mounsokdara.zyphvert.ui.home.MediaKind
+import com.mounsokdara.zyphvert.ui.home.OutputChoice
 import com.mounsokdara.zyphvert.ui.home.Tool
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -41,6 +44,12 @@ class ToolViewModel @Inject constructor() : ViewModel() {
         private set
     var outputLabel by mutableStateOf<String?>(null)
         private set
+    var extraUri by mutableStateOf<Uri?>(null)
+        private set
+    var extraPath by mutableStateOf<String?>(null)
+        private set
+    var extraLabel by mutableStateOf<String?>(null)
+        private set
 
     var running by mutableStateOf(false)
         private set
@@ -62,6 +71,8 @@ class ToolViewModel @Inject constructor() : ViewModel() {
     var rotate by mutableStateOf("0")
     var flipH by mutableStateOf(false)
     var flipV by mutableStateOf(false)
+    var gain by mutableStateOf("1.0")
+    var mute by mutableStateOf(false)
 
     private var job: Job? = null
     private var currentJobId: String? = null
@@ -92,24 +103,53 @@ class ToolViewModel @Inject constructor() : ViewModel() {
         outputLabel = f.name
     }
 
+    fun setExtra(uri: Uri?, label: String?) {
+        extraUri = uri
+        extraPath = null
+        extraLabel = label
+    }
+
+    /** Picking a format renames a filesystem output so the extension matches. */
+    fun selectFormat(toolId: String, formatId: String) {
+        outputFormat = formatId
+        val choice = Formats.resolve(toolId, formatId) ?: return
+        val path = outputPath ?: return
+        val file = File(path)
+        val parent = file.parentFile ?: return
+        val stem = file.nameWithoutExtension
+            .replace(Regex("_?%0\\d+d$"), "")
+            .ifBlank { "output" }
+        val name = if (choice.kind == MediaKind.Sequence) "${stem}_%04d.${choice.ext}" else "$stem.${choice.ext}"
+        val next = File(parent, name)
+        if (next.absolutePath != file.absolutePath) setOutputPath(next.absolutePath)
+    }
+
     /** Place a sensible output next to the input file (File Manager flow). */
     fun suggestOutputBesideInput(toolId: String) {
         val inPath = inputPath ?: return
         val parent = File(inPath).parentFile ?: return
         val base = File(inPath).nameWithoutExtension
-        val ext = when (toolId) {
-            "vid2aud", "ringtone" -> "mp3"
-            "vid2gif" -> "gif"
-            "vid2img" -> "jpg"
-            "heic", "sticker" -> "jpg"
+        val choice = Formats.resolve(toolId, outputFormat.ifBlank { Formats.defaultId(toolId) })
+        val ext = when {
+            choice != null -> choice.ext
+            toolId == "ringtone" -> "mp3"
+            toolId == "sticker" -> "jpg"
+            toolId == "subs" -> "srt"
             else -> "mp4"
         }
-        var candidate = File(parent, "${base}_zyphvert.$ext")
+        val leaf = if (choice?.kind == MediaKind.Sequence) "${base}_zyphvert_%04d.$ext" else "${base}_zyphvert.$ext"
+        var candidate = File(parent, leaf)
         var n = 1
         while (candidate.exists()) {
-            candidate = File(parent, "${base}_zyphvert_$n.$ext")
+            val numbered = if (choice?.kind == MediaKind.Sequence) {
+                "${base}_zyphvert_${n}_%04d.$ext"
+            } else {
+                "${base}_zyphvert_$n.$ext"
+            }
+            candidate = File(parent, numbered)
             n++
         }
+        if (outputFormat.isBlank()) outputFormat = choice?.id ?: Formats.defaultId(toolId)
         setOutputPath(candidate.absolutePath)
     }
 
@@ -138,7 +178,18 @@ class ToolViewModel @Inject constructor() : ViewModel() {
             else -> null
         }
 
-        val cmd = buildCommand(tool, inArg, outArg)
+        val extraArg = when {
+            tool.id != "merge" -> null
+            extraPath != null -> quote(extraPath!!)
+            extraUri != null -> engine.safRead(context, extraUri!!)
+            else -> null
+        }
+        if (tool.id == "merge" && extraArg == null) {
+            add(LogLine("Pick a second file to merge", LogKind.Error))
+            return
+        }
+
+        val cmd = buildCommand(tool, inArg, outArg, extraArg)
         if (cmd == null) {
             add(LogLine("This tool needs more options or an output file", LogKind.Error))
             return
@@ -196,67 +247,25 @@ class ToolViewModel @Inject constructor() : ViewModel() {
         }
     }
 
-    private fun buildCommand(tool: Tool, input: String, output: String?): String? {
+    private fun buildCommand(tool: Tool, input: String, output: String?, extra: String?): String? {
         val out = output ?: return null
         val ss = startTime.trim().takeIf { it.isNotEmpty() }?.let { "-ss $it " } ?: ""
         val to = endTime.trim().takeIf { it.isNotEmpty() }?.let { "-to $it " } ?: ""
         val meta = if (stripMetadata) "-map_metadata -1 " else ""
-
-        fun scaleFilter(): String? = when (scale) {
-            "1080" -> "scale=-2:1080"
-            "720" -> "scale=-2:720"
-            "480" -> "scale=-2:480"
-            "360" -> "scale=-2:360"
-            else -> null
-        }
-
-        fun videoCodec(): String = when (codec) {
-            "h264" -> "libx264"
-            "h265" -> "libx265"
-            "vp9" -> "libvpx-vp9"
-            "copy" -> "copy"
-            else -> "libx264"
-        }
-
-        fun crf(): String = when (quality) {
-            "low" -> "28"
-            "medium" -> "23"
-            "high" -> "18"
-            else -> "23"
-        }
+        val choice = Formats.resolve(tool.id, outputFormat.ifBlank { Formats.defaultId(tool.id) })
 
         return when (tool.id) {
-            "vid2aud" -> {
-                val ab = audioBitrate.ifBlank { "192k" }
-                if (out.contains(".m4a", true) || outputFormat == "aac") {
-                    "${ss}${to}-i $input -vn -c:a aac -b:a $ab $meta$out".trim()
-                } else {
-                    "${ss}${to}-i $input -vn -c:a libmp3lame -b:a $ab $meta$out".trim()
-                }
+            "video" -> choice?.let { videoConvert(it, input, out, ss, to, meta) }
+            "audio" -> choice?.let { audioConvert(it, input, out, ss, to, meta) }
+            "image" -> choice?.let { imageConvert(it, input, out, meta) }
+            "compress" -> choice?.let { compress(it, input, out, meta) }
+            "merge" -> {
+                val second = extra ?: return null
+                val kind = choice?.kind ?: MediaKind.Video
+                merge(kind, input, second, out, meta)
             }
-            "vid2gif" -> {
-                val f = gifFps.ifBlank { "12" }
-                val w = gifWidth.ifBlank { "480" }
-                if (out.endsWith(".webp", ignoreCase = true)) {
-                    "${ss}${to}-i $input -vf fps=$f,scale=$w:-1:flags=lanczos -c:v libwebp -loop 0 $meta$out".trim()
-                } else {
-                    "${ss}${to}-i $input -vf fps=$f,scale=$w:-1:flags=lanczos $meta$out".trim()
-                }
-            }
-            "vid2img" -> {
-                val f = fps.takeIf { it != "original" && it.isNotBlank() } ?: "1"
-                "${ss}${to}-i $input -vf fps=$f $meta$out".trim()
-            }
-            "heic" -> "-i $input -q:v 2 $meta$out".trim()
-            "img2vid" -> {
-                val dur = endTime.trim().ifBlank { "5" }
-                val vf = scaleFilter()?.let { "-vf $it " } ?: ""
-                "-loop 1 -i $input -c:v ${videoCodec()} -t $dur ${vf}-pix_fmt yuv420p $meta$out".trim()
-            }
-            "aud2vid" ->
-                "-f lavfi -i color=c=black:s=1280x720:d=1 -i $input -shortest -c:v libx264 -c:a aac -pix_fmt yuv420p $meta$out".trim()
-            "live" ->
-                "-i $input -c:v ${videoCodec()} -crf ${crf()} -c:a aac $meta$out".trim()
+            "volume" -> volume(input, out, meta)
+            "subs" -> "-i $input -map 0:s:0 -c:s srt $out".trim()
             "trim" -> {
                 if (codec == "copy") "${ss}${to}-i $input -c copy $meta$out".trim()
                 else "${ss}${to}-i $input -c:v ${videoCodec()} -crf ${crf()} -c:a aac $meta$out".trim()
@@ -287,8 +296,10 @@ class ToolViewModel @Inject constructor() : ViewModel() {
                 "-i $input -vf $vf -c:v ${videoCodec()} -crf ${crf()} -c:a copy $meta$out".trim()
             }
             "scrub" -> "-i $input -map_metadata -1 -c copy $out".trim()
-            "meta" -> if (stripMetadata) "-i $input -map_metadata -1 -c copy $out".trim()
-            else "-i $input -c copy $out".trim()
+            "meta" -> {
+                if (stripMetadata) "-i $input -map_metadata -1 -c copy $out".trim()
+                else "-i $input -c copy $out".trim()
+            }
             "ringtone" -> {
                 val ab = audioBitrate.ifBlank { "128k" }
                 "${ss}${to}-i $input -vn -c:a libmp3lame -b:a $ab $meta$out".trim()
@@ -300,6 +311,147 @@ class ToolViewModel @Inject constructor() : ViewModel() {
             "wm" -> "-i $input -c:v ${videoCodec()} -crf ${crf()} -c:a copy $meta$out".trim()
             else -> null
         }
+    }
+
+    private fun videoConvert(choice: OutputChoice, input: String, out: String, ss: String, to: String, meta: String): String {
+        val ab = audioBitrate.ifBlank { "192k" }
+        return when (choice.kind) {
+            MediaKind.Audio -> "${ss}${to}-i $input -vn ${audioEncode(choice.ext, ab)} $meta$out".trim()
+            MediaKind.Sequence -> {
+                val f = fps.takeIf { it != "original" && it.isNotBlank() } ?: "1"
+                "${ss}${to}-i $input -vf fps=$f $meta$out".trim()
+            }
+            MediaKind.Image -> gifLike(choice.ext, input, out, ss, to, meta)
+            MediaKind.Video -> {
+                if (codec == "copy") return "${ss}${to}-i $input -c copy $meta$out".trim()
+                val filters = buildList {
+                    scaleFilter()?.let { add(it) }
+                    if (fps != "original" && fps.isNotBlank()) add("fps=$fps")
+                }
+                val vf = if (filters.isNotEmpty()) "-vf ${filters.joinToString(",")} " else ""
+                val (vc, ac, extra) = videoCodecs(choice.ext)
+                "${ss}${to}-i $input -c:v $vc ${rateArgs(vc)} -c:a $ac $extra${vf}$meta$out".trim()
+            }
+        }
+    }
+
+    private fun audioConvert(choice: OutputChoice, input: String, out: String, ss: String, to: String, meta: String): String {
+        if (choice.kind == MediaKind.Video) {
+            return "-f lavfi -i color=c=0x111318:s=1280x720 -i $input -shortest -c:v libx264 -pix_fmt yuv420p -c:a aac -b:a ${audioBitrate.ifBlank { "192k" }} $meta$out".trim()
+        }
+        return "${ss}${to}-i $input -vn ${audioEncode(choice.ext, audioBitrate.ifBlank { "192k" })} $meta$out".trim()
+    }
+
+    private fun imageConvert(choice: OutputChoice, input: String, out: String, meta: String): String {
+        val vf = scaleFilter()?.let { "-vf $it " } ?: ""
+        return when (choice.kind) {
+            MediaKind.Video -> {
+                val dur = endTime.trim().ifBlank { "5" }
+                "-loop 1 -i $input -c:v ${videoCodec()} -t $dur ${vf}-pix_fmt yuv420p $meta$out".trim()
+            }
+            else -> "-i $input ${vf}-q:v 2 $meta$out".trim()
+        }
+    }
+
+    private fun compress(choice: OutputChoice, input: String, out: String, meta: String): String {
+        val ab = when (quality) {
+            "low" -> "96k"
+            "high" -> "160k"
+            else -> "128k"
+        }
+        return when (choice.kind) {
+            MediaKind.Audio -> "-i $input -vn ${audioEncode(choice.ext, ab)} $meta$out".trim()
+            MediaKind.Image -> {
+                val (width, q) = when (quality) {
+                    "low" -> "1280" to "8"
+                    "high" -> "2048" to "3"
+                    else -> "1600" to "5"
+                }
+                "-i $input -vf scale=$width:-1 -q:v $q $meta$out".trim()
+            }
+            else -> {
+                val (crfValue, height) = when (quality) {
+                    "low" -> "34" to "480"
+                    "high" -> "23" to null
+                    else -> "28" to "720"
+                }
+                val vf = height?.let { "-vf scale=-2:$it " } ?: ""
+                "-i $input ${vf}-c:v libx264 -crf $crfValue -c:a aac -b:a $ab $meta$out".trim()
+            }
+        }
+    }
+
+    private fun merge(kind: MediaKind, first: String, second: String, out: String, meta: String): String {
+        return if (kind == MediaKind.Audio) {
+            "-i $first -i $second -filter_complex \"[0:a:0][1:a:0]concat=n=2:v=0:a=1[a]\" -map \"[a]\" ${audioEncode("mp3", audioBitrate.ifBlank { "192k" })} $meta$out".trim()
+        } else {
+            "-i $first -i $second -filter_complex \"[0:v:0][0:a:0][1:v:0][1:a:0]concat=n=2:v=1:a=1[v][a]\" -map \"[v]\" -map \"[a]\" -c:v libx264 -crf ${crf()} -c:a aac $meta$out".trim()
+        }
+    }
+
+    private fun volume(input: String, out: String, meta: String): String {
+        val vol = if (mute) "0" else (gain.toDoubleOrNull()?.coerceIn(0.0, 4.0) ?: 1.0).toString()
+        return "-i $input -af volume=$vol -c:v copy $meta$out".trim()
+    }
+
+    private fun gifLike(ext: String, input: String, out: String, ss: String, to: String, meta: String): String {
+        val f = gifFps.ifBlank { "12" }
+        val w = gifWidth.ifBlank { "480" }
+        return if (ext == "webp") {
+            "${ss}${to}-i $input -vf fps=$f,scale=$w:-1:flags=lanczos -c:v libwebp -loop 0 $meta$out".trim()
+        } else {
+            "${ss}${to}-i $input -vf fps=$f,scale=$w:-1:flags=lanczos $meta$out".trim()
+        }
+    }
+
+    private fun audioEncode(ext: String, bitrate: String): String = when (ext) {
+        "mp3" -> "-c:a libmp3lame -b:a $bitrate"
+        "m4a", "aac" -> "-c:a aac -b:a $bitrate"
+        "wav" -> "-c:a pcm_s16le"
+        "flac" -> "-c:a flac"
+        "ogg" -> "-c:a libvorbis -q:a 5"
+        "opus" -> "-c:a libopus -b:a $bitrate"
+        else -> "-c:a aac -b:a $bitrate"
+    }
+
+    /** video codec, audio codec, extra flags (with trailing space if non-empty). */
+    private fun videoCodecs(ext: String): Triple<String, String, String> = when (ext) {
+        "webm" -> Triple("libvpx-vp9", "libopus", "")
+        "avi" -> Triple("mpeg4", "libmp3lame", "")
+        else -> {
+            val vc = videoCodec()
+            val tag = if (vc == "libx265" && ext != "mkv") "-tag:v hvc1 " else ""
+            Triple(vc, "aac", tag)
+        }
+    }
+
+    private fun rateArgs(vcodec: String): String = when (vcodec) {
+        "libvpx-vp9" -> "-crf ${crf()} -b:v 0"
+        "mpeg4" -> "-q:v 5"
+        else -> "-crf ${crf()}"
+    }
+
+    private fun scaleFilter(): String? = when (scale) {
+        "1080" -> "scale=-2:1080"
+        "720" -> "scale=-2:720"
+        "480" -> "scale=-2:480"
+        "360" -> "scale=-2:360"
+        else -> null
+    }
+
+    private fun videoCodec(): String = when (codec) {
+        "h264" -> "libx264"
+        "h265" -> "libx265"
+        "vp9" -> "libvpx-vp9"
+        "copy" -> "copy"
+        else -> "libx264"
+    }
+
+    private fun crf(): String = when (quality) {
+        "low" -> "28"
+        "medium" -> "23"
+        "high" -> "18"
+        else -> "23"
     }
 
     private fun add(line: LogLine) {

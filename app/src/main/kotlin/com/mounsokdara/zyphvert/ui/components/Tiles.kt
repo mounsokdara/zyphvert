@@ -36,7 +36,13 @@ private val TileShape = RoundedCornerShape(24.dp)
 
 /** Big hub card used on the More screen. */
 @Composable
-fun MoreCard(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun MoreCard(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
     val shape = RoundedCornerShape(28.dp)
     Surface(
         shape = shape,

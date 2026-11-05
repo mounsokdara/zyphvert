@@ -65,14 +65,14 @@ fun HeroCard(modifier: Modifier = Modifier) {
                 }
                 Spacer(Modifier.height(16.dp))
                 Text(
-                    "Convert and edit media\nwithout it leaving your phone",
+                    "Convert any file to any format, on your phone",
                     style = MaterialTheme.typography.headlineSmall,
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "No ads, no tracking, no account. Zyphvert doesn’t even ask for the internet permission.",
+                    "Video, audio, or image — one converter each, and it can turn the file into anything else. No ads, no tracking, no account.",
                     style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.fillMaxWidth(if (isWideLayout()) 0.6f else 0.82f),
+                    modifier = Modifier.fillMaxWidth(if (isWideLayout()) 0.72f else 0.92f),
                 )
             }
         }

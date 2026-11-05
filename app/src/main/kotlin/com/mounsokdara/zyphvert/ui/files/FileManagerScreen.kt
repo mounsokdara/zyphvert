@@ -294,9 +294,10 @@ fun FileManagerScreen(
                 }
                 ActionRow(Icons.Rounded.Transform, "Open in converter…") {
                     val id = when (selected.extension) {
-                        in listOf("mp4", "mkv", "webm", "mov", "avi", "m4v") -> "vid2aud"
-                        in listOf("mp3", "aac", "flac", "wav", "ogg", "m4a") -> "ringtone"
-                        in listOf("jpg", "jpeg", "png", "webp", "heic", "avif", "gif") -> "heic"
+                        in listOf("mp4", "mkv", "webm", "mov", "avi", "m4v", "3gp", "flv", "ts", "m2ts") -> "video"
+                        in listOf("mp3", "aac", "flac", "wav", "ogg", "m4a", "opus", "wma") -> "audio"
+                        in listOf("jpg", "jpeg", "png", "webp", "heic", "heif", "avif", "gif", "bmp") -> "image"
+                        in listOf("srt", "vtt", "ass", "ssa") -> "subs"
                         else -> "ffmpeg"
                     }
                     onOpenInTool(id, selected.file.absolutePath)

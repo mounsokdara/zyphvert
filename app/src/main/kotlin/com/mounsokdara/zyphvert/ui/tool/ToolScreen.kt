@@ -1,10 +1,10 @@
 package com.mounsokdara.zyphvert.ui.tool
 
-import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -59,6 +59,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.mounsokdara.zyphvert.ui.components.SubScreenScaffold
+import com.mounsokdara.zyphvert.ui.home.Formats
+import com.mounsokdara.zyphvert.ui.home.MediaKind
 import com.mounsokdara.zyphvert.ui.home.Tool
 import com.mounsokdara.zyphvert.ui.home.accent
 import com.mounsokdara.zyphvert.util.StorageAccess
@@ -96,6 +98,24 @@ fun ToolScreen(
             } catch (_: SecurityException) { }
             val name = uri.lastPathSegment?.substringAfterLast('/') ?: uri.toString()
             vm.setOutput(uri, name)
+        }
+    }
+    val pickExtra = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            try {
+                ctx.contentResolver.takePersistableUriPermission(
+                    uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                )
+            } catch (_: SecurityException) { }
+            val name = uri.lastPathSegment?.substringAfterLast('/') ?: uri.toString()
+            vm.setExtra(uri, name)
+        }
+    }
+
+    LaunchedEffect(tool.id) {
+        if (vm.outputFormat.isBlank()) {
+            vm.outputFormat = Formats.defaultId(tool.id)
+            if (tool.id == "compress") vm.quality = "medium"
         }
     }
 
@@ -192,13 +212,22 @@ fun ToolScreen(
                     title = "Output file",
                     label = vm.outputLabel,
                     onPick = {
-                        val suggested = suggestedOutputName(tool)
+                        val suggested = suggestedOutputName(tool, vm.outputFormat)
                         pickOutput.launch(suggested)
                     },
                     onClear = { vm.setOutput(null, null) },
                     pickIcon = Icons.Rounded.SaveAlt,
                     pickLabel = "Choose output",
                 )
+                if (tool.id == "merge") {
+                    FilePickCard(
+                        title = "Second file",
+                        label = vm.extraLabel,
+                        onPick = { pickExtra.launch(arrayOf("*/*")) },
+                        onClear = { vm.setExtra(null, null) },
+                        pickLabel = "Add the file to join after",
+                    )
+                }
 
                 // Advanced options per tool
                 OptionsCard(tool, vm)
@@ -274,7 +303,8 @@ fun ToolScreen(
                             }
                             vm.run(tool, ctx)
                         },
-                        enabled = vm.inputUri != null && vm.outputUri != null,
+                        enabled = vm.inputUri != null && vm.outputUri != null &&
+                            (tool.id != "merge" || vm.extraUri != null),
                         modifier = Modifier
                             .weight(1f)
                             .height(52.dp),
@@ -370,27 +400,152 @@ private fun OptionsCard(tool: Tool, vm: ToolViewModel) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
 
             when (tool.id) {
-                "vid2aud", "ringtone" -> {
+                "video", "audio", "image" -> {
+                    val choices = Formats.forTool(tool.id)
+                    val selected = vm.outputFormat.ifBlank { choices.firstOrNull()?.id.orEmpty() }
+                    val choice = Formats.resolve(tool.id, selected)
+                    Text(
+                        "Convert to anything. Pick a format, then choose where to save it.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    ChipRow("Convert to", choices.map { it.id }, selected, { id ->
+                        choices.firstOrNull { it.id == id }?.label ?: id
+                    }) { vm.selectFormat(tool.id, it) }
+                    if (choice == null) {
+                        Text(
+                            "Pick a format to continue.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else when (choice.kind) {
+                        MediaKind.Audio -> {
+                            ChipRow("Bitrate", listOf("96k", "128k", "192k", "256k", "320k"), vm.audioBitrate) {
+                                vm.audioBitrate = it
+                            }
+                            if (tool.id != "image") TimeFields(vm)
+                        }
+                        MediaKind.Sequence -> {
+                            OutlinedTextField(
+                                value = if (vm.fps == "original") "1" else vm.fps,
+                                onValueChange = { vm.fps = it },
+                                label = { Text("Frames per second") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                            )
+                            Text(
+                                "The output name should contain %04d, for example frame_%04d.jpg.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            TimeFields(vm)
+                        }
+                        MediaKind.Image -> {
+                            if (tool.id == "video" && (choice.id == "gif" || choice.id == "webp")) {
+                                OutlinedTextField(
+                                    value = vm.gifFps,
+                                    onValueChange = { vm.gifFps = it },
+                                    label = { Text("FPS") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true,
+                                )
+                                OutlinedTextField(
+                                    value = vm.gifWidth,
+                                    onValueChange = { vm.gifWidth = it },
+                                    label = { Text("Width (px)") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true,
+                                )
+                                TimeFields(vm)
+                            } else {
+                                ChipRow("Scale", listOf("original", "1080", "720", "480"), vm.scale) { vm.scale = it }
+                            }
+                        }
+                        MediaKind.Video -> {
+                            if (tool.id == "image" || tool.id == "audio") {
+                                if (tool.id == "image") {
+                                    OutlinedTextField(
+                                        value = vm.endTime.ifBlank { "5" },
+                                        onValueChange = { vm.endTime = it },
+                                        label = { Text("Duration (seconds)") },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        singleLine = true,
+                                    )
+                                    ChipRow("Scale", listOf("original", "1080", "720", "480"), vm.scale) { vm.scale = it }
+                                } else {
+                                    Text(
+                                        "Builds a video from this audio.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            } else {
+                                ChipRow("Scale", listOf("original", "1080", "720", "480", "360"), vm.scale) { vm.scale = it }
+                                ChipRow("Frame rate", listOf("original", "24", "30", "60"), vm.fps) { vm.fps = it }
+                                ChipRow("Quality", listOf("low", "medium", "high"), vm.quality) { vm.quality = it }
+                                ChipRow("Codec", listOf("auto", "h264", "h265", "vp9", "copy"), vm.codec) { vm.codec = it }
+                                TimeFields(vm)
+                            }
+                        }
+                    }
+                    choice?.let {
+                        val label = vm.outputLabel
+                        val ext = label?.substringAfterLast('.', "")?.lowercase().orEmpty()
+                        val mismatch = label != null && it.kind != MediaKind.Sequence && ext.isNotEmpty() && ext != it.ext
+                        if (mismatch) {
+                            Text(
+                                "Save the file as .${it.ext} so it matches ${it.label}.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
+                }
+                "compress" -> {
+                    val choices = Formats.forTool("compress")
+                    ChipRow("File type", choices.map { it.id }, vm.outputFormat.ifBlank { "mp4" }, { id ->
+                        choices.first { it.id == id }.label
+                    }) { vm.selectFormat(tool.id, it) }
+                    ChipRow("Size", listOf("low", "medium", "high"), vm.quality, {
+                        when (it) {
+                            "low" -> "Smaller"
+                            "high" -> "Clearer"
+                            else -> "Balanced"
+                        }
+                    }) { vm.quality = it }
+                }
+                "merge" -> {
+                    Text(
+                        "The second file is joined after the first. Both should be the same kind of media.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    val choices = Formats.forTool("merge")
+                    ChipRow("Output", choices.map { it.id }, vm.outputFormat.ifBlank { "mp4" }, { id ->
+                        choices.first { it.id == id }.label
+                    }) { vm.selectFormat(tool.id, it) }
+                    if (vm.outputFormat != "mp3") {
+                        ChipRow("Quality", listOf("low", "medium", "high"), vm.quality) { vm.quality = it }
+                    }
+                }
+                "volume" -> {
+                    ChipRow("Loudness", listOf("0.5", "0.75", "1.0", "1.25", "1.5", "2.0"), vm.gain) { vm.gain = it }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Mute", modifier = Modifier.weight(1f))
+                        Switch(checked = vm.mute, onCheckedChange = { vm.mute = it })
+                    }
+                }
+                "subs" -> {
+                    Text(
+                        "Saves the first subtitle track as an SRT file. The video needs embedded subtitles.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                "ringtone" -> {
                     ChipRow("Quality / bitrate", listOf("96k", "128k", "192k", "256k", "320k"), vm.audioBitrate) {
                         vm.audioBitrate = it
                     }
-                    TimeFields(vm)
-                }
-                "vid2gif" -> {
-                    OutlinedTextField(
-                        value = vm.gifFps,
-                        onValueChange = { vm.gifFps = it },
-                        label = { Text("FPS") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                    )
-                    OutlinedTextField(
-                        value = vm.gifWidth,
-                        onValueChange = { vm.gifWidth = it },
-                        label = { Text("Width (px)") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                    )
                     TimeFields(vm)
                 }
                 "trim" -> {
@@ -425,31 +580,12 @@ private fun OptionsCard(tool: Tool, vm: ToolViewModel) {
                     ChipRow("Scale", listOf("original", "1080", "720", "480"), vm.scale) { vm.scale = it }
                     ChipRow("Quality", listOf("low", "medium", "high"), vm.quality) { vm.quality = it }
                 }
-                "vid2img" -> {
-                    OutlinedTextField(
-                        value = if (vm.fps == "original") "1" else vm.fps,
-                        onValueChange = { vm.fps = it },
-                        label = { Text("Frames per second") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                    )
-                    TimeFields(vm)
-                }
-                "img2vid", "live", "aud2vid", "filters", "wm" -> {
+                "filters", "wm" -> {
                     ChipRow("Scale", listOf("original", "1080", "720", "480"), vm.scale) { vm.scale = it }
                     ChipRow("Quality", listOf("low", "medium", "high"), vm.quality) { vm.quality = it }
                     ChipRow("Codec", listOf("auto", "h264", "h265", "vp9"), vm.codec) { vm.codec = it }
-                    if (tool.id == "img2vid") {
-                        OutlinedTextField(
-                            value = vm.endTime.ifBlank { "5" },
-                            onValueChange = { vm.endTime = it },
-                            label = { Text("Duration (seconds)") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                        )
-                    }
                 }
-                "heic", "sticker" -> {
+                "sticker" -> {
                     ChipRow("Scale", listOf("original", "1080", "720", "480"), vm.scale) { vm.scale = it }
                 }
                 "scrub", "meta" -> {
@@ -468,7 +604,7 @@ private fun OptionsCard(tool: Tool, vm: ToolViewModel) {
             }
 
             // Common
-            if (tool.id !in listOf("scrub", "meta", "batch")) {
+            if (tool.id !in listOf("scrub", "meta", "batch", "subs")) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Strip metadata", modifier = Modifier.weight(1f))
                     Switch(checked = vm.stripMetadata, onCheckedChange = { vm.stripMetadata = it })
@@ -499,28 +635,43 @@ private fun TimeFields(vm: ToolViewModel) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ChipRow(label: String, options: List<String>, selected: String, onSelect: (String) -> Unit) {
+private fun ChipRow(
+    label: String,
+    options: List<String>,
+    selected: String,
+    optionLabel: (String) -> String = { it },
+    onSelect: (String) -> Unit,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(label, style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
             options.forEach { opt ->
                 FilterChip(
                     selected = selected == opt,
                     onClick = { onSelect(opt) },
-                    label = { Text(opt) },
+                    label = { Text(optionLabel(opt)) },
                 )
             }
         }
     }
 }
 
-private fun suggestedOutputName(tool: Tool): String = when (tool.id) {
-    "vid2aud", "ringtone" -> "output.mp3"
-    "vid2gif" -> "output.gif"
-    "vid2img" -> "frame_%04d.jpg"
-    "heic", "sticker" -> "output.jpg"
-    "scrub", "meta", "trim", "speed", "crop", "filters", "wm", "live", "img2vid", "aud2vid" -> "output.mp4"
-    else -> "output"
+private fun suggestedOutputName(tool: Tool, formatId: String): String {
+    val choice = Formats.resolve(tool.id, formatId.ifBlank { Formats.defaultId(tool.id) })
+    if (choice != null) {
+        return if (choice.kind == MediaKind.Sequence) "frame_%04d.${choice.ext}" else "output.${choice.ext}"
+    }
+    return when (tool.id) {
+        "ringtone" -> "output.mp3"
+        "sticker" -> "output.jpg"
+        "subs" -> "output.srt"
+        "scrub", "meta", "trim", "speed", "crop", "filters", "wm", "volume" -> "output.mp4"
+        else -> "output"
+    }
 }
