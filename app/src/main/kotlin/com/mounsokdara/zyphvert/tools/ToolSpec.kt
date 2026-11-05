@@ -5,13 +5,17 @@ import android.net.Uri
 import com.mounsokdara.zyphvert.engine.MediaEngine
 import java.io.File
 
-enum class InKind(val mimes: Array<String>) {
-    Video(arrayOf("video/*")),
-    Audio(arrayOf("audio/*")),
-    Media(arrayOf("video/*", "audio/*")),
-    Image(arrayOf("image/*")),
-    Visual(arrayOf("video/*", "image/*")),
-    Any(arrayOf("*/*")),
+enum class InKind(val mimes: Array<String>, val exts: Set<String>?) {
+    Video(arrayOf("video/*"), VIDEO_EXTS),
+    Audio(arrayOf("audio/*"), AUDIO_EXTS),
+    Media(arrayOf("video/*", "audio/*"), VIDEO_EXTS + AUDIO_EXTS),
+    Image(arrayOf("image/*"), IMAGE_EXTS),
+    Visual(arrayOf("video/*", "image/*"), VIDEO_EXTS + IMAGE_EXTS),
+    Any(arrayOf("*/*"), null),
+    ;
+
+    /** Video and audio-or-video slots also accept Live/Motion Photos, which are swapped for their video. */
+    val acceptsLive get() = this == Video || this == Media
 }
 
 data class InputSlot(
@@ -76,7 +80,14 @@ sealed class Opt(
     class Section(label: String, advanced: Boolean = false) : Opt("section:$label", label, null, advanced) { override val default = "" }
 }
 
-data class PickedFile(val uri: Uri, val name: String) {
+data class PickedFile(
+    val uri: Uri,
+    val name: String,
+    /** Path of the motion half of an iPhone Live Photo (HEIC + MOV pair). */
+    val companion: String? = null,
+    /** Looks like a Live Photo or Motion Photo. */
+    val live: Boolean = false,
+) {
     /** Real path when the file came from the file manager. */
     val path: String? get() = if (uri.scheme == "file") uri.path else null
 }

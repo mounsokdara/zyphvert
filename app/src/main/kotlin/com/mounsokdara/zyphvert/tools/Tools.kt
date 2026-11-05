@@ -517,19 +517,15 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
     ToolSpec(
         id = "live",
         intro = "Get the video out of a Motion Photo or Live Photo, or turn it into a GIF or a still frame.",
-        inputs = listOf(InputSlot("media", "Motion Photo (JPG) or Live Photo video (MOV/MP4)", InKind.Any)),
+        inputs = listOf(InputSlot("media", "Live Photo or Motion Photo", InKind.Visual)),
         options = listOf(
             Opt.Choice("action", "Action", items("video" to "Extract the video (MP4)", "gif" to "Make a GIF", "still" to "Grab a still frame (JPG)")),
         ),
         actionLabel = "Convert",
-        hint = "Android Motion Photos hide an MP4 inside the JPEG. For an iPhone Live Photo, pick its video half (the MOV).",
+        hint = "Works with iPhone Live Photos (the picture with its MOV next to it), Android Motion Photos, and plain MOV or MP4 clips.",
         build = { r ->
             val f = r.file("media")!!
-            val src: String = if (isImageName(f.name)) {
-                val tmp = File(r.ctx.cacheDir, "motion_${System.currentTimeMillis()}.mp4")
-                if (!extractMotionVideo(r.ctx, f.uri, tmp)) fail("No embedded video found. This doesn't look like a Motion Photo.")
-                tmp.path
-            } else r.saf(f)
+            val src = r.saf(resolveLive(r.ctx, f))
             when (r.str("action")) {
                 "gif" -> {
                     val out = r.out("Images", f, "gif")

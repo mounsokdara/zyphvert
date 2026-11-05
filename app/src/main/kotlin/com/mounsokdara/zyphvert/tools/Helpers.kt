@@ -11,8 +11,8 @@ import android.provider.OpenableColumns
 import java.io.File
 import java.util.Locale
 
-internal val imageExts = setOf("jpg", "jpeg", "png", "webp", "bmp", "heic", "heif", "avif", "tif", "tiff", "gif")
-internal val audioExts = setOf("mp3", "m4a", "aac", "flac", "wav", "ogg", "opus", "wma", "amr", "mka")
+internal val imageExts = IMAGE_EXTS
+internal val audioExts = AUDIO_EXTS
 
 internal fun nameExt(name: String) = name.substringAfterLast('.', "").lowercase()
 internal fun baseName(name: String) = name.substringBeforeLast('.').replace(Regex("[^A-Za-z0-9_-]"), "_").trim('_').take(40).ifEmpty { "file" }
@@ -127,3 +127,22 @@ internal fun streamsOf(ctx: Context, uri: Uri): Pair<Boolean, Boolean>? = runCat
 
 /** Tag values go inside double quotes, so only quotes, backslashes and newlines are a problem. */
 internal fun cleanTag(s: String) = s.filterNot { it == '"' || it == '\'' || it == '\\' || it == '\n' || it == '\r' }.trim()
+
+/**
+ * Live Photo / Motion Photo to its video: the paired MOV for an iPhone Live Photo,
+ * or the MP4 hidden inside an Android Motion Photo JPEG.
+ */
+internal fun resolveLive(ctx: Context, f: PickedFile): PickedFile {
+    if (!isImageName(f.name)) return f
+    f.companion?.let { c ->
+        val file = File(c)
+        if (file.isFile) return PickedFile(Uri.fromFile(file), file.name)
+    }
+    val tmp = File(ctx.cacheDir, "live_${(f.uri.toString().hashCode().toLong() and 0xffffffffL)}.mp4")
+    if (!tmp.exists() || tmp.length() == 0L) {
+        if (!extractMotionVideo(ctx, f.uri, tmp)) {
+            throw IllegalArgumentException("${f.name} isn't a Live Photo or Motion Photo. For an iPhone Live Photo, pick the picture that has its video next to it.")
+        }
+    }
+    return PickedFile(Uri.fromFile(tmp), f.name.substringBeforeLast('.') + ".mp4")
+}

@@ -14,6 +14,7 @@ import com.mounsokdara.zyphvert.tools.Opt
 import com.mounsokdara.zyphvert.tools.PickedFile
 import com.mounsokdara.zyphvert.tools.ToolRequest
 import com.mounsokdara.zyphvert.tools.ToolSpec
+import com.mounsokdara.zyphvert.tools.resolveLive
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -69,8 +70,14 @@ class ToolViewModel @Inject constructor(
         error = null
         viewModelScope.launch {
             try {
-                val req = ToolRequest(ctx.applicationContext, manager.engine, title, picked.toMap(), values.toMap())
-                val jobs = withContext(Dispatchers.IO) { spec.build(req) }
+                val app = ctx.applicationContext
+                val jobs = withContext(Dispatchers.IO) {
+                    // Video-ish slots accept Live/Motion Photos: swap them for their video first.
+                    val files = picked.toMap().mapValues { (slot, list) ->
+                        if (spec.inputs.firstOrNull { it.id == slot }?.kind?.acceptsLive == true) list.map { resolveLive(app, it) } else list
+                    }
+                    spec.build(ToolRequest(app, manager.engine, title, files, values.toMap()))
+                }
                 if (jobs.isEmpty()) throw IllegalArgumentException("Nothing to do.")
                 // Don't remember per-file or free-text fields.
                 val keep = values.filterKeys { !it.startsWith("tag.") && it != "name" && it != "range" && !it.startsWith("range.") }
