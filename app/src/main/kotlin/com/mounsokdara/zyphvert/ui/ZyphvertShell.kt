@@ -124,19 +124,13 @@ fun ZyphvertShell(settingsVm: SettingsViewModel, hapticsEnabled: Boolean) {
                         }
                         TerminalScreen(tvm, onBack = { openToolId = null; pendingFilePath = null })
                     } else {
-                        // Key ViewModel per tool so state does not leak across tools
+                        // Key ViewModel per tool so form state does not leak across tools
                         val tvm = hiltViewModel<ToolViewModel>(key = activeTool.id)
-                        val seed = pendingFilePath
-                        LaunchedEffect(seed, activeTool.id) {
-                            if (seed != null) {
-                                tvm.setInputPath(seed)
-                                tvm.suggestOutputBesideInput(activeTool.id)
-                                pendingFilePath = null
-                            }
-                        }
                         ToolScreen(
                             tool = activeTool,
+                            seedPath = pendingFilePath,
                             onBack = { openToolId = null; pendingFilePath = null },
+                            onQueued = { openToolId = null; pendingFilePath = null; current = Destination.Queue },
                             vm = tvm,
                         )
                     }

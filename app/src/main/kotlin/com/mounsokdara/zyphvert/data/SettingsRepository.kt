@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -63,4 +64,21 @@ class SettingsRepository @Inject constructor(
     }
 
     suspend fun clearCommands() = context.dataStore.edit { it.remove(Keys.saved) }
+
+    /** Remembered options for a tool ("Use the same settings next time"). Empty if none. */
+    suspend fun toolSettings(toolId: String): Map<String, String> {
+        val raw = context.dataStore.data.first()[androidx.datastore.preferences.core.stringPreferencesKey("tool_$toolId")]
+            ?: return emptyMap()
+        return runCatching {
+            val o = org.json.JSONObject(raw)
+            o.keys().asSequence().associateWith { o.getString(it) }
+        }.getOrDefault(emptyMap())
+    }
+
+    suspend fun saveToolSettings(toolId: String, values: Map<String, String>?) {
+        val key = androidx.datastore.preferences.core.stringPreferencesKey("tool_$toolId")
+        context.dataStore.edit {
+            if (values == null) it.remove(key) else it[key] = org.json.JSONObject(values as Map<*, *>).toString()
+        }
+    }
 }

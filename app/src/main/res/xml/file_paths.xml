@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Lets "Open" and "Share" hand any converted file to other apps. -->
+    <root-path name="root" path="." />
+</paths>

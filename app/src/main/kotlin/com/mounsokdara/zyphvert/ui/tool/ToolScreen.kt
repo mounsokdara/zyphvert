@@ -1,678 +1,461 @@
+@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+
 package com.mounsokdara.zyphvert.ui.tool
 
-import android.widget.Toast
+import android.Manifest
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.FileOpen
-import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.SaveAlt
-import androidx.compose.material.icons.rounded.Stop
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedCard
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.automirrored.rounded.*
+import androidx.compose.material.icons.rounded.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
-import com.mounsokdara.zyphvert.ui.components.SubScreenScaffold
-import com.mounsokdara.zyphvert.ui.home.Formats
-import com.mounsokdara.zyphvert.ui.home.MediaKind
+import com.mounsokdara.zyphvert.tools.*
+import com.mounsokdara.zyphvert.ui.components.SectionLabel
 import com.mounsokdara.zyphvert.ui.home.Tool
 import com.mounsokdara.zyphvert.ui.home.accent
 import com.mounsokdara.zyphvert.util.StorageAccess
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+private val CardShape = RoundedCornerShape(24.dp)
+
 @Composable
-fun ToolScreen(
-    tool: Tool,
-    onBack: () -> Unit,
-    vm: ToolViewModel = hiltViewModel(),
-) {
-    val accent = tool.category.accent()
+fun ToolScreen(tool: Tool, seedPath: String?, onBack: () -> Unit, onQueued: () -> Unit, vm: ToolViewModel) {
+    val spec = toolSpecs[tool.id]
     val ctx = LocalContext.current
-    val listState = rememberLazyListState()
+    var askStorage by remember { mutableStateOf(false) }
+    var advancedOpen by rememberSaveable { mutableStateOf(false) }
+    val notif = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
-    val pickInput = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) {
-            try {
-                ctx.contentResolver.takePersistableUriPermission(
-                    uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION,
-                )
-            } catch (_: SecurityException) { }
-            val name = uri.lastPathSegment?.substringAfterLast('/') ?: uri.toString()
-            vm.setInput(uri, name)
+    if (spec == null) {
+        Scaffold(topBar = { TopAppBar(title = { Text(tool.title) }, navigationIcon = { BackButton(onBack) }) }) { p ->
+            Box(Modifier.padding(p).fillMaxSize(), contentAlignment = Alignment.Center) { Text("This tool isn't available.") }
         }
+        return
     }
-    val pickOutput = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("*/*")) { uri ->
-        if (uri != null) {
-            try {
-                ctx.contentResolver.takePersistableUriPermission(
-                    uri,
-                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                        android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
-                )
-            } catch (_: SecurityException) { }
-            val name = uri.lastPathSegment?.substringAfterLast('/') ?: uri.toString()
-            vm.setOutput(uri, name)
-        }
-    }
-    val pickExtra = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) {
-            try {
-                ctx.contentResolver.takePersistableUriPermission(
-                    uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION,
-                )
-            } catch (_: SecurityException) { }
-            val name = uri.lastPathSegment?.substringAfterLast('/') ?: uri.toString()
-            vm.setExtra(uri, name)
-        }
+    LaunchedEffect(spec.id, seedPath) { vm.init(spec, seedPath) }
+
+    val ready = spec.inputs.all { it.optional || vm.picked[it.id].orEmpty().isNotEmpty() }
+    val vals: Map<String, String> = vm.values
+    fun start() {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ctx.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) notif.launch(Manifest.permission.POST_NOTIFICATIONS)
+        vm.submit(ctx, spec, tool.title, onQueued)
     }
 
-    LaunchedEffect(tool.id) {
-        if (vm.outputFormat.isBlank()) {
-            vm.outputFormat = Formats.defaultId(tool.id)
-            if (tool.id == "compress") vm.quality = "medium"
-        }
-    }
-
-    LaunchedEffect(vm.lines.size) {
-        if (vm.lines.isNotEmpty()) listState.scrollToItem(vm.lines.lastIndex)
-    }
-
-    SubScreenScaffold(title = tool.title, onBack = onBack) { pad ->
-        Column(
-            Modifier
-                .padding(pad)
-                .fillMaxSize()
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            // Engine status
-            Text(
-                vm.engine.version(),
-                style = MaterialTheme.typography.labelMedium,
-                color = if (vm.engine.isAvailable) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.error,
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.surface,
+        topBar = {
+            TopAppBar(
+                title = { Text(tool.title, style = MaterialTheme.typography.titleLarge) },
+                navigationIcon = { BackButton(onBack) },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
             )
-
-            if (!StorageAccess.hasAllFilesAccess()) {
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.tertiaryContainer,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Row(
-                        Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        },
+        bottomBar = {
+            Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
+                Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp), contentAlignment = Alignment.Center) {
+                    Button(
+                        onClick = { if (!StorageAccess.hasAllFilesAccess()) askStorage = true else start() },
+                        enabled = ready && !vm.busy,
+                        modifier = Modifier.widthIn(max = 640.dp).fillMaxWidth().height(56.dp),
+                        shape = CircleShape,
                     ) {
-                        Text(
-                            "Grant All files access for the best experience with any path.",
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.weight(1f),
-                            color = MaterialTheme.colorScheme.onTertiaryContainer,
-                        )
-                        FilledTonalButton(onClick = { StorageAccess.openAllFilesSettings(ctx) }) {
-                            Text("Grant")
-                        }
+                        if (vm.busy) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                        else Text(spec.actionLabel, style = MaterialTheme.typography.titleMedium)
                     }
                 }
             }
-
+        },
+    ) { pad ->
+        Box(Modifier.padding(pad).fillMaxSize(), contentAlignment = Alignment.TopCenter) {
             Column(
-                Modifier
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState()),
+                Modifier.widthIn(max = 640.dp).fillMaxWidth().verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                // Header
-                Surface(
-                    shape = RoundedCornerShape(24.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Row(
-                        Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    ) {
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = accent.container,
-                            contentColor = accent.content,
-                            modifier = Modifier.size(48.dp),
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(tool.icon, null, Modifier.size(26.dp))
-                            }
-                        }
-                        Column(Modifier.weight(1f)) {
-                            Text(tool.title, style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                tool.description,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
+                IntroCard(tool, spec)
+
+                spec.inputs.forEach { slot ->
+                    SlotCard(slot, vm.picked[slot.id].orEmpty()) { vm.setFiles(slot.id, it) }
                 }
 
-                // Input / Output
-                FilePickCard(
-                    title = "Input file",
-                    label = vm.inputLabel,
-                    onPick = { pickInput.launch(arrayOf("*/*")) },
-                    onClear = { vm.setInput(null, null) },
-                )
-                FilePickCard(
-                    title = "Output file",
-                    label = vm.outputLabel,
-                    onPick = {
-                        val suggested = suggestedOutputName(tool, vm.outputFormat)
-                        pickOutput.launch(suggested)
-                    },
-                    onClear = { vm.setOutput(null, null) },
-                    pickIcon = Icons.Rounded.SaveAlt,
-                    pickLabel = "Choose output",
-                )
-                if (tool.id == "merge") {
-                    FilePickCard(
-                        title = "Second file",
-                        label = vm.extraLabel,
-                        onPick = { pickExtra.launch(arrayOf("*/*")) },
-                        onClear = { vm.setExtra(null, null) },
-                        pickLabel = "Add the file to join after",
-                    )
-                }
-
-                // Advanced options per tool
-                OptionsCard(tool, vm)
-
-                // Log
-                if (vm.lines.isNotEmpty()) {
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerLowest,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(180.dp),
-                    ) {
-                        SelectionContainer {
-                            LazyColumn(
-                                state = listState,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(12.dp),
+                val visible = spec.options.filter { it.showIf?.invoke(vals) != false }
+                val basic = visible.filter { !it.advanced }
+                val advanced = visible.filter { it.advanced }
+                basic.forEach { OptionRow(it, vm, spec) }
+                if (advanced.isNotEmpty()) {
+                    Surface(shape = CardShape, color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
+                        Column {
+                            Row(
+                                Modifier.fillMaxWidth().clickable { advancedOpen = !advancedOpen }.padding(horizontal = 20.dp, vertical = 16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                items(vm.lines.size) { i ->
-                                    val line = vm.lines[i]
-                                    Text(
-                                        line.text,
-                                        fontFamily = FontFamily.Monospace,
-                                        fontSize = 11.sp,
-                                        lineHeight = 14.sp,
-                                        color = when (line.kind) {
-                                            LogKind.Command -> MaterialTheme.colorScheme.primary
-                                            LogKind.Error -> MaterialTheme.colorScheme.error
-                                            LogKind.Info -> MaterialTheme.colorScheme.tertiary
-                                            LogKind.Output -> MaterialTheme.colorScheme.onSurface
-                                        },
-                                    )
-                                }
+                                Icon(Icons.Rounded.Tune, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("Advanced options", Modifier.weight(1f).padding(start = 16.dp), style = MaterialTheme.typography.titleMedium)
+                                Icon(if (advancedOpen) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, null)
+                            }
+                            if (advancedOpen) Column(Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                advanced.forEach { OptionRow(it, vm, spec) }
                             }
                         }
                     }
                 }
-            }
 
-            // Actions
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                if (vm.running) {
-                    Button(
-                        onClick = vm::stop,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(52.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.error,
-                        ),
-                    ) {
-                        Icon(Icons.Rounded.Stop, null, Modifier.size(20.dp))
-                        Spacer(Modifier.size(8.dp))
-                        Text("Stop")
+                spec.hint?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 8.dp))
+                }
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { vm.remember = !vm.remember }.padding(horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(checked = vm.remember, onCheckedChange = { vm.remember = it })
+                    Text("Use the same settings next time", style = MaterialTheme.typography.bodyMedium)
+                }
+                vm.error?.let {
+                    Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.fillMaxWidth()) {
+                        Text(it, Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onErrorContainer, style = MaterialTheme.typography.bodyMedium)
                     }
-                } else {
-                    Button(
-                        onClick = {
-                            if (!vm.engine.isAvailable) {
-                                Toast.makeText(
-                                    ctx,
-                                    "FFmpeg engine not in this build. Run the FFmpeg AAR workflow.",
-                                    Toast.LENGTH_LONG,
-                                ).show()
-                            }
-                            vm.run(tool, ctx)
-                        },
-                        enabled = vm.inputUri != null && vm.outputUri != null &&
-                            (tool.id != "merge" || vm.extraUri != null),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(52.dp),
-                        shape = RoundedCornerShape(14.dp),
-                    ) {
-                        Icon(Icons.Rounded.PlayArrow, null, Modifier.size(22.dp))
-                        Spacer(Modifier.size(8.dp))
-                        Text("Start ${tool.title}")
+                }
+                Spacer(Modifier.height(8.dp))
+            }
+        }
+    }
+
+    if (askStorage) {
+        AlertDialog(
+            onDismissRequest = { askStorage = false },
+            title = { Text("Allow access to all files?") },
+            text = { Text("With all-files access, converted files are saved to Zyphvert/ on your phone and you can pick files from anywhere. Without it, files go to the app's own folder.") },
+            confirmButton = { TextButton(onClick = { askStorage = false; StorageAccess.openAllFilesSettings(ctx) }) { Text("Allow") } },
+            dismissButton = { TextButton(onClick = { askStorage = false; start() }) { Text("Use app folder") } },
+        )
+    }
+}
+
+@Composable private fun BackButton(onBack: () -> Unit) {
+    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") }
+}
+
+@Composable
+private fun IntroCard(tool: Tool, spec: ToolSpec) {
+    val accent = tool.category.accent()
+    Surface(shape = CardShape, color = accent.container, contentColor = accent.content, modifier = Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(20.dp), verticalAlignment = Alignment.Top) {
+            Icon(tool.icon, null, Modifier.size(32.dp))
+            Text(spec.intro, Modifier.padding(start = 16.dp), style = MaterialTheme.typography.bodyLarge)
+        }
+    }
+}
+
+// ------------------------------------------------------------------ files
+
+@Composable
+private fun SlotCard(slot: InputSlot, files: List<PickedFile>, onChange: (List<PickedFile>) -> Unit) {
+    val ctx = LocalContext.current
+    val multi = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        if (uris.isNotEmpty()) {
+            val add = uris.map { PickedFile(it, ctx.displayName(it)) }
+            onChange(if (slot.multiple) files + add else add.take(1))
+        }
+    }
+    val single = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) onChange(listOf(PickedFile(uri, ctx.displayName(uri))))
+    }
+    fun pick() { if (slot.multiple) multi.launch(slot.kind.mimes) else single.launch(slot.kind.mimes) }
+
+    Surface(shape = CardShape, color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(slot.label, style = MaterialTheme.typography.titleMedium)
+                    if (slot.optional) Text("Optional", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                if (files.isEmpty()) FilledTonalButton(onClick = ::pick) {
+                    Icon(Icons.Rounded.FolderOpen, null, Modifier.size(18.dp)); Text("  Choose")
+                } else TextButton(onClick = ::pick) { Text(if (slot.multiple) "Add more" else "Change") }
+            }
+            files.forEachIndexed { i, f ->
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceContainerHighest).padding(start = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(fileIcon(f.name), null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                    Text(f.name, Modifier.weight(1f).padding(horizontal = 10.dp, vertical = 12.dp), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
+                    if (slot.multiple && files.size > 1) {
+                        IconButton(onClick = { onChange(files.swap(i, i - 1)) }, enabled = i > 0) { Icon(Icons.Rounded.ArrowUpward, "Move up", Modifier.size(18.dp)) }
+                        IconButton(onClick = { onChange(files.swap(i, i + 1)) }, enabled = i < files.lastIndex) { Icon(Icons.Rounded.ArrowDownward, "Move down", Modifier.size(18.dp)) }
                     }
+                    IconButton(onClick = { onChange(files.filterIndexed { j, _ -> j != i }) }) { Icon(Icons.Rounded.Close, "Remove", Modifier.size(18.dp)) }
                 }
             }
         }
     }
 }
 
+private fun <T> List<T>.swap(a: Int, b: Int): List<T> {
+    if (a !in indices || b !in indices) return this
+    return toMutableList().also { val t = it[a]; it[a] = it[b]; it[b] = t }
+}
+
+private fun fileIcon(name: String) = when {
+    isImageName(name) -> Icons.Rounded.Image
+    isAudioName(name) -> Icons.Rounded.MusicNote
+    else -> Icons.Rounded.Movie
+}
+
+// ------------------------------------------------------------------ options
+
 @Composable
-private fun FilePickCard(
-    title: String,
-    label: String?,
-    onPick: () -> Unit,
-    onClear: () -> Unit,
-    pickIcon: androidx.compose.ui.graphics.vector.ImageVector = Icons.Rounded.FileOpen,
-    pickLabel: String = "Choose file",
-) {
-    OutlinedCard(
-        shape = RoundedCornerShape(16.dp),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(title, style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (label == null) {
-                FilledTonalButton(
-                    onClick = onPick,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                ) {
-                    Icon(pickIcon, null, Modifier.size(18.dp))
-                    Spacer(Modifier.size(8.dp))
-                    Text(pickLabel)
+private fun OptionRow(opt: Opt, vm: ToolViewModel, spec: ToolSpec) {
+    val value = vm.values[opt.id] ?: opt.default
+    when (opt) {
+        is Opt.Section -> SectionLabel(opt.label)
+        is Opt.Name -> {
+            val first = spec.inputs.firstOrNull()?.let { vm.picked[it.id].orEmpty().firstOrNull() }
+            val multi = spec.inputs.firstOrNull()?.let { vm.picked[it.id].orEmpty().size > 1 } == true
+            OutlinedTextField(
+                value = value, onValueChange = { vm.values[opt.id] = it },
+                label = { Text(opt.label) }, singleLine = true, enabled = !multi,
+                placeholder = { Text(if (multi) "Each file keeps its own name" else first?.name?.substringBeforeLast('.') ?: "Same name as the original") },
+                trailingIcon = { Icon(Icons.Rounded.Edit, null, tint = MaterialTheme.colorScheme.primary) },
+                shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        is Opt.Presets -> {
+            var open by remember { mutableStateOf(false) }
+            val current = opt.presets.firstOrNull { it.key == value }
+            ValueTile(opt.label, current?.title ?: "Choose a ready-made setup") { open = true }
+            if (open) PickerSheet(
+                title = opt.label,
+                items = opt.presets.map { Item(it.key, it.title, it.desc) },
+                selected = value, onDismiss = { open = false },
+            ) { key ->
+                vm.values[opt.id] = key
+                opt.presets.first { it.key == key }.let { vm.applyPreset(it.values) }
+            }
+        }
+        is Opt.Choice -> {
+            val short = opt.options.size <= 4 && opt.options.all { it.label.length <= 24 && it.desc == null }
+            if (short) {
+                Surface(shape = CardShape, color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(opt.label, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            opt.options.forEach { it ->
+                                FilterChip(selected = value == it.key, onClick = { vm.values[opt.id] = it.key }, label = { Text(it.label) })
+                            }
+                        }
+                    }
                 }
             } else {
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerLowest,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Row(
-                        Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Icon(
-                            Icons.Rounded.CheckCircle, null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Text(
-                            label,
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.weight(1f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        IconButton(onClick = onClear, modifier = Modifier.size(32.dp)) {
-                            Icon(Icons.Rounded.Close, "Remove", Modifier.size(18.dp))
-                        }
-                    }
-                }
-                FilledTonalButton(
-                    onClick = onPick,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                ) {
-                    Icon(pickIcon, null, Modifier.size(18.dp))
-                    Spacer(Modifier.size(8.dp))
-                    Text("Change")
-                }
+                var open by remember { mutableStateOf(false) }
+                ValueTile(opt.label, opt.options.firstOrNull { it.key == value }?.label ?: value) { open = true }
+                if (open) PickerSheet(opt.label, opt.options, value, { open = false }) { vm.values[opt.id] = it }
             }
         }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun OptionsCard(tool: Tool, vm: ToolViewModel) {
-    OutlinedCard(
-        shape = RoundedCornerShape(16.dp),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Options", style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-
-            when (tool.id) {
-                "video", "audio", "image" -> {
-                    val choices = Formats.forTool(tool.id)
-                    val selected = vm.outputFormat.ifBlank { choices.firstOrNull()?.id.orEmpty() }
-                    val choice = Formats.resolve(tool.id, selected)
-                    Text(
-                        "Convert to anything. Pick a format, then choose where to save it.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    ChipRow("Convert to", choices.map { it.id }, selected, { id ->
-                        choices.firstOrNull { it.id == id }?.label ?: id
-                    }) { vm.selectFormat(tool.id, it) }
-                    if (choice == null) {
-                        Text(
-                            "Pick a format to continue.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    } else when (choice.kind) {
-                        MediaKind.Audio -> {
-                            ChipRow("Bitrate", listOf("96k", "128k", "192k", "256k", "320k"), vm.audioBitrate) {
-                                vm.audioBitrate = it
-                            }
-                            if (tool.id != "image") TimeFields(vm)
-                        }
-                        MediaKind.Sequence -> {
-                            OutlinedTextField(
-                                value = if (vm.fps == "original") "1" else vm.fps,
-                                onValueChange = { vm.fps = it },
-                                label = { Text("Frames per second") },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true,
-                            )
-                            Text(
-                                "The output name should contain %04d, for example frame_%04d.jpg.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            TimeFields(vm)
-                        }
-                        MediaKind.Image -> {
-                            if (tool.id == "video" && (choice.id == "gif" || choice.id == "webp")) {
-                                OutlinedTextField(
-                                    value = vm.gifFps,
-                                    onValueChange = { vm.gifFps = it },
-                                    label = { Text("FPS") },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    singleLine = true,
-                                )
-                                OutlinedTextField(
-                                    value = vm.gifWidth,
-                                    onValueChange = { vm.gifWidth = it },
-                                    label = { Text("Width (px)") },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    singleLine = true,
-                                )
-                                TimeFields(vm)
-                            } else {
-                                ChipRow("Scale", listOf("original", "1080", "720", "480"), vm.scale) { vm.scale = it }
-                            }
-                        }
-                        MediaKind.Video -> {
-                            if (tool.id == "image" || tool.id == "audio") {
-                                if (tool.id == "image") {
-                                    OutlinedTextField(
-                                        value = vm.endTime.ifBlank { "5" },
-                                        onValueChange = { vm.endTime = it },
-                                        label = { Text("Duration (seconds)") },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        singleLine = true,
-                                    )
-                                    ChipRow("Scale", listOf("original", "1080", "720", "480"), vm.scale) { vm.scale = it }
-                                } else {
-                                    Text(
-                                        "Builds a video from this audio.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            } else {
-                                ChipRow("Scale", listOf("original", "1080", "720", "480", "360"), vm.scale) { vm.scale = it }
-                                ChipRow("Frame rate", listOf("original", "24", "30", "60"), vm.fps) { vm.fps = it }
-                                ChipRow("Quality", listOf("low", "medium", "high"), vm.quality) { vm.quality = it }
-                                ChipRow("Codec", listOf("auto", "h264", "h265", "vp9", "copy"), vm.codec) { vm.codec = it }
-                                TimeFields(vm)
-                            }
-                        }
-                    }
-                    choice?.let {
-                        val label = vm.outputLabel
-                        val ext = label?.substringAfterLast('.', "")?.lowercase().orEmpty()
-                        val mismatch = label != null && it.kind != MediaKind.Sequence && ext.isNotEmpty() && ext != it.ext
-                        if (mismatch) {
-                            Text(
-                                "Save the file as .${it.ext} so it matches ${it.label}.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error,
-                            )
-                        }
-                    }
+        is Opt.Slider -> Surface(shape = CardShape, color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(horizontal = 20.dp, vertical = 14.dp)) {
+                Row {
+                    Text(opt.label, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                    Text("$value${opt.unit}", style = MaterialTheme.typography.titleSmall)
                 }
-                "compress" -> {
-                    val choices = Formats.forTool("compress")
-                    ChipRow("File type", choices.map { it.id }, vm.outputFormat.ifBlank { "mp4" }, { id ->
-                        choices.first { it.id == id }.label
-                    }) { vm.selectFormat(tool.id, it) }
-                    ChipRow("Size", listOf("low", "medium", "high"), vm.quality, {
-                        when (it) {
-                            "low" -> "Smaller"
-                            "high" -> "Clearer"
-                            else -> "Balanced"
-                        }
-                    }) { vm.quality = it }
-                }
-                "merge" -> {
-                    Text(
-                        "The second file is joined after the first. Both should be the same kind of media.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    val choices = Formats.forTool("merge")
-                    ChipRow("Output", choices.map { it.id }, vm.outputFormat.ifBlank { "mp4" }, { id ->
-                        choices.first { it.id == id }.label
-                    }) { vm.selectFormat(tool.id, it) }
-                    if (vm.outputFormat != "mp3") {
-                        ChipRow("Quality", listOf("low", "medium", "high"), vm.quality) { vm.quality = it }
-                    }
-                }
-                "volume" -> {
-                    ChipRow("Loudness", listOf("0.5", "0.75", "1.0", "1.25", "1.5", "2.0"), vm.gain) { vm.gain = it }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Mute", modifier = Modifier.weight(1f))
-                        Switch(checked = vm.mute, onCheckedChange = { vm.mute = it })
-                    }
-                }
-                "subs" -> {
-                    Text(
-                        "Saves the first subtitle track as an SRT file. The video needs embedded subtitles.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                "ringtone" -> {
-                    ChipRow("Quality / bitrate", listOf("96k", "128k", "192k", "256k", "320k"), vm.audioBitrate) {
-                        vm.audioBitrate = it
-                    }
-                    TimeFields(vm)
-                }
-                "trim" -> {
-                    TimeFields(vm)
-                    ChipRow("Mode", listOf("copy", "re-encode"), if (vm.codec == "copy") "copy" else "re-encode") {
-                        vm.codec = if (it == "copy") "copy" else "h264"
-                    }
-                    if (vm.codec != "copy") {
-                        ChipRow("Quality", listOf("low", "medium", "high"), vm.quality) { vm.quality = it }
-                    }
-                }
-                "speed" -> {
-                    ChipRow("Speed", listOf("0.5", "0.75", "1.0", "1.25", "1.5", "2.0"), vm.speed) {
-                        vm.speed = it
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Reverse", modifier = Modifier.weight(1f))
-                        Switch(checked = vm.reverse, onCheckedChange = { vm.reverse = it })
-                    }
-                    ChipRow("Quality", listOf("low", "medium", "high"), vm.quality) { vm.quality = it }
-                }
-                "crop" -> {
-                    ChipRow("Rotate", listOf("0", "90", "180", "270"), vm.rotate) { vm.rotate = it }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Flip horizontal", modifier = Modifier.weight(1f))
-                        Switch(checked = vm.flipH, onCheckedChange = { vm.flipH = it })
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Flip vertical", modifier = Modifier.weight(1f))
-                        Switch(checked = vm.flipV, onCheckedChange = { vm.flipV = it })
-                    }
-                    ChipRow("Scale", listOf("original", "1080", "720", "480"), vm.scale) { vm.scale = it }
-                    ChipRow("Quality", listOf("low", "medium", "high"), vm.quality) { vm.quality = it }
-                }
-                "filters", "wm" -> {
-                    ChipRow("Scale", listOf("original", "1080", "720", "480"), vm.scale) { vm.scale = it }
-                    ChipRow("Quality", listOf("low", "medium", "high"), vm.quality) { vm.quality = it }
-                    ChipRow("Codec", listOf("auto", "h264", "h265", "vp9"), vm.codec) { vm.codec = it }
-                }
-                "sticker" -> {
-                    ChipRow("Scale", listOf("original", "1080", "720", "480"), vm.scale) { vm.scale = it }
-                }
-                "scrub", "meta" -> {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Strip all metadata", modifier = Modifier.weight(1f))
-                        Switch(checked = vm.stripMetadata, onCheckedChange = { vm.stripMetadata = it })
-                    }
-                }
-                else -> {
-                    Text(
-                        "Use Custom FFmpeg for full control.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-
-            // Common
-            if (tool.id !in listOf("scrub", "meta", "batch", "subs")) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Strip metadata", modifier = Modifier.weight(1f))
-                    Switch(checked = vm.stripMetadata, onCheckedChange = { vm.stripMetadata = it })
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun TimeFields(vm: ToolViewModel) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedTextField(
-            value = vm.startTime,
-            onValueChange = { vm.startTime = it },
-            label = { Text("Start (HH:MM:SS)") },
-            modifier = Modifier.weight(1f),
-            singleLine = true,
-            placeholder = { Text("00:00:00") },
-        )
-        OutlinedTextField(
-            value = vm.endTime,
-            onValueChange = { vm.endTime = it },
-            label = { Text("End (HH:MM:SS)") },
-            modifier = Modifier.weight(1f),
-            singleLine = true,
-        )
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun ChipRow(
-    label: String,
-    options: List<String>,
-    selected: String,
-    optionLabel: (String) -> String = { it },
-    onSelect: (String) -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(label, style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            options.forEach { opt ->
-                FilterChip(
-                    selected = selected == opt,
-                    onClick = { onSelect(opt) },
-                    label = { Text(optionLabel(opt)) },
+                Slider(
+                    value = (value.toFloatOrNull() ?: opt.initial.toFloat()),
+                    onValueChange = { vm.values[opt.id] = it.toInt().toString() },
+                    valueRange = opt.min.toFloat()..opt.max.toFloat(),
+                    steps = if (opt.max - opt.min <= 60) opt.max - opt.min - 1 else 0,
                 )
             }
         }
+        is Opt.Text -> OutlinedTextField(
+            value = value, onValueChange = { vm.values[opt.id] = it }, label = { Text(opt.label) },
+            placeholder = { if (opt.hint.isNotEmpty()) Text(opt.hint) }, singleLine = true,
+            shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth(),
+        )
+        is Opt.Toggle -> Surface(
+            shape = CardShape, color = MaterialTheme.colorScheme.surfaceContainerLow,
+            modifier = Modifier.fillMaxWidth().clip(CardShape).clickable { vm.values[opt.id] = (value != "true").toString() },
+        ) {
+            Row(Modifier.padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(opt.label, style = MaterialTheme.typography.titleSmall)
+                    opt.desc?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                }
+                Switch(checked = value == "true", onCheckedChange = { vm.values[opt.id] = it.toString() })
+            }
+        }
+        is Opt.Range -> RangeCard(opt, vm)
+        is Opt.Tags -> TagsRow(opt, vm)
     }
 }
 
-private fun suggestedOutputName(tool: Tool, formatId: String): String {
-    val choice = Formats.resolve(tool.id, formatId.ifBlank { Formats.defaultId(tool.id) })
-    if (choice != null) {
-        return if (choice.kind == MediaKind.Sequence) "frame_%04d.${choice.ext}" else "output.${choice.ext}"
+@Composable
+private fun ValueTile(label: String, value: String, onClick: () -> Unit) {
+    Surface(
+        shape = CardShape, color = MaterialTheme.colorScheme.surfaceContainerLow,
+        modifier = Modifier.fillMaxWidth().clip(CardShape).clickable(onClick = onClick),
+    ) {
+        Row(Modifier.padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(label, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                Text(value, style = MaterialTheme.typography.bodyLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
-    return when (tool.id) {
-        "ringtone" -> "output.mp3"
-        "sticker" -> "output.jpg"
-        "subs" -> "output.srt"
-        "scrub", "meta", "trim", "speed", "crop", "filters", "wm", "volume" -> "output.mp4"
-        else -> "output"
+}
+
+@Composable
+private fun PickerSheet(title: String, items: List<Item>, selected: String, onDismiss: () -> Unit, onPick: (String) -> Unit) {
+    val idx = items.indexOfFirst { it.key == selected }.coerceAtLeast(0)
+    val list = rememberLazyListState(initialFirstVisibleItemIndex = (idx - 2).coerceAtLeast(0))
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        Text(title, Modifier.padding(horizontal = 24.dp, vertical = 8.dp), style = MaterialTheme.typography.titleLarge)
+        LazyColumn(state = list, modifier = Modifier.navigationBarsPadding()) {
+            itemsIndexed(items, key = { _, it -> it.key }) { _, it ->
+                Row(
+                    Modifier.fillMaxWidth().clickable { onPick(it.key); onDismiss() }.padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioButton(selected = it.key == selected, onClick = null)
+                    Column(Modifier.padding(start = 16.dp)) {
+                        Text(it.label, style = MaterialTheme.typography.bodyLarge)
+                        it.desc?.let { d -> Text(d, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ------------------------------------------------------------------ trim range
+
+private fun clock(sec: Double): String {
+    val t = (sec * 10).toLong() / 10.0
+    val m = (t / 60).toInt()
+    val s = t - m * 60
+    return String.format(Locale.US, "%d:%04.1f", m, s)
+}
+
+@Composable
+private fun RangeCard(opt: Opt.Range, vm: ToolViewModel) {
+    val ctx = LocalContext.current
+    val first = vm.picked[opt.slot].orEmpty().firstOrNull()
+    val dur by produceState(0.0, first?.uri) {
+        value = if (first == null) 0.0 else withContext(Dispatchers.IO) { durationSec(ctx, first.uri) } ?: 0.0
+    }
+    Surface(shape = CardShape, color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(opt.label, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+            if (first == null || dur <= 0.0) {
+                Text(
+                    if (first == null) "Choose a file first, then pick the part you want." else "Couldn't read the length of this file. The whole file will be used.",
+                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                return@Column
+            }
+            val parts = (vm.values[opt.id] ?: "").split(",")
+            val s = (parts.getOrNull(0)?.toDoubleOrNull() ?: 0.0).coerceIn(0.0, dur)
+            val e = (parts.getOrNull(1)?.toDoubleOrNull() ?: dur).coerceIn(s, dur)
+            fun set(ns: Double, ne: Double) {
+                vm.values[opt.id] = String.format(Locale.US, "%.1f,%.1f", ns.coerceIn(0.0, dur), ne.coerceIn(ns.coerceIn(0.0, dur), dur))
+            }
+            if (opt.modes) {
+                val mode = vm.values["${opt.id}.mode"] ?: "keep"
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = mode == "keep", onClick = { vm.values["${opt.id}.mode"] = "keep" }, label = { Text("Keep selection") })
+                    FilterChip(selected = mode == "remove", onClick = { vm.values["${opt.id}.mode"] = "remove" }, label = { Text("Remove selection") })
+                }
+            }
+            RangeSlider(
+                value = s.toFloat()..e.toFloat(),
+                onValueChange = { set(it.start.toDouble(), it.endInclusive.toDouble()) },
+                valueRange = 0f..dur.toFloat(),
+            )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                Stepper(clock(s), { set(s - 0.1, e) }, { set(s + 0.1, e) })
+                Text(clock(e - s), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleSmall)
+                Stepper(clock(e), { set(s, e - 0.1) }, { set(s, e + 0.1) })
+            }
+            Text("Total length ${clock(dur)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun Stepper(text: String, minus: () -> Unit, plus: () -> Unit) {
+    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.secondaryContainer) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = minus) { Icon(Icons.Rounded.Remove, "Earlier") }
+            Text(text, style = MaterialTheme.typography.titleSmall)
+            IconButton(onClick = plus) { Icon(Icons.Rounded.Add, "Later") }
+        }
+    }
+}
+
+// ------------------------------------------------------------------ tags
+
+@Composable
+private fun TagsRow(opt: Opt.Tags, vm: ToolViewModel) {
+    var open by remember { mutableStateOf(false) }
+    val summary = listOf("title", "artist", "album").mapNotNull { vm.values["tag.$it"]?.takeIf(String::isNotBlank) }.joinToString(" · ")
+    ValueTile(opt.label, summary.ifEmpty { "Edit file details such as title, artist and album" }) { open = true }
+    if (open) {
+        var genreOpen by remember { mutableStateOf(false) }
+        ModalBottomSheet(onDismissRequest = { open = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+            Column(
+                Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).navigationBarsPadding().imePadding(),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text("Edit tags", style = MaterialTheme.typography.titleLarge)
+                Text("Leave a field empty to keep what the file already has.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(
+                    Modifier.fillMaxWidth().clickable { vm.values["tag.useFilename"] = (vm.values["tag.useFilename"] != "true").toString() },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(checked = vm.values["tag.useFilename"] == "true", onCheckedChange = { vm.values["tag.useFilename"] = it.toString() })
+                    Text("Use file name as title")
+                }
+                tagKeys.forEach { (k, label) ->
+                    val v = vm.values["tag.$k"].orEmpty()
+                    if (k == "genre") {
+                        OutlinedTextField(
+                            value = v, onValueChange = { vm.values["tag.$k"] = it }, label = { Text(label) }, singleLine = true,
+                            trailingIcon = { IconButton(onClick = { genreOpen = true }) { Icon(Icons.AutoMirrored.Rounded.List, "Choose genre") } },
+                            shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth(),
+                        )
+                    } else {
+                        OutlinedTextField(
+                            value = v, onValueChange = { vm.values["tag.$k"] = it }, label = { Text(label) }, singleLine = k != "comment",
+                            shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
+                Button(onClick = { open = false }, Modifier.fillMaxWidth().height(52.dp), shape = CircleShape) { Text("Done") }
+                Spacer(Modifier.height(16.dp))
+            }
+        }
+        if (genreOpen) PickerSheet("Genre", genres.map { Item(it, it) }, vm.values["tag.genre"].orEmpty(), { genreOpen = false }) { vm.values["tag.genre"] = it }
     }
 }

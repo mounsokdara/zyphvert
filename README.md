@@ -6,43 +6,44 @@ request the `INTERNET` permission, so your files never leave your phone.
 
 ## Features
 
-### Convert
+### Convert: any file to any format
 | Tool | What it does |
 |---|---|
-| **Video converter** | Convert any video to MP4, MKV, WebM, MOV, AVI, GIF, WebP, MP3, M4A, WAV, FLAC, or an image sequence |
-| **Audio converter** | Convert any audio to MP3, M4A, AAC, WAV, FLAC, OGG, OPUS, or a video |
-| **Image converter** | Convert any image, including HEIC and Live Photos, to JPG, PNG, WebP, BMP, GIF, or a short video |
+| **Video converter** | Any video to MP4, MKV, MOV, WebM, AVI, GIF, animated WebP/PNG, image frames, or a lossless remux. Presets for WhatsApp, Discord (8 MB), TikTok, YouTube, Instagram and Telegram. Resolution, frame rate, quality, audio, trim and target file size. |
+| **Audio converter** | Any audio or video to MP3, AAC, M4A, M4B, M4R, Opus, OGG, WAV, FLAC, ALAC, AIFF, WMA, AC3, EAC3, MP2, AU, CAF, W64, TTA or Speex. Conversion templates, CBR/ABR/VBR bitrate, sample rate, channels, trim or cut out a section, normalize, fades, full tag editor and cover art. |
+| **Image converter** | Any image (HEIC, HEIF, AVIF, JPG, PNG, WebP, BMP, TIFF, GIF) to JPG, PNG, WebP, BMP, TIFF or GIF, with quality and resize. |
 
 ### Edit
 | Tool | What it does |
 |---|---|
-| **Trim & Cut** | Cut a clip to the part you want |
-| **Crop & Rotate** | Crop the frame and rotate or flip |
-| **Speed & Reverse** | Slow down, speed up or reverse playback |
-| **Compress** | Shrink a video, audio file, or image |
-| **Merge** | Join two videos or two audio files |
-| **Volume** | Make a clip louder, quieter, or silent |
-| **Subtitles** | Extract the first subtitle track as SRT |
-| **Filters** | Apply visual filters to video and images |
-| **Watermark** | Overlay a logo or text on your media |
+| **Trim & Cut** | Keep or remove any part of a video or audio file, lossless or precise |
+| **Crop & Rotate** | Crop to a ratio, rotate, flip |
+| **Speed & Reverse** | Slow down, speed up or reverse, with natural audio pitch |
+| **Filters** | Colour and effect filters for video and photos |
+| **Watermark** | Text or logo overlay |
 
 ### Metadata and privacy
 | Tool | What it does |
 |---|---|
-| **Metadata Editor** | View and edit media metadata |
-| **Privacy Scrub** | Strip location and device info before sharing |
+| **Tag editor** | Edit title, artist, album, genre and more, set cover art, or view every detail of a file |
+| **Privacy Scrub** | Strip GPS, device info and all hidden tags without re-encoding |
 
 ### Create
 | Tool | What it does |
 |---|---|
-| **Sticker Maker** | Make stickers from images and clips |
-| **Ringtone Maker** | Cut audio into a ringtone |
+| **Slideshow maker** | Photos to video with transitions and music |
+| **Live/Motion Photos** | Extract the video, make a GIF or grab a still |
+| **Sticker Maker** | 512x512 animated WebP stickers |
+| **Ringtone Maker** | Cut a song into a ringtone saved to your Ringtones folder |
 
 ### Power tools
 | Tool | What it does |
 |---|---|
-| **Batch Queue** | Queue many conversions and run them in the background |
-| **Custom FFmpeg** | Run your own FFmpeg command for anything not covered above |
+| **Batch converter** | Convert many files at once; each becomes a queued background job |
+| **Custom FFmpeg** | Run your own FFmpeg or ffprobe command |
+
+Conversions run one after another in the background with a notification, a **Queue** screen
+with progress, cancel, open and share, and plain-words error messages.
 
 ### Principles
 - **Fully offline:** all processing happens on the device.
