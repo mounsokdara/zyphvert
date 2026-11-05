@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Apps
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Notifications
@@ -41,6 +42,7 @@ import com.mounsokdara.zyphvert.ui.components.InfoTile
 import com.mounsokdara.zyphvert.ui.components.SectionLabel
 import com.mounsokdara.zyphvert.ui.components.SubScreenScaffold
 import com.mounsokdara.zyphvert.ui.components.SwitchTile
+import com.mounsokdara.zyphvert.util.StorageAccess
 
 @Composable
 fun SettingsScreen(vm: SettingsViewModel, onBack: () -> Unit) {
@@ -48,6 +50,7 @@ fun SettingsScreen(vm: SettingsViewModel, onBack: () -> Unit) {
     val ctx = LocalContext.current
     var themeDialog by remember { mutableStateOf(false) }
     var clearDialog by remember { mutableStateOf(false) }
+    val hasAllFiles = StorageAccess.hasAllFilesAccess()
 
     fun launch(intent: Intent) {
         runCatching { ctx.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
@@ -75,6 +78,16 @@ fun SettingsScreen(vm: SettingsViewModel, onBack: () -> Unit) {
             }
 
             SectionLabel("Permissions")
+            InfoTile(
+                Icons.Rounded.FolderOpen,
+                "All files access",
+                if (hasAllFiles) "Granted — tools can use any path"
+                else "Required for full converter access. Tap to grant",
+                onClick = {
+                    if (!hasAllFiles) StorageAccess.openAllFilesSettings(ctx)
+                    else launch(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", ctx.packageName, null)))
+                },
+            )
             InfoTile(Icons.Rounded.Notifications, "Notifications", "Progress alerts for long conversions", onClick = {
                 launch(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName))
             })

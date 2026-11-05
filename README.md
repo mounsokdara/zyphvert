@@ -4,10 +4,6 @@ All-in-one **offline media converter and editor** for Android, powered by FFmpeg
 Native Kotlin and Jetpack Compose. No ads, no tracking, no account. The app does not
 request the `INTERNET` permission, so your files never leave your phone.
 
-> **Status:** early development. The app shell and release pipeline are done; the
-> tools below are the planned feature set and are **not usable yet** (see
-> [Roadmap](#roadmap)).
-
 ## Features
 
 ### Convert
@@ -51,21 +47,23 @@ request the `INTERNET` permission, so your files never leave your phone.
 ### Principles
 - **Fully offline:** all processing happens on the device.
 - **No ads, no tracking, no analytics.**
-- **Scoped storage only:** files come from the Photo Picker, the Storage Access
-  Framework or MediaStore. No broad storage permission.
-- **Per-ABI builds:** `arm64-v8a`, `armeabi-v7a`, `x86_64`, plus a universal APK, each built by its own CI job so every artifact zip holds a single APK. Android 7.0+ (minSdk 24).
+- **All-files access:** optional `MANAGE_EXTERNAL_STORAGE` so tools can use any path; SAF still works without it.
+- **Any file format:** pickers accept `*/*` — no dummy MIME filters.
+- **Per-ABI builds:** `arm64-v8a`, `armeabi-v7a`, `x86_64`, plus a universal APK. Android 7.0+ (minSdk 24).
 - **Adaptive layout:** bottom bar on phones, navigation rail and width-capped content on tablets.
 
 ## Roadmap
 
-- [x] App shell: Material 3 Compose UI with the tool-grid home screen (all tools are placeholders)
+- [x] App shell: Material 3 Compose UI with the tool-grid home screen
 - [x] CI: lint, unit tests and debug build on every push and PR
 - [x] Release pipeline: signed per-ABI and universal APKs, AAB, signature verification, SHA256 checksums, GitHub Release on `v*.*.*` tags
-- [ ] FFmpeg native build pipeline, the blocker for every conversion feature. Status in [docs/FFMPEG.md](docs/FFMPEG.md)
-- [ ] First real tool: media info (ffprobe) as the integration test
-- [ ] Convert tools, then edit tools, then metadata/privacy, create, batch and custom FFmpeg
+- [x] Real converter / editor UIs with advanced options, wired to `MediaEngine`
+- [x] All-files access + any-format file pickers
+- [ ] FFmpeg native build pipeline (AAR). Status in [docs/FFMPEG.md](docs/FFMPEG.md)
+- [ ] First real tool smoke test once AAR is present (ffprobe media-info)
+- [ ] Batch queue + richer watermark / multi-input tools
 
 ## Tech stack
 
 Kotlin, Jetpack Compose, Material 3, MVVM, Hilt, Coroutines/Flow, Room,
-WorkManager, Media3, FFmpegKitNext (planned).
+WorkManager, Media3, FFmpegKitNext (when AAR is present).
