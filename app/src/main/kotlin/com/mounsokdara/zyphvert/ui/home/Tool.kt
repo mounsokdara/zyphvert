@@ -1,6 +1,8 @@
 package com.mounsokdara.zyphvert.ui.home
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.MotionPhotosOn
+import androidx.compose.material.icons.rounded.Slideshow
 import androidx.compose.material.icons.rounded.ClosedCaption
 import androidx.compose.material.icons.rounded.Compress
 import androidx.compose.material.icons.rounded.ContentCut
@@ -139,7 +141,7 @@ val allTools: List<Tool> = listOf(
         "Convert any video to whatever you need — another video, audio, a GIF, or images.",
         Icons.Rounded.Movie,
         ToolCategory.Convert,
-        formats = Formats.video.map { it.label },
+        formats = listOf("MP4", "MKV", "MOV", "WebM", "AVI", "GIF", "WebP", "APNG", "Images", "Remux"),
     ),
     Tool(
         "audio",
@@ -147,7 +149,7 @@ val allTools: List<Tool> = listOf(
         "Convert any audio to whatever you need — MP3, AAC, WAV, FLAC, OGG, OPUS, or a video.",
         Icons.Rounded.GraphicEq,
         ToolCategory.Convert,
-        formats = Formats.audio.map { it.label },
+        formats = listOf("MP3", "AAC", "M4A", "M4B", "OPUS", "OGG", "FLAC", "WAV", "ALAC", "AIFF", "WMA", "AC3"),
     ),
     Tool(
         "image",
@@ -155,7 +157,7 @@ val allTools: List<Tool> = listOf(
         "Convert any image, including HEIC and Live Photos, to JPG, PNG, WebP, GIF, or a video.",
         Icons.Rounded.Image,
         ToolCategory.Convert,
-        formats = Formats.image.map { it.label },
+        formats = listOf("JPG", "PNG", "WebP", "BMP", "TIFF", "GIF"),
     ),
 
     Tool("trim", "Trim & Cut", "Cut a clip down to the part you want", Icons.Rounded.ContentCut, ToolCategory.Edit),
@@ -171,6 +173,8 @@ val allTools: List<Tool> = listOf(
     Tool("meta", "Metadata Editor", "View and edit media metadata", Icons.Rounded.Info, ToolCategory.Privacy),
     Tool("scrub", "Privacy Scrub", "Strip location and device info before sharing", Icons.Rounded.VisibilityOff, ToolCategory.Privacy),
 
+    Tool("slideshow", "Slideshow maker", "Turn photos into a video with transitions and music", Icons.Rounded.Slideshow, ToolCategory.Create),
+    Tool("live", "Live/Motion Photos", "Get the video out of a Live or Motion Photo", Icons.Rounded.MotionPhotosOn, ToolCategory.Create),
     Tool("sticker", "Sticker Maker", "Make stickers from images and clips", Icons.Rounded.EmojiEmotions, ToolCategory.Create),
     Tool("ringtone", "Ringtone Maker", "Cut audio into a ringtone", Icons.Rounded.RingVolume, ToolCategory.Create),
 

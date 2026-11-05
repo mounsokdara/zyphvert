@@ -640,4 +640,129 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
             }
         },
     ),
+    // ================================================================ EXTRA EDIT TOOLS
+    ToolSpec(
+        id = "compress",
+        intro = "Make videos, audio files and photos smaller before you share them. Pick how much to squeeze.",
+        inputs = listOf(InputSlot("media", "Videos, audio or photos", InKind.Any, multiple = true)),
+        options = listOf(
+            Opt.Choice("level", "How much", listOf(
+                Item("light", "Light", "Keep nearly the same quality"),
+                Item("medium", "Medium", "Good balance of size and quality"),
+                Item("strong", "Strong", "Smallest files, lower quality"),
+            )),
+        ),
+        actionLabel = "Compress",
+        build = { r ->
+            val lvl = r.str("level").ifEmpty { "medium" }
+            r.files("media").map { f ->
+                when {
+                    isImageName(f.name) -> {
+                        val qv = when (lvl) { "light" -> 4; "strong" -> 14; else -> 8 }
+                        val w = when (lvl) { "light" -> 2560; "strong" -> 1280; else -> 1920 }
+                        val out = r.out("Images", f, "jpg", "_small")
+                        r.job(f, out, "-i ${r.saf(f)} -vf ${q("scale=w=(iw+$w-abs(iw-$w))/2:h=-2")} -frames:v 1 -q:v $qv ${out.path}")
+                    }
+                    isVideoStream(r, f) -> {
+                        val (br, h, ab) = when (lvl) { "light" -> Triple(6000, 0, 160); "strong" -> Triple(1200, 480, 96); else -> Triple(2800, 720, 128) }
+                        val vf = listOfNotNull(if (h > 0) "scale=-2:$h" else null, VID_TAIL).joinToString(",")
+                        val out = r.out("Video", f, "mp4", "_small")
+                        r.job(f, out, "-i ${r.saf(f)} -vf ${q(vf)} -c:v h264_mediacodec -b:v ${br}k -c:a aac -b:a ${ab}k ${out.path}")
+                    }
+                    else -> {
+                        val ab = when (lvl) { "light" -> 160; "strong" -> 64; else -> 96 }
+                        val out = r.out("Audio", f, "m4a", "_small")
+                        r.job(f, out, "-i ${r.saf(f)} -vn -map 0:a:0 -c:a aac -b:a ${ab}k ${out.path}")
+                    }
+                }
+            }
+        },
+    ),
+
+    ToolSpec(
+        id = "merge",
+        intro = "Join videos, or audio files, into one. They play in the order listed. Use the arrows to reorder.",
+        inputs = listOf(InputSlot("media", "Files to join (2 or more)", InKind.Media, multiple = true)),
+        options = listOf(
+            Opt.Name(),
+            Opt.Choice("mfmt", "Audio format (when joining audio)", items("mp3" to "MP3", "m4a" to "M4A (AAC)", "flac" to "FLAC", "wav" to "WAV")),
+        ),
+        actionLabel = "Join files",
+        build = { r ->
+            val files = r.files("media")
+            if (files.size < 2) fail("Pick at least two files to join.")
+            val allVideo = files.all { isVideoStream(r, it) }
+            val allAudio = files.all { streamsOf(r.ctx, it.uri)?.second ?: true }
+            val inputs = files.joinToString(" ") { "-i ${r.saf(it)}" }
+            if (allVideo) {
+                val (w0, h0) = mediaSize(r.ctx, files[0].uri, false) ?: (1280 to 720)
+                val w = w0 / 2 * 2; val h = h0 / 2 * 2
+                val g = StringBuilder()
+                files.indices.forEach { i ->
+                    g.append("[$i:v]scale=$w:$h:force_original_aspect_ratio=decrease,pad=$w:$h:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30,format=yuv420p[v$i];")
+                    if (allAudio) g.append("[$i:a]aresample=44100,aformat=sample_fmts=fltp:channel_layouts=stereo[a$i];")
+                }
+                files.indices.forEach { i -> g.append("[v$i]"); if (allAudio) g.append("[a$i]") }
+                g.append("concat=n=${files.size}:v=1:a=${if (allAudio) 1 else 0}[v]")
+                if (allAudio) g.append("[a]")
+                val out = r.out("Video", null, "mp4", defaultBase = "merged")
+                val maps = "-map ${q("[v]")}" + if (allAudio) " -map ${q("[a]")}" else ""
+                listOf(r.job(null, out, "$inputs -filter_complex ${q(g.toString())} $maps $H264 ${out.path}", "${files.size} videos"))
+            } else {
+                val a = audioFmt(r.str("mfmt").ifEmpty { "mp3" })
+                val g = files.indices.joinToString("") { "[$it:a]" } + "concat=n=${files.size}:v=0:a=1[a]"
+                val out = r.out("Audio", null, a.ext, defaultBase = "merged")
+                listOf(r.job(null, out, "$inputs -filter_complex ${q(g)} -map ${q("[a]")} ${audioCodecArgs(a, "auto", "auto", "auto", "auto")} ${a.mux} ${out.path}", "${files.size} audio files"))
+            }
+        },
+    ),
+
+    ToolSpec(
+        id = "volume",
+        intro = "Make a video or audio clip louder, quieter, evened out or silent. Video quality isn't touched.",
+        inputs = listOf(InputSlot("media", "Video or audio", InKind.Media, multiple = true)),
+        options = listOf(
+            Opt.Name(),
+            Opt.Choice("vol", "Volume", listOf(
+                Item("volume=2.0", "Much louder (+6 dB)"), Item("volume=1.41", "Louder (+3 dB)"),
+                Item("volume=0.71", "Quieter (−3 dB)"), Item("volume=0.5", "Much quieter (−6 dB)"),
+                Item("volume=0.25", "Very quiet (−12 dB)"),
+                Item("loudnorm=I=-16:TP=-1.5:LRA=11", "Normalize", "Even out loud and quiet parts"),
+                Item("mute", "Mute", "Remove the sound"),
+            )),
+        ),
+        actionLabel = "Apply",
+        build = { r ->
+            val v = r.str("vol").ifEmpty { "volume=2.0" }
+            r.files("media").map { f ->
+                val ext = nameExt(f.name).ifEmpty { "mp4" }
+                val hasV = isVideoStream(r, f)
+                val out = r.out(if (hasV) "Video" else "Audio", f, ext, "_vol")
+                val codec = when (ext) {
+                    "mp3" -> "libmp3lame"; "flac" -> "flac"; "wav" -> "pcm_s16le"; "ogg", "oga" -> "libvorbis"
+                    "opus", "webm" -> "libopus"; else -> "aac"
+                }
+                val cmd = if (v == "mute") "-i ${r.saf(f)} -map ${q("0:v?")} -c copy -an ${out.path}"
+                          else "-i ${r.saf(f)} -map ${q("0:v?")} -map ${q("0:a?")} -c:v copy -af ${q(v)} -c:a $codec ${out.path}"
+                r.job(f, out, cmd)
+            }
+        },
+    ),
+
+    ToolSpec(
+        id = "subs",
+        intro = "Pull a subtitle track out of a video, or convert a subtitle file between SRT, WebVTT and ASS.",
+        inputs = listOf(InputSlot("media", "Video or subtitle file", InKind.Any)),
+        options = listOf(
+            Opt.Choice("sfmt", "Save as", items("srt" to "SRT", "vtt" to "WebVTT", "ass" to "ASS")),
+            Opt.Slider("track", "Subtitle track", 1, 6, 1),
+        ),
+        actionLabel = "Extract",
+        build = { r ->
+            val f = r.file("media")!!
+            val fmt = r.str("sfmt").ifEmpty { "srt" }
+            val out = r.out("Subtitles", f, fmt, "_subs")
+            listOf(r.job(f, out, "-i ${r.saf(f)} -map 0:s:${r.int("track") - 1} ${out.path}"))
+        },
+    ),
 ).associateBy { it.id }
