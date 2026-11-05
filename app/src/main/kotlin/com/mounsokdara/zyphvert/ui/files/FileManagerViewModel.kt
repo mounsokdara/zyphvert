@@ -34,7 +34,7 @@ data class FileEntry(
         get() = DATE_FMT.format(Date(lastModified))
 
     companion object {
-        private val DATE_FMT = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+        private val DATE_FMT = SimpleDateFormat("M/d/yy h:mm a", Locale.getDefault())
         fun humanSize(bytes: Long): String {
             if (bytes < 1024) return "$bytes B"
             val kb = bytes / 1024.0

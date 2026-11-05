@@ -1,6 +1,10 @@
 package com.mounsokdara.zyphvert.ui.files
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import com.mounsokdara.zyphvert.ui.components.AppSheet
+import com.mounsokdara.zyphvert.ui.components.FileRow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -77,7 +81,6 @@ fun FileManagerScreen(
     val ctx = LocalContext.current
     val list = vm.filtered()
     var sortMenu by remember { mutableStateOf(false) }
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     Column(
         Modifier
@@ -225,7 +228,7 @@ fun FileManagerScreen(
             }
             else -> {
                 LazyColumn(
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                    contentPadding = PaddingValues(vertical = 4.dp),
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     items(list, key = { it.file.absolutePath }) { entry ->
@@ -237,7 +240,7 @@ fun FileManagerScreen(
     }
 
     if (sortMenu) {
-        ModalBottomSheet(onDismissRequest = { sortMenu = false }, sheetState = sheetState) {
+        AppSheet({ sortMenu = false }) {
             Column(Modifier.padding(bottom = 32.dp)) {
                 Text(
                     "Sort by",
@@ -271,11 +274,8 @@ fun FileManagerScreen(
 
     val selected = vm.selected
     if (selected != null && !selected.isDirectory) {
-        ModalBottomSheet(
-            onDismissRequest = { vm.selected = null },
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        ) {
-            Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+        AppSheet({ vm.selected = null }) {
+            Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp)) {
                 Text(
                     selected.name,
                     style = MaterialTheme.typography.titleMedium,
@@ -343,43 +343,11 @@ private fun ActionRow(icon: ImageVector, label: String, onClick: () -> Unit) {
 
 @Composable
 private fun FileListItem(entry: FileEntry, onClick: () -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            iconFor(entry),
-            null,
-            modifier = Modifier.size(28.dp),
-            tint = if (entry.isDirectory) MaterialTheme.colorScheme.primary
-            else MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f)) {
-            Text(entry.name, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
-            Text(
-                buildString {
-                    if (entry.isDirectory) append("Folder")
-                    else {
-                        append(entry.sizeLabel)
-                        if (entry.extension.isNotEmpty()) append(" · ").append(entry.extension.uppercase())
-                    }
-                    append(" · ").append(entry.dateLabel)
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        if (entry.isDirectory) {
-            Icon(Icons.Rounded.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
+    FileRow(
+        name = entry.name, file = entry.file, isDir = entry.isDirectory,
+        size = if (entry.isDirectory) null else entry.sizeLabel,
+        date = entry.dateLabel, onClick = onClick,
+    )
 }
 
 @Composable

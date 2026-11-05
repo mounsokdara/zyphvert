@@ -3,6 +3,7 @@
 package com.mounsokdara.zyphvert.ui.picker
 
 import android.os.Environment
+import android.os.StatFs
 import android.text.format.Formatter
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -32,6 +33,7 @@ import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.mounsokdara.zyphvert.tools.*
+import com.mounsokdara.zyphvert.ui.components.FileRow
 import com.mounsokdara.zyphvert.ui.components.SearchField
 import com.mounsokdara.zyphvert.util.StorageAccess
 import kotlinx.coroutines.Dispatchers
@@ -94,6 +96,16 @@ private fun roots(ctx: android.content.Context): List<Pair<String, File>> {
     return list
 }
 
+private const val HOME = "::home"
+private val FolderOrange = androidx.compose.ui.graphics.Color(0xFFFFA726)
+private val StorageGreen = androidx.compose.ui.graphics.Color(0xFF4CAF50)
+
+private fun usageOf(ctx: android.content.Context, f: File): String? = runCatching {
+    val st = StatFs(f.path)
+    val total = st.totalBytes
+    Formatter.formatFileSize(ctx, total - st.availableBytes) + "/" + Formatter.formatFileSize(ctx, total)
+}.getOrNull()
+
 /** Full-screen file browser. Replaces the system picker so every file on the phone is reachable. */
 @Composable
 fun FilePicker(
@@ -115,26 +127,36 @@ fun FilePicker(
 
     val rootList = remember { roots(ctx) }
     val storageRoot = remember { Environment.getExternalStorageDirectory() }
+    // Whole drives: going "up" from one of these shows the home list of storages.
+    val volumePaths = remember { rootList.filter { it.first == "Internal storage" || it.first == "SD card" }.map { it.second.path }.toSet() }
     var dir by rememberSaveable { mutableStateOf(lastDir ?: storageRoot.path) }
     var showAll by rememberSaveable { mutableStateOf(kind.exts == null) }
     var sort by rememberSaveable { mutableStateOf(Sort.Newest) }
     var query by rememberSaveable { mutableStateOf("") }
-    var sortMenu by remember { mutableStateOf(false) }
+    var searching by rememberSaveable { mutableStateOf(false) }
+    var menu by remember { mutableStateOf(false) }
+    var placesMenu by remember { mutableStateOf(false) }
     val selected = remember { mutableStateListOf<String>() }
     var entries by remember { mutableStateOf<List<Entry>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     val byPath = remember(entries) { entries.associateBy { it.file.path } }
+    val atHome = dir == HOME
+    val dateFmt = remember { SimpleDateFormat("M/d/yy h:mm a", Locale.getDefault()) }
 
     LaunchedEffect(dir, showAll, granted) {
+        if (dir == HOME) { entries = emptyList(); loading = false; return@LaunchedEffect }
         loading = true
         entries = withContext(Dispatchers.IO) { listDir(File(dir), kind, showAll) }
         lastDir = dir
         loading = false
     }
 
-    val parent = File(dir).parentFile
-    val canUp = parent != null && dir != "/" && File(dir).path.length > "/storage".length
-    BackHandler(enabled = canUp) { dir = parent!!.path; query = "" }
+    val canUp = !atHome
+    fun goUp() {
+        query = ""
+        dir = if (dir in volumePaths) HOME else File(dir).parentFile?.path ?: HOME
+    }
+    BackHandler(enabled = canUp) { goUp() }
 
     val shown = remember(entries, query, sort) {
         val q = query.trim()
@@ -154,29 +176,67 @@ fun FilePicker(
         if (picked.isNotEmpty()) onPicked(picked)
     }
 
+    val folderName = when {
+        atHome -> title
+        dir == storageRoot.path -> "Internal storage"
+        else -> File(dir).name.ifEmpty { "/" }
+    }
+
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
             Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
                 TopAppBar(
                     title = {
-                        Column {
-                            Text(title, style = MaterialTheme.typography.titleLarge)
-                            Text(
-                                dir.removePrefix(storageRoot.path).ifEmpty { "/" }, style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            )
+                        Box {
+                            Column(Modifier.clip(RoundedCornerShape(8.dp)).clickable { placesMenu = true }.padding(vertical = 2.dp, horizontal = 4.dp)) {
+                                Text(folderName, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        if (atHome) "Choose a location" else dir, style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f, fill = false),
+                                    )
+                                    Icon(Icons.Rounded.ArrowDropDown, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                            DropdownMenu(expanded = placesMenu, onDismissRequest = { placesMenu = false }) {
+                                DropdownMenuItem(
+                                    text = { Text("All locations") }, leadingIcon = { Icon(Icons.Rounded.Home, null) },
+                                    onClick = { dir = HOME; query = ""; placesMenu = false },
+                                )
+                                rootList.forEach { (label, f) ->
+                                    DropdownMenuItem(
+                                        text = { Text(label) },
+                                        leadingIcon = { Icon(if (label == "Internal storage" || label == "SD card") Icons.Rounded.Storage else Icons.Rounded.Folder, null) },
+                                        onClick = { dir = f.path; query = ""; placesMenu = false },
+                                    )
+                                }
+                            }
                         }
                     },
-                    navigationIcon = { IconButton(onClick = onDismiss) { Icon(Icons.Rounded.Close, "Close") } },
+                    navigationIcon = {
+                        if (canUp) IconButton(onClick = { goUp() }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Up one folder") }
+                        else IconButton(onClick = onDismiss) { Icon(Icons.Rounded.Close, "Close") }
+                    },
                     actions = {
-                        IconButton(onClick = { dir = parent!!.path; query = "" }, enabled = canUp) { Icon(Icons.Rounded.ArrowUpward, "Up one folder") }
-                        Box {
-                            IconButton(onClick = { sortMenu = true }) { Icon(Icons.AutoMirrored.Rounded.Sort, "Sort") }
-                            DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
+                        if (!atHome) IconButton(onClick = { searching = !searching; if (!searching) query = "" }) {
+                            Icon(if (searching) Icons.Rounded.SearchOff else Icons.Rounded.Search, "Search")
+                        }
+                        if (canUp) IconButton(onClick = onDismiss) { Icon(Icons.Rounded.Close, "Close") }
+                        if (!atHome) Box {
+                            IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, "More") }
+                            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                                 Sort.entries.forEach { s ->
                                     DropdownMenuItem(
-                                        text = { Text(s.label) }, onClick = { sort = s; sortMenu = false },
-                                        leadingIcon = { if (sort == s) Icon(Icons.Rounded.Check, null) },
+                                        text = { Text(s.label) }, onClick = { sort = s; menu = false },
+                                        leadingIcon = { if (sort == s) Icon(Icons.Rounded.Check, null) else Spacer(Modifier.size(24.dp)) },
+                                    )
+                                }
+                                if (kind.exts != null) {
+                                    HorizontalDivider()
+                                    DropdownMenuItem(
+                                        text = { Text("Show all files") }, onClick = { showAll = !showAll; menu = false },
+                                        leadingIcon = { if (showAll) Icon(Icons.Rounded.Check, null) else Spacer(Modifier.size(24.dp)) },
                                     )
                                 }
                             }
@@ -197,21 +257,31 @@ fun FilePicker(
                     }
                 }
 
-                LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(rootList, key = { it.second.path + it.first }) { (label, f) ->
-                        FilterChip(selected = dir == f.path, onClick = { dir = f.path; query = "" }, label = { Text(label) })
-                    }
-                }
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    SearchField(query, { query = it }, "Search in this folder", Modifier.weight(1f))
-                    if (kind.exts != null) FilterChip(selected = showAll, onClick = { showAll = !showAll }, label = { Text("All files") })
-                }
+                if (searching && !atHome) SearchField(query, { query = it }, "Search in this folder", Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
 
                 Box(Modifier.weight(1f).fillMaxWidth()) {
                     when {
+                        atHome -> LazyColumn(Modifier.fillMaxSize()) {
+                            items(rootList, key = { it.second.path + it.first }) { (label, f) ->
+                                val isDrive = label == "Internal storage" || label == "SD card"
+                                Row(
+                                    Modifier.fillMaxWidth().clickable { dir = f.path; query = "" }.padding(horizontal = 12.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Icon(
+                                        if (!isDrive) Icons.Rounded.Folder else if (label == "SD card") Icons.Rounded.SdCard else Icons.Rounded.Storage,
+                                        null, Modifier.size(44.dp).padding(start = 4.dp), tint = if (isDrive) StorageGreen else FolderOrange,
+                                    )
+                                    Column(Modifier.weight(1f).padding(start = 16.dp)) {
+                                        Text(label, style = MaterialTheme.typography.bodyLarge)
+                                        Text(f.path, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    }
+                                    if (isDrive) usageOf(ctx, f)?.let {
+                                        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                            }
+                        }
                         loading && entries.isEmpty() -> CircularProgressIndicator(Modifier.align(Alignment.Center))
                         shown.isEmpty() -> Column(Modifier.align(Alignment.Center).padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(Icons.Rounded.FolderOff, null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -222,41 +292,31 @@ fun FilePicker(
                             }
                         }
                         else -> LazyColumn(Modifier.fillMaxSize()) {
+                            item(key = "..up") {
+                                Row(
+                                    Modifier.fillMaxWidth().clickable { goUp() }.padding(horizontal = 12.dp, vertical = 6.dp).heightIn(min = 56.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Icon(Icons.Rounded.DriveFolderUpload, null, Modifier.size(52.dp), tint = FolderOrange)
+                                    Text("..", Modifier.padding(start = 12.dp), style = MaterialTheme.typography.bodyLarge)
+                                }
+                            }
                             items(shown, key = { it.file.path }) { e ->
                                 val order = selected.indexOf(e.file.path)
-                                Row(
-                                    Modifier.fillMaxWidth().clickable {
+                                FileRow(
+                                    name = e.file.name, file = e.file, isDir = e.isDir,
+                                    size = if (e.isDir) null else Formatter.formatFileSize(ctx, e.size),
+                                    date = dateFmt.format(Date(e.modified)),
+                                    live = e.live, selectedOrder = order, showSelect = multiple && !e.isDir,
+                                    onClick = {
                                         when {
                                             e.isDir -> { dir = e.file.path; query = "" }
                                             !multiple -> finish(listOf(e.file.path))
                                             order >= 0 -> selected.remove(e.file.path)
                                             else -> selected.add(e.file.path)
                                         }
-                                    }.padding(horizontal = 16.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Icon(
-                                        iconFor(e), null, Modifier.size(28.dp),
-                                        tint = if (e.isDir) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary,
-                                    )
-                                    Column(Modifier.weight(1f).padding(horizontal = 16.dp)) {
-                                        Text(e.file.name, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
-                                        val meta = if (e.isDir) "Folder" else
-                                            Formatter.formatShortFileSize(ctx, e.size) + " · " + SimpleDateFormat("d MMM yyyy", Locale.getDefault()).format(Date(e.modified))
-                                        Text(meta, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                    if (e.live) Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.tertiaryContainer) {
-                                        Text("LIVE", Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onTertiaryContainer)
-                                    }
-                                    if (multiple && !e.isDir) {
-                                        Spacer(Modifier.width(8.dp))
-                                        if (order >= 0) Box(
-                                            Modifier.size(26.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
-                                            contentAlignment = Alignment.Center,
-                                        ) { Text("${order + 1}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimary) }
-                                        else Icon(Icons.Rounded.RadioButtonUnchecked, null, Modifier.size(26.dp), tint = MaterialTheme.colorScheme.outline)
-                                    }
-                                }
+                                    },
+                                )
                             }
                         }
                     }
@@ -276,14 +336,4 @@ fun FilePicker(
             }
         }
     }
-}
-
-private fun iconFor(e: Entry) = when {
-    e.isDir -> Icons.Rounded.Folder
-    e.live -> Icons.Rounded.MotionPhotosOn
-    e.file.extension.lowercase() in IMAGE_EXTS -> Icons.Rounded.Image
-    e.file.extension.lowercase() in AUDIO_EXTS -> Icons.Rounded.MusicNote
-    e.file.extension.lowercase() in VIDEO_EXTS -> Icons.Rounded.Movie
-    e.file.extension.lowercase() in SUBTITLE_EXTS -> Icons.Rounded.ClosedCaption
-    else -> Icons.AutoMirrored.Rounded.InsertDriveFile
 }

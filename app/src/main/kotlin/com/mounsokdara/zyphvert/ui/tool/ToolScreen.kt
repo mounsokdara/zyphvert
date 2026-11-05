@@ -28,6 +28,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.mounsokdara.zyphvert.ui.components.AppSheet
 import com.mounsokdara.zyphvert.tools.*
 import com.mounsokdara.zyphvert.ui.components.SectionLabel
 import com.mounsokdara.zyphvert.ui.home.Tool
@@ -346,9 +347,9 @@ private fun ValueTile(label: String, value: String, onClick: () -> Unit) {
 private fun PickerSheet(title: String, items: List<Item>, selected: String, onDismiss: () -> Unit, onPick: (String) -> Unit) {
     val idx = items.indexOfFirst { it.key == selected }.coerceAtLeast(0)
     val list = rememberLazyListState(initialFirstVisibleItemIndex = (idx - 2).coerceAtLeast(0))
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+    AppSheet(onDismiss) {
         Text(title, Modifier.padding(horizontal = 24.dp, vertical = 8.dp), style = MaterialTheme.typography.titleLarge)
-        LazyColumn(state = list, modifier = Modifier.navigationBarsPadding()) {
+        LazyColumn(state = list, modifier = Modifier.weight(1f, fill = false).navigationBarsPadding()) {
             itemsIndexed(items, key = { _, it -> it.key }) { _, it ->
                 Row(
                     Modifier.fillMaxWidth().clickable { onPick(it.key); onDismiss() }.padding(horizontal = 16.dp, vertical = 12.dp),
@@ -440,9 +441,9 @@ private fun TagsRow(opt: Opt.Tags, vm: ToolViewModel) {
     ValueTile(opt.label, summary.ifEmpty { "Edit file details such as title, artist and album" }) { open = true }
     if (open) {
         var genreOpen by remember { mutableStateOf(false) }
-        ModalBottomSheet(onDismissRequest = { open = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        AppSheet({ open = false }) {
             Column(
-                Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).navigationBarsPadding().imePadding(),
+                Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).navigationBarsPadding().imePadding(),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Text("Edit tags", style = MaterialTheme.typography.titleLarge)
