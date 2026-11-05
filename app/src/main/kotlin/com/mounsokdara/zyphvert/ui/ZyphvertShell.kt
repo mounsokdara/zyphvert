@@ -1,6 +1,9 @@
 package com.mounsokdara.zyphvert.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Apps
 import androidx.compose.material.icons.rounded.Folder
@@ -11,22 +14,20 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.ui.Modifier
-import com.mounsokdara.zyphvert.ui.components.isWideLayout
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.mounsokdara.zyphvert.ui.components.isWideLayout
 import com.mounsokdara.zyphvert.ui.files.FileManagerScreen
 import com.mounsokdara.zyphvert.ui.files.MediaInfoScreen
 import com.mounsokdara.zyphvert.ui.home.HomeScreen
@@ -114,16 +115,24 @@ fun ZyphvertShell(settingsVm: SettingsViewModel, hapticsEnabled: Boolean) {
                 if (activeTool != null) {
                     if (activeTool.id == "ffmpeg") {
                         val tvm = hiltViewModel<TerminalViewModel>()
-                        pendingFilePath?.let { path ->
-                            tvm.insert("\"$path\"")
-                            pendingFilePath = null
+                        val seed = pendingFilePath
+                        LaunchedEffect(seed) {
+                            if (seed != null) {
+                                tvm.insert("\"$seed\"")
+                                pendingFilePath = null
+                            }
                         }
                         TerminalScreen(tvm, onBack = { openToolId = null; pendingFilePath = null })
                     } else {
-                        val tvm = hiltViewModel<ToolViewModel>()
-                        pendingFilePath?.let { path ->
-                            tvm.setInputPath(path)
-                            pendingFilePath = null
+                        // Key ViewModel per tool so state does not leak across tools
+                        val tvm = hiltViewModel<ToolViewModel>(key = activeTool.id)
+                        val seed = pendingFilePath
+                        LaunchedEffect(seed, activeTool.id) {
+                            if (seed != null) {
+                                tvm.setInputPath(seed)
+                                tvm.suggestOutputBesideInput(activeTool.id)
+                                pendingFilePath = null
+                            }
                         }
                         ToolScreen(
                             tool = activeTool,
