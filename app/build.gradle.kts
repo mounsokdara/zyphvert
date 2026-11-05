@@ -71,13 +71,14 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            isDebuggable = false
             if (keystorePropsFile.exists()) {
                 signingConfig = signingConfigs.getByName("release")
             }
         }
+        // Debug is switched off: no debuggable app, no ".debug" id. CI and releases only build `release`.
         debug {
-            applicationIdSuffix = ".debug"
-            isDebuggable = true
+            isDebuggable = false
         }
     }
 

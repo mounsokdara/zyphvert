@@ -33,16 +33,16 @@ jobs:
         run: scripts/fetch-ffmpeg-aar.sh
 
       - name: Lint
-        run: ./gradlew lint --no-daemon 2>&1 | tee -a /tmp/build.log
+        run: ./gradlew lintRelease --no-daemon 2>&1 | tee -a /tmp/build.log
 
       - name: Unit tests
-        run: ./gradlew testDebugUnitTest --no-daemon 2>&1 | tee -a /tmp/build.log
+        run: ./gradlew testReleaseUnitTest --no-daemon 2>&1 | tee -a /tmp/build.log
 
       - name: Publish build log to ci-logs branch (on failure)
         if: failure()
         run: |
           mkdir /tmp/logs && cp /tmp/build.log /tmp/logs/ || true
-          cp app/build/reports/lint-results-debug.xml /tmp/logs/ 2>/dev/null || true
+          cp app/build/reports/lint-results-release.xml /tmp/logs/ 2>/dev/null || true
           cd /tmp/logs && git init -q && git checkout -q -b ci-logs
           git config user.name github-actions && git config user.email actions@users.noreply.github.com
           git add . && git commit -qm "build log for ${{ github.sha }}"
@@ -58,7 +58,7 @@ jobs:
 
   # One job per CPU type, so each artifact zip holds exactly one APK.
   build:
-    name: Debug APK · ${{ matrix.abi }}
+    name: APK · ${{ matrix.abi }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -78,6 +78,9 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - name: Set up Android SDK build-tools (for apksigner and zipalign)
+        uses: android-actions/setup-android@v3
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
@@ -86,22 +89,51 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: scripts/fetch-ffmpeg-aar.sh
 
-      - name: Assemble debug (${{ matrix.abi }})
+      - name: Decode keystore and write key.properties
+        if: github.event_name != 'pull_request'
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/release.p12"
+          cat > key.properties <<PROPS
+          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
+          keyPassword=${{ secrets.KEY_PASSWORD }}
+          keyAlias=${{ secrets.KEY_ALIAS }}
+          storeFile=$RUNNER_TEMP/release.p12
+          PROPS
+
+      - name: Assemble release (${{ matrix.abi }})
         run: |
           # "universal" = no ABI restriction (all CPU types in one APK)
           if [ "${{ matrix.abi }}" = "universal" ]; then ABI_ARG=""; else ABI_ARG="-PtargetAbi=${{ matrix.abi }}"; fi
           set -o pipefail
-          ./gradlew assembleDebug $ABI_ARG --no-daemon 2>&1 | tee -a /tmp/build.log
+          ./gradlew assembleRelease $ABI_ARG --no-daemon 2>&1 | tee -a /tmp/build.log
 
-      - name: Collect the single APK
+      - name: Sign with v1 + v2 + v3 and verify
         run: |
           mkdir -p dist
           if [ "${{ matrix.abi }}" = "universal" ]; then
-            cp app/build/outputs/apk/debug/*universal*.apk "dist/zyphvert-debug-universal.apk"
+            SRC="$(find app/build/outputs/apk/release -name '*universal*.apk' | head -1)"
           else
-            cp app/build/outputs/apk/debug/app-debug.apk "dist/zyphvert-debug-${{ matrix.abi }}.apk"
+            SRC="$(find app/build/outputs/apk/release -name '*.apk' | head -1)"
+          fi
+          [ -n "$SRC" ] || { echo "::error::no release APK was built"; exit 1; }
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            # Pull requests get no secrets, so there is no key: keep the APK unsigned and say so in its name.
+            cp "$SRC" "dist/zyphvert-${{ matrix.abi }}-unsigned.apk"
+          else
+            chmod +x scripts/sign-apk.sh
+            KS_FILE="$RUNNER_TEMP/release.p12" \
+            KS_PASS="${{ secrets.KEYSTORE_PASSWORD }}" \
+            KEY_ALIAS="${{ secrets.KEY_ALIAS }}" \
+            KEY_PASS="${{ secrets.KEY_PASSWORD }}" \
+            scripts/sign-apk.sh "$SRC" "dist/zyphvert-${{ matrix.abi }}.apk"
           fi
           ls -lh dist/
+
+      - name: Remove key.properties and keystore
+        if: always()
+        run: |
+          rm -f key.properties
+          shred -u "$RUNNER_TEMP/release.p12" 2>/dev/null || rm -f "$RUNNER_TEMP/release.p12"
 
       - name: Publish build log to ci-logs-${{ matrix.abi }} branch (on failure)
         if: failure()
@@ -112,9 +144,9 @@ jobs:
           git add . && git commit -qm "build log (${{ matrix.abi }}) for ${{ github.sha }}"
           git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ci-logs-${{ matrix.abi }}
 
-      - name: Upload debug APK (${{ matrix.abi }})
+      - name: Upload APK (${{ matrix.abi }})
         uses: actions/upload-artifact@v4
         with:
-          name: debug-apk-${{ matrix.abi }}
+          name: apk-${{ matrix.abi }}
           path: dist/*.apk
           if-no-files-found: error

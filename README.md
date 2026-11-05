@@ -56,7 +56,7 @@ with progress, cancel, open and share, and plain-words error messages.
 ## Roadmap
 
 - [x] App shell: Material 3 Compose UI with the tool-grid home screen
-- [x] CI: lint, unit tests and debug build on every push and PR
+- [x] CI: lint, unit tests and a signed release build (v1 + v2 + v3) on every push; no debug builds
 - [x] Release pipeline: signed per-ABI and universal APKs, AAB, signature verification, SHA256 checksums, GitHub Release on `v*.*.*` tags
 - [x] Real converter / editor UIs with advanced options, wired to `MediaEngine`
 - [x] All-files access + any-format file pickers
