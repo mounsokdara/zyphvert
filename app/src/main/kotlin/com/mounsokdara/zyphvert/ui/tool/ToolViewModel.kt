@@ -8,6 +8,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.mounsokdara.zyphvert.data.ConversionJob
+import com.mounsokdara.zyphvert.data.JobHistory
+import com.mounsokdara.zyphvert.data.JobStatus
 import com.mounsokdara.zyphvert.engine.EngineEvent
 import com.mounsokdara.zyphvert.engine.EngineFactory
 import com.mounsokdara.zyphvert.engine.MediaEngine
@@ -28,7 +31,6 @@ class ToolViewModel @Inject constructor() : ViewModel() {
 
     var inputUri by mutableStateOf<Uri?>(null)
         private set
-    /** Absolute filesystem path when opened from File Manager (preferred over SAF). */
     var inputPath by mutableStateOf<String?>(null)
         private set
     var inputLabel by mutableStateOf<String?>(null)
@@ -62,6 +64,7 @@ class ToolViewModel @Inject constructor() : ViewModel() {
     var flipV by mutableStateOf(false)
 
     private var job: Job? = null
+    private var currentJobId: String? = null
 
     fun setInput(uri: Uri?, label: String?) {
         inputUri = uri
@@ -87,6 +90,27 @@ class ToolViewModel @Inject constructor() : ViewModel() {
         outputPath = path
         outputUri = Uri.fromFile(f)
         outputLabel = f.name
+    }
+
+    /** Place a sensible output next to the input file (File Manager flow). */
+    fun suggestOutputBesideInput(toolId: String) {
+        val inPath = inputPath ?: return
+        val parent = File(inPath).parentFile ?: return
+        val base = File(inPath).nameWithoutExtension
+        val ext = when (toolId) {
+            "vid2aud", "ringtone" -> "mp3"
+            "vid2gif" -> "gif"
+            "vid2img" -> "jpg"
+            "heic", "sticker" -> "jpg"
+            else -> "mp4"
+        }
+        var candidate = File(parent, "${base}_zyphvert.$ext")
+        var n = 1
+        while (candidate.exists()) {
+            candidate = File(parent, "${base}_zyphvert_$n.$ext")
+            n++
+        }
+        setOutputPath(candidate.absolutePath)
     }
 
     fun clearLog() = lines.clear()
@@ -120,6 +144,16 @@ class ToolViewModel @Inject constructor() : ViewModel() {
             return
         }
 
+        val historyJob = ConversionJob(
+            toolTitle = tool.title,
+            inputLabel = inputLabel ?: "input",
+            outputLabel = outputLabel ?: "output",
+            command = cmd,
+            status = JobStatus.Running,
+        )
+        currentJobId = historyJob.id
+        JobHistory.add(historyJob)
+
         running = true
         add(LogLine("$ ffmpeg $cmd", LogKind.Command))
         job = viewModelScope.launch {
@@ -130,23 +164,34 @@ class ToolViewModel @Inject constructor() : ViewModel() {
                             val kind = if (it.contains(Regex("(?i)error|failed|invalid|unable|no such"))) LogKind.Error else LogKind.Output
                             add(LogLine(it, kind))
                         }
-                        is EngineEvent.Done -> add(
-                            LogLine(
-                                when {
-                                    ev.cancelled -> "Cancelled"
-                                    ev.success -> "Finished successfully"
-                                    else -> "Failed" + (ev.returnCode?.let { " (exit $it)" } ?: "")
-                                },
-                                if (ev.success) LogKind.Info else LogKind.Error,
-                            ),
-                        )
+                        is EngineEvent.Done -> {
+                            val msg = when {
+                                ev.cancelled -> "Cancelled"
+                                ev.success -> "Finished successfully"
+                                else -> "Failed" + (ev.returnCode?.let { " (exit $it)" } ?: "")
+                            }
+                            add(LogLine(msg, if (ev.success) LogKind.Info else LogKind.Error))
+                            currentJobId?.let { id ->
+                                JobHistory.update(
+                                    id,
+                                    when {
+                                        ev.cancelled -> JobStatus.Cancelled
+                                        ev.success -> JobStatus.Success
+                                        else -> JobStatus.Failed
+                                    },
+                                    msg,
+                                )
+                            }
+                        }
                     }
                 }
             } catch (t: Throwable) {
                 if (t is CancellationException) throw t
                 add(LogLine(t.message ?: "Engine error", LogKind.Error))
+                currentJobId?.let { JobHistory.update(it, JobStatus.Failed, t.message) }
             } finally {
                 running = false
+                currentJobId = null
             }
         }
     }
