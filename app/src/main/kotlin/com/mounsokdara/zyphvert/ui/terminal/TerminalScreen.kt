@@ -1,10 +1,13 @@
-@file:OptIn(ExperimentalMaterial3Api::class)
+@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
 
 package com.mounsokdara.zyphvert.ui.terminal
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -31,6 +34,16 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontWeight
+import com.mounsokdara.zyphvert.R
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
@@ -54,24 +67,32 @@ import com.mounsokdara.zyphvert.tools.InKind
 import com.mounsokdara.zyphvert.ui.components.AppSheet
 import com.mounsokdara.zyphvert.ui.picker.FilePicker
 
-// Windows Terminal "Campbell" colours.
-private val Bg = Color(0xFF0C0C0C)
-private val TabBg = Color(0xFF1F1F1F)
-private val KeyBg = Color(0xFF2B2B2B)
-private val Fg = Color(0xFFCCCCCC)
-private val Dim = Color(0xFF767676)
-private val Yellow = Color(0xFFF9F1A5)
-private val Cyan = Color(0xFF61D6D6)
-private val Green = Color(0xFF16C60C)
-private val Red = Color(0xFFE74856)
-private val Blue = Color(0xFF3A96DD)
-private val Magenta = Color(0xFFB4009E)
+// Near-black background with soft, readable colours (Tokyo Night inspired).
+private val Bg = Color(0xFF0A0A10)
+private val TabBg = Color(0xFF14141D)
+private val KeyBg = Color(0xFF1E1F2E)
+private val Fg = Color(0xFFD5D9E8)
+private val Dim = Color(0xFF636A88)
+private val Yellow = Color(0xFFE0AF68)
+private val Cyan = Color(0xFF7DCFFF)
+private val Green = Color(0xFF9ECE6A)
+private val Red = Color(0xFFF7768E)
+private val Blue = Color(0xFF7AA2F7)
+private val Magenta = Color(0xFFBB9AF7)
 
-private val Mono = FontFamily.Monospace
-private const val MIN_TEXT = 10
-private const val MAX_TEXT = 20
+/** JetBrains Mono: made for reading code, with clear 0/O and 1/l/I. */
+private val Mono = FontFamily(
+    Font(R.font.jetbrains_mono_regular, FontWeight.Normal),
+    Font(R.font.jetbrains_mono_bold, FontWeight.Bold),
+)
+private const val MIN_TEXT = 8f
+private const val MAX_TEXT = 32f
 
-private fun termStyle(size: Int) = TextStyle(fontFamily = Mono, fontSize = size.sp, lineHeight = (size * 1.4f).sp, color = Fg)
+private fun termStyle(size: Float) = TextStyle(
+    fontFamily = Mono, fontSize = size.sp, lineHeight = (size * 1.45f).sp, color = Fg,
+    // No ligatures: a terminal must show exactly the characters that were typed (-> stays -> and not an arrow).
+    fontFeatureSettings = "'liga' 0, 'calt' 0",
+)
 
 /** Colours a command line as it is typed. Never changes the text itself, only how it is painted. */
 private fun highlight(text: String): AnnotatedString = buildAnnotatedString {
@@ -137,8 +158,11 @@ fun TerminalScreen(vm: TerminalViewModel, onBack: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
     var sheet by remember { mutableStateOf<String?>(null) }
     var picker by remember { mutableStateOf(false) }
-    var textSize by rememberSaveable { mutableIntStateOf(13) }
+    var textSize by rememberSaveable { mutableFloatStateOf(13f) }
     val term = remember(textSize) { termStyle(textSize) }
+    var folderPicker by remember { mutableStateOf(false) }
+    val keyboard = LocalSoftwareKeyboardController.current
+    val scope = rememberCoroutineScope()
 
     // Everything the list shows, so "the end" is always the last item no matter which rows are present.
     val itemCount = (if (!vm.engineReady) 1 else 0) + s.lines.size + 1
@@ -155,6 +179,20 @@ fun TerminalScreen(vm: TerminalViewModel, onBack: () -> Unit) {
         }
     }
     LaunchedEffect(vm.selected, vm.sessions.size) { tabState.animateScrollToItem(vm.selected.coerceAtLeast(0)) }
+
+    /** Any tap on the screen is a tap on the input: focus the command line and bring up the keyboard. */
+    fun openKeyboard() {
+        if (s.running) return
+        scope.launch {
+            if (runCatching { focus.requestFocus() }.isFailure) {
+                // The prompt is scrolled out of view (reading old output): bring it back first.
+                listState.scrollToItem((listState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0), scrollOffset = Int.MAX_VALUE / 2)
+                androidx.compose.runtime.withFrameNanos { }
+                runCatching { focus.requestFocus() }
+            }
+            keyboard?.show()
+        }
+    }
 
     fun type(chars: String) {
         val t = s.input.text + chars
@@ -192,13 +230,14 @@ fun TerminalScreen(vm: TerminalViewModel, onBack: () -> Unit) {
             Box {
                 IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, "More", tint = Fg) }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(text = { Text("Pick a folder") }, leadingIcon = { Icon(Icons.Rounded.FolderOpen, null) }, onClick = { menu = false; folderPicker = true })
                     DropdownMenuItem(text = { Text("Pick a file") }, leadingIcon = { Icon(Icons.Rounded.AttachFile, null) }, onClick = { menu = false; picker = true })
                     DropdownMenuItem(text = { Text("Saved commands") }, leadingIcon = { Icon(Icons.Rounded.Bookmarks, null) }, onClick = { menu = false; sheet = "saved" })
                     DropdownMenuItem(text = { Text("Examples") }, leadingIcon = { Icon(Icons.Rounded.Lightbulb, null) }, onClick = { menu = false; sheet = "examples" })
                     DropdownMenuItem(text = { Text("Copy output") }, leadingIcon = { Icon(Icons.Rounded.ContentCopy, null) }, onClick = { menu = false; clipboard.setText(AnnotatedString(vm.outputText())) })
                     DropdownMenuItem(text = { Text("Clear screen") }, leadingIcon = { Icon(Icons.Rounded.DeleteSweep, null) }, onClick = { menu = false; vm.clear() })
-                    DropdownMenuItem(text = { Text("Text bigger") }, leadingIcon = { Icon(Icons.Rounded.ZoomIn, null) }, enabled = textSize < MAX_TEXT, onClick = { textSize = (textSize + 1).coerceAtMost(MAX_TEXT) })
-                    DropdownMenuItem(text = { Text("Text smaller") }, leadingIcon = { Icon(Icons.Rounded.ZoomOut, null) }, enabled = textSize > MIN_TEXT, onClick = { textSize = (textSize - 1).coerceAtLeast(MIN_TEXT) })
+                    DropdownMenuItem(text = { Text("Text bigger") }, leadingIcon = { Icon(Icons.Rounded.ZoomIn, null) }, enabled = textSize < MAX_TEXT, onClick = { textSize = (textSize + 1f).coerceAtMost(MAX_TEXT) })
+                    DropdownMenuItem(text = { Text("Text smaller") }, leadingIcon = { Icon(Icons.Rounded.ZoomOut, null) }, enabled = textSize > MIN_TEXT, onClick = { textSize = (textSize - 1f).coerceAtLeast(MIN_TEXT) })
                 }
             }
         }
@@ -206,7 +245,23 @@ fun TerminalScreen(vm: TerminalViewModel, onBack: () -> Unit) {
         // ---------------------------------------------------------------- screen
         Box(
             Modifier.weight(1f).fillMaxWidth()
-                .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { runCatching { focus.requestFocus() } },
+                // Two fingers: pinch to zoom the text. Single-finger gestures (scroll, select, tap) are left alone.
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                        do {
+                            val ev = awaitPointerEvent(PointerEventPass.Initial)
+                            if (ev.changes.size > 1) {
+                                val zoom = ev.calculateZoom()
+                                if (zoom != 1f) {
+                                    textSize = (textSize * zoom).coerceIn(MIN_TEXT, MAX_TEXT)
+                                    ev.changes.forEach { it.consume() }
+                                }
+                            }
+                        } while (ev.changes.any { it.pressed })
+                    }
+                }
+                .pointerInput(s.id, s.running) { detectTapGestures(onTap = { openKeyboard() }) },
         ) {
             SelectionContainer {
                 LazyColumn(
@@ -256,26 +311,40 @@ fun TerminalScreen(vm: TerminalViewModel, onBack: () -> Unit) {
         }
 
         // ---------------------------------------------------------------- key bar
-        // Equal-width keys that always fit the screen (no hidden keys off to the right).
-        Row(
+        // Two rows of equal-width keys that always fit the screen. Arrow keys repeat while held.
+        Column(
             Modifier.fillMaxWidth().background(TabBg).padding(horizontal = 6.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Row(Modifier.widthIn(max = 640.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Key(icon = Icons.Rounded.AttachFile, desc = "Insert a file path") { picker = true }
                 Key("Tab") { vm.complete() }
-                Key("↑") { vm.historyStep(-1) }
-                Key("↓") { vm.historyStep(1) }
+                Key("←", repeat = true) { vm.moveCursor(-1) }
+                Key("↑", repeat = true) { vm.historyStep(-1) }
+                Key("↓", repeat = true) { vm.historyStep(1) }
+                Key("→", repeat = true) { vm.moveCursor(1) }
                 Key("^C", tint = if (s.running) Red else Fg) { vm.interrupt() }
-                Key("-") { type("-") }
-                Key("/") { type("/") }
-                Key("\"") { type("\"") }
-                Key("~") { type("~") }
                 Key(icon = Icons.Rounded.ContentPaste, desc = "Paste") {
                     clipboard.getText()?.text?.let { type(vm.cleanPaste(it)) }
                 }
             }
+            Row(Modifier.widthIn(max = 640.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Key(icon = Icons.Rounded.AttachFile, desc = "Insert a file path") { picker = true }
+                Key(icon = Icons.Rounded.FolderOpen, desc = "Pick a folder") { folderPicker = true }
+                Key("-") { type("-") }
+                Key("/") { type("/") }
+                Key("\"") { type("\"") }
+                Key("'") { type("'") }
+                Key("~") { type("~") }
+            }
         }
+    }
+
+    if (folderPicker) {
+        FolderPicker(
+            start = s.cwd, root = android.os.Environment.getExternalStorageDirectory(),
+            onPick = { vm.cdTo(it) }, onDismiss = { folderPicker = false },
+        )
     }
 
     if (picker) {
@@ -321,20 +390,30 @@ fun TerminalScreen(vm: TerminalViewModel, onBack: () -> Unit) {
 @Composable
 private fun Modifier.verticalScroll2(): Modifier = this.then(Modifier.verticalScroll(rememberScrollState()))
 
-/** One key of the bar. Every key takes an equal share of the row, so all ten always fit. */
+/** One key of the bar. Every key takes an equal share of the row. With [repeat], holding the key repeats it. */
 @Composable
 private fun RowScope.Key(
     label: String? = null,
     icon: ImageVector? = null,
     desc: String = label.orEmpty(),
     tint: Color = Fg,
+    repeat: Boolean = false,
     onClick: () -> Unit,
 ) {
-    Box(
-        Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(6.dp)).background(KeyBg).clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
+    val action by rememberUpdatedState(onClick)
+    val base = Modifier.weight(1f).height(38.dp).clip(RoundedCornerShape(8.dp)).background(KeyBg)
+    val modifier = if (repeat) base.pointerInput(Unit) {
+        detectTapGestures(onPress = {
+            action()
+            coroutineScope {
+                val held = launch { delay(380); while (true) { action(); delay(55) } }
+                tryAwaitRelease()
+                held.cancel()
+            }
+        })
+    } else base.clickable(onClick = onClick)
+    Box(modifier, contentAlignment = Alignment.Center) {
         if (icon != null) Icon(icon, desc, Modifier.size(18.dp), tint = tint)
-        else Text(label.orEmpty(), style = TextStyle(fontFamily = Mono, fontSize = 13.sp, color = tint), maxLines = 1)
+        else Text(label.orEmpty(), style = TextStyle(fontFamily = Mono, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = tint), maxLines = 1)
     }
 }

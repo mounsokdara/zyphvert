@@ -27,6 +27,7 @@ private val libs = listOf(
     Lib("Material Components and icons", "Apache License 2.0", "https://github.com/material-components/material-components-android"),
     Lib("Hilt and Dagger", "Apache License 2.0", "https://github.com/google/dagger"),
     Lib("Kotlin and Coroutines", "Apache License 2.0", "https://github.com/Kotlin/kotlinx.coroutines"),
+    Lib("JetBrains Mono (terminal font)", "SIL Open Font License 1.1", "https://github.com/JetBrains/JetBrainsMono"),
 )
 
 @Composable
