@@ -65,7 +65,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mounsokdara.zyphvert.tools.InKind
 import com.mounsokdara.zyphvert.ui.components.AppSheet
-import com.mounsokdara.zyphvert.ui.picker.FilePicker
+import com.mounsokdara.zyphvert.ui.files.FilePickerDialog
 
 // Near-black background with soft, readable colours (Tokyo Night inspired).
 private val Bg = Color(0xFF0A0A10)
@@ -348,7 +348,7 @@ fun TerminalScreen(vm: TerminalViewModel, onBack: () -> Unit) {
     }
 
     if (picker) {
-        FilePicker(
+        FilePickerDialog(
             kind = InKind.Any, multiple = false, title = "Insert a file path",
             onDismiss = { picker = false }, onUseSystem = { picker = false },
         ) { picked ->

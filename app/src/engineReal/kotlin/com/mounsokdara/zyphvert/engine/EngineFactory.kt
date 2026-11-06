@@ -24,7 +24,7 @@ private class FfmpegKitEngine : MediaEngine {
     override fun version(): String =
         "FFmpegKitNext ${FFmpegKitConfig.getVersion()} · FFmpeg ${FFmpegKitConfig.getFFmpegVersion()}"
 
-    override fun run(command: String, probe: Boolean): Flow<EngineEvent> = callbackFlow {
+    override fun run(command: String, probe: Boolean, onProgress: ((Long, Long) -> Unit)?): Flow<EngineEvent> = callbackFlow {
         var finished = false
         fun complete(session: Session) {
             finished = true
@@ -35,7 +35,10 @@ private class FfmpegKitEngine : MediaEngine {
         current = if (probe) {
             FFprobeKit.executeAsync(command, { s -> complete(s) }, { l -> trySend(EngineEvent.Log(l.message)) })
         } else {
-            FFmpegKit.executeAsync(command, { s -> complete(s) }, { l -> trySend(EngineEvent.Log(l.message)) }, null)
+            FFmpegKit.executeAsync(
+                command, { s -> complete(s) }, { l -> trySend(EngineEvent.Log(l.message)) },
+                { st -> onProgress?.invoke(st.time.toLong(), st.size.toLong()) },
+            )
         }
         awaitClose {
             if (!finished) current?.cancel()

@@ -106,11 +106,26 @@ class ConversionManager @Inject constructor(@ApplicationContext private val ctx:
             }
             if (!handled) {
                 val cmd = job.command
+                // The first "Duration:" line in the log is the input; with the trim options it gives the output length.
+                var inputMs: Long? = null
+                var lastPush = 0L
+                val outFile = job.output?.let { File(it) }
+                val onProgress: (Long, Long) -> Unit = { timeMs, bytes ->
+                    val now = System.currentTimeMillis()
+                    if (now - lastPush >= 300) {
+                        lastPush = now
+                        val total = effectiveMs(cmd.orEmpty(), inputMs)
+                        val frac = total?.let { (timeMs.toFloat() / it).coerceIn(0f, 0.99f) }
+                        val written = maxOf(bytes, outFile?.takeIf { it.isFile }?.length() ?: 0L)
+                        JobHistory.patch(item.id) { it.copy(progress = frac, outputBytes = written) }
+                    }
+                }
                 if (cmd == null) error = "Nothing to run"
                 else if (!engine.isAvailable) error = "The FFmpeg engine isn't part of this build."
-                else engine.run(cmd, job.probe).collect { ev ->
+                else engine.run(cmd, job.probe, if (job.probe) null else onProgress).collect { ev ->
                     when (ev) {
                         is EngineEvent.Log -> {
+                            if (!job.probe && inputMs == null) inputMs = durationMs(ev.text)
                             if (job.probe) { if (full.length < 40_000) full.append(ev.text) }
                             ev.text.split('\n').filter { it.isNotBlank() }.forEach {
                                 tail.addLast(it); if (tail.size > 30) tail.removeFirst()
@@ -156,6 +171,29 @@ class ConversionManager @Inject constructor(@ApplicationContext private val ctx:
         }
         payloads.remove(item.id)
         runningId = null
+    }
+
+    private val durationRe = Regex("""Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)""")
+
+    private fun durationMs(log: String): Long? = durationRe.find(log)?.let {
+        val (h, m, s) = it.destructured
+        ((h.toLong() * 3600 + m.toLong() * 60 + s.toDouble()) * 1000).toLong()
+    }
+
+    private fun seconds(v: String): Double = v.split(':').fold(0.0) { acc, p -> acc * 60 + (p.toDoubleOrNull() ?: 0.0) }
+
+    /**
+     * How long the output will be, so progress can be a percentage: the input length,
+     * cut down by -ss, -to and -t. Unknown (null) for slideshows built from still images.
+     */
+    private fun effectiveMs(cmd: String, inputMs: Long?): Long? {
+        if (inputMs == null || inputMs <= 0 || " -loop " in cmd) return null
+        fun opt(name: String) = Regex("""(?:^|\s)-$name\s+"?([0-9:.]+)"?(?=\s|$)""").find(cmd)?.groupValues?.get(1)?.let(::seconds)
+        val start = opt("ss") ?: 0.0
+        var len = inputMs / 1000.0 - start
+        opt("to")?.let { len = minOf(len, it - start) }
+        opt("t")?.let { len = minOf(len, it) }
+        return if (len > 0) (len * 1000).toLong() else null
     }
 
     private fun scan(out: File) {

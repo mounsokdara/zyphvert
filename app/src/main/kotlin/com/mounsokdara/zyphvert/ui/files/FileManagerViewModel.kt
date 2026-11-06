@@ -1,6 +1,16 @@
 package com.mounsokdara.zyphvert.ui.files
 
+import android.content.Context
 import android.os.Environment
+import android.provider.MediaStore
+import android.provider.MediaStore.Files.FileColumns
+import com.mounsokdara.zyphvert.tools.AUDIO_EXTS
+import com.mounsokdara.zyphvert.tools.IMAGE_EXTS
+import com.mounsokdara.zyphvert.tools.InKind
+import com.mounsokdara.zyphvert.tools.LIVE_STILL_EXTS
+import com.mounsokdara.zyphvert.tools.LIVE_VIDEO_EXTS
+import com.mounsokdara.zyphvert.tools.VIDEO_EXTS
+import dagger.hilt.android.qualifiers.ApplicationContext
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -26,6 +36,9 @@ data class FileStats(val bytes: Long, val files: Int, val folders: Int)
 enum class SortMode { NameAsc, NameDesc, SizeDesc, DateDesc, Type }
 enum class ViewMode { List, Grid }
 
+/** Folders: walk the folder tree. Media: one flat list of every picture, video and song on the phone. */
+enum class BrowseMode { Folders, Media }
+
 data class FileEntry(
     val file: File,
     val name: String,
@@ -33,6 +46,10 @@ data class FileEntry(
     val sizeBytes: Long,
     val lastModified: Long,
     val extension: String,
+    /** Looks like a Live Photo or Motion Photo. */
+    val live: Boolean = false,
+    /** The motion half of an iPhone Live Photo pair. */
+    val companion: File? = null,
 ) {
     val sizeLabel: String
         get() = if (isDirectory) "" else humanSize(sizeBytes)
@@ -53,7 +70,7 @@ data class FileEntry(
 }
 
 @HiltViewModel
-class FileManagerViewModel @Inject constructor() : ViewModel() {
+class FileManagerViewModel @Inject constructor(@ApplicationContext private val appCtx: Context) : ViewModel() {
     var currentPath by mutableStateOf(defaultRoot())
         private set
     var entries by mutableStateOf<List<FileEntry>>(emptyList())
@@ -70,6 +87,18 @@ class FileManagerViewModel @Inject constructor() : ViewModel() {
     var viewMode by mutableStateOf(ViewMode.List)
     var showHidden by mutableStateOf(false)
     var selected by mutableStateOf<FileEntry?>(null)
+    var browseMode by mutableStateOf(BrowseMode.Folders)
+        private set
+    /** Picker only: the kind of file the tool wants, and whether to show everything instead. */
+    var typeKind by mutableStateOf<InKind?>(null)
+        private set
+    var showAllTypes by mutableStateOf(true)
+    private var mediaItems by mutableStateOf<List<FileEntry>>(emptyList())
+    private var sortBeforeMedia: SortMode? = null
+    // Picker only: going up from a whole drive stops there unless the user came in through Root.
+    private var drives: Set<String> = emptySet()
+    private var stopAtDrives = false
+    private var fromRoot = false
     var clip by mutableStateOf<Clip?>(null)
         private set
     /** One-shot text for a Toast; the screen shows it and clears it. */
@@ -94,12 +123,38 @@ class FileManagerViewModel @Inject constructor() : ViewModel() {
     }
 
     fun navigateTo(path: String) {
+        fromRoot = if (path == "/") true else if (path in drives) false else fromRoot
+        if (browseMode == BrowseMode.Media) {
+            browseMode = BrowseMode.Folders
+            sortBeforeMedia?.let { sort = it }
+        }
         currentPath = path
         selected = null
         reload()
     }
 
-    val canGoUp: Boolean get() = currentPath != "/"
+    val canGoUp: Boolean get() = currentPath != "/" && !(stopAtDrives && currentPath in drives && !fromRoot)
+
+    /** Called when the browser is opened as a file picker for a tool input. */
+    fun configurePick(kind: InKind, driveRoots: Set<String>) {
+        typeKind = kind
+        drives = driveRoots
+        stopAtDrives = true
+        showAllTypes = kind.exts == null
+        query = ""
+        selected = null
+        sort = SortMode.DateDesc
+        reload()
+    }
+
+    fun setMode(mode: BrowseMode) {
+        if (mode == browseMode) return
+        browseMode = mode
+        selected = null
+        query = ""
+        if (mode == BrowseMode.Media) { sortBeforeMedia = sort; sort = SortMode.DateDesc } else sortBeforeMedia?.let { sort = it }
+        reload()
+    }
 
     fun goUp() {
         val parent = File(currentPath).parentFile ?: return
@@ -116,9 +171,13 @@ class FileManagerViewModel @Inject constructor() : ViewModel() {
         loadJob = viewModelScope.launch {
             loading = true
             error = null
-            val result = withContext(Dispatchers.IO) { listDir(currentPath) }
-            entries = result.entries
-            error = result.error
+            if (browseMode == BrowseMode.Media) {
+                mediaItems = withContext(Dispatchers.IO) { queryMedia() }
+            } else {
+                val result = withContext(Dispatchers.IO) { listDir(currentPath) }
+                entries = result.entries
+                error = result.error
+            }
             loading = false
         }
     }
@@ -252,7 +311,10 @@ class FileManagerViewModel @Inject constructor() : ViewModel() {
     }
 
     fun filtered(): List<FileEntry> {
-        var list = entries
+        var list = if (browseMode == BrowseMode.Media) mediaItems else entries
+        val kind = typeKind
+        val exts = kind?.exts
+        if (exts != null && !showAllTypes) list = list.filter { it.isDirectory || it.extension in exts || (kind?.acceptsLive == true && it.live) }
         if (!showHidden) list = list.filter { !it.name.startsWith('.') }
         if (query.isNotBlank()) {
             val q = query.trim().lowercase()
@@ -276,21 +338,103 @@ class FileManagerViewModel @Inject constructor() : ViewModel() {
         if (!dir.isDirectory) return ListResult(emptyList(), "Not a directory")
         val files = FsFallback.children(dir)
             ?: return ListResult(emptyList(), if (!dir.canRead()) "Permission denied. Grant All files access in Settings." else "Cannot list this folder")
+        val videoBases = files.filter { it.isFile && it.extension.lowercase() in LIVE_VIDEO_EXTS }
+            .associateBy { it.nameWithoutExtension.lowercase() }
         val mapped = files.map { f ->
+            val ext = f.extension.lowercase()
+            val pair = if (f.isFile && ext in LIVE_STILL_EXTS) videoBases[f.nameWithoutExtension.lowercase()] else null
             FileEntry(
                 file = f,
                 name = f.name,
                 isDirectory = f.isDirectory,
                 sizeBytes = if (f.isFile) f.length() else 0L,
                 lastModified = f.lastModified(),
-                extension = f.extension.lowercase(),
+                extension = ext,
+                live = pair != null || (f.isFile && ext in LIVE_STILL_EXTS && motionName(f.name)),
+                companion = pair,
             )
         }
         return ListResult(mapped, null)
+    }
+
+    /** Every picture, video and song the phone knows about, newest first. */
+    private fun queryMedia(): List<FileEntry> {
+        val out = ArrayList<FileEntry>()
+        val wantPairs = typeKind?.acceptsLive == true
+        runCatching {
+            val args = arrayOf(FileColumns.MEDIA_TYPE_IMAGE, FileColumns.MEDIA_TYPE_AUDIO, FileColumns.MEDIA_TYPE_VIDEO).map { it.toString() }.toTypedArray()
+            appCtx.contentResolver.query(
+                MediaStore.Files.getContentUri("external"),
+                arrayOf(FileColumns.DATA, FileColumns.SIZE, FileColumns.DATE_MODIFIED),
+                "${FileColumns.MEDIA_TYPE} IN (?, ?, ?)", args, "${FileColumns.DATE_MODIFIED} DESC",
+            )?.use { c ->
+                val iData = c.getColumnIndexOrThrow(FileColumns.DATA)
+                val iSize = c.getColumnIndexOrThrow(FileColumns.SIZE)
+                val iDate = c.getColumnIndexOrThrow(FileColumns.DATE_MODIFIED)
+                while (c.moveToNext()) {
+                    val path = c.getString(iData) ?: continue
+                    val size = c.getLong(iSize)
+                    if (size <= 0) continue
+                    out += mediaEntry(File(path), size, c.getLong(iDate) * 1000, wantPairs)
+                }
+            }
+        }
+        if (out.isEmpty()) out += walkMedia(wantPairs)
+        return out
+    }
+
+    /** Fallback when the media database is empty or unreadable: scan the storage, skipping Android/ and hidden folders. */
+    private fun walkMedia(wantPairs: Boolean): List<FileEntry> {
+        val exts = VIDEO_EXTS + AUDIO_EXTS + IMAGE_EXTS
+        val out = ArrayList<FileEntry>()
+        runCatching {
+            Environment.getExternalStorageDirectory().walkTopDown()
+                .onEnter { it.name != "Android" && !it.name.startsWith(".") }
+                .forEach { f ->
+                    if (out.size < 20_000 && f.isFile && f.extension.lowercase() in exts) out += mediaEntry(f, f.length(), f.lastModified(), wantPairs)
+                }
+        }
+        return out.sortedByDescending { it.lastModified }
+    }
+
+    private fun mediaEntry(f: File, size: Long, modified: Long, wantPairs: Boolean): FileEntry {
+        val ext = f.extension.lowercase()
+        val still = ext in LIVE_STILL_EXTS
+        val pair = if (wantPairs && still) {
+            LIVE_VIDEO_EXTS.firstNotNullOfOrNull { e -> File(f.parentFile, f.nameWithoutExtension + "." + e).takeIf { it.isFile } }
+        } else null
+        return FileEntry(f, f.name, false, size, modified, ext, live = pair != null || (still && motionName(f.name)), companion = pair)
+    }
+
+    private fun motionName(n: String): Boolean {
+        val l = n.lowercase()
+        return l.startsWith("mvimg_") || ".mp." in l || "_mp." in l || l.contains("motionphoto")
     }
 
     private fun defaultRoot(): String {
         val storage = Environment.getExternalStorageDirectory()
         return if (storage.exists()) storage.absolutePath else "/"
     }
+}
+
+/** Quick locations for the title menu: internal storage, the usual folders, Root and any SD card. */
+internal fun roots(ctx: Context): List<Pair<String, File>> {
+    val base = Environment.getExternalStorageDirectory()
+    val list = mutableListOf("Internal storage" to base)
+    for ((label, dir) in listOf(
+        "Camera" to Environment.DIRECTORY_DCIM, "Downloads" to Environment.DIRECTORY_DOWNLOADS,
+        "Movies" to Environment.DIRECTORY_MOVIES, "Music" to Environment.DIRECTORY_MUSIC,
+        "Pictures" to Environment.DIRECTORY_PICTURES, "Documents" to Environment.DIRECTORY_DOCUMENTS,
+    )) {
+        val f = Environment.getExternalStoragePublicDirectory(dir)
+        if (f.isDirectory) list += label to f
+    }
+    File(base, "Zyphvert").takeIf { it.isDirectory }?.let { list += "Zyphvert" to it }
+    list += "Root (/)" to File("/")
+    // SD cards and USB drives show up as extra app-files dirs; walk up to the volume root.
+    ctx.getExternalFilesDirs(null).drop(1).filterNotNull().forEach { d ->
+        val root = d.path.substringBefore("/Android/")
+        if (root != d.path && File(root).isDirectory) list += "SD card" to File(root)
+    }
+    return list
 }

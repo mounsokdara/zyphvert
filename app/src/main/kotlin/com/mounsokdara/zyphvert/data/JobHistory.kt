@@ -21,6 +21,10 @@ data class ConversionJob(
     val outputPath: String? = null,
     /** Command output (tail) or the full report for info jobs. */
     val details: String? = null,
+    /** 0..1 while running, or null when the length of the job isn't known. */
+    val progress: Float? = null,
+    /** Bytes written to the output file so far. */
+    val outputBytes: Long = 0L,
 )
 
 /** Simple in-memory history shared across tools (survives while process is alive). */

@@ -10,6 +10,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.text.format.Formatter
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import com.mounsokdara.zyphvert.MainActivity
@@ -39,7 +40,7 @@ class ConversionForegroundService : Service() {
         if (intent?.action == ACTION_CANCEL) manager.cancelAll()
         ensureChannel()
         ServiceCompat.startForeground(
-            this, NOTIFICATION_ID, build("Starting…", null),
+            this, NOTIFICATION_ID, build("Starting…", null, null),
             if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0,
         )
         scope.launch {
@@ -51,8 +52,12 @@ class ConversionForegroundService : Service() {
                     stopSelf()
                 } else {
                     val title = running?.let { "${it.toolTitle}: ${it.inputLabel}" } ?: "Waiting to start"
-                    val text = if (waiting > 0) "$waiting more waiting" else "Converting…"
-                    getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, build(title, text))
+                    val percent = running?.progress?.let { (it * 100).toInt() }
+                    val size = running?.outputBytes?.takeIf { it > 0 }?.let { Formatter.formatFileSize(this@ConversionForegroundService, it) }
+                    val text = listOfNotNull(
+                        percent?.let { "$it%" }, size?.let { "$it written" }, if (waiting > 0) "$waiting more waiting" else null,
+                    ).joinToString(" · ").ifEmpty { "Converting…" }
+                    getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, build(title, text, percent))
                 }
             }
         }
@@ -73,7 +78,7 @@ class ConversionForegroundService : Service() {
         }
     }
 
-    private fun build(title: String, text: String?): Notification {
+    private fun build(title: String, text: String?, percent: Int?): Notification {
         val open = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
@@ -86,7 +91,7 @@ class ConversionForegroundService : Service() {
             .setSmallIcon(R.drawable.ic_launcher_monochrome)
             .setContentTitle(title)
             .setContentText(text)
-            .setProgress(0, 0, true)
+            .setProgress(100, percent ?: 0, percent == null)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(open)

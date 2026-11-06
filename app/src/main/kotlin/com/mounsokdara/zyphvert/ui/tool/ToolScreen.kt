@@ -37,7 +37,7 @@ import com.mounsokdara.zyphvert.tools.*
 import com.mounsokdara.zyphvert.ui.components.SectionLabel
 import com.mounsokdara.zyphvert.ui.home.Tool
 import com.mounsokdara.zyphvert.ui.home.accent
-import com.mounsokdara.zyphvert.ui.picker.FilePicker
+import com.mounsokdara.zyphvert.ui.files.FilePickerDialog
 import com.mounsokdara.zyphvert.util.StorageAccess
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -217,7 +217,7 @@ private fun SlotCard(slot: InputSlot, files: List<PickedFile>, onChange: (List<P
     var showPicker by remember { mutableStateOf(false) }
     fun pick() { showPicker = true }
     if (showPicker) {
-        FilePicker(
+        FilePickerDialog(
             kind = slot.kind,
             multiple = slot.multiple,
             title = slot.label,

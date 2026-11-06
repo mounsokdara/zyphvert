@@ -3,6 +3,7 @@ package com.mounsokdara.zyphvert.ui.screens
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.text.format.Formatter
 import android.webkit.MimeTypeMap
 import android.widget.Toast
 import androidx.compose.animation.animateContentSize
@@ -130,7 +131,17 @@ private fun JobCard(job: ConversionJob, onCancel: () -> Unit, modifier: Modifier
                     IconButton(onClick = onCancel) { Icon(Icons.Rounded.Close, "Cancel") }
                 }
             }
-            if (job.status == JobStatus.Running) LinearProgressIndicator(Modifier.fillMaxWidth())
+            if (job.status == JobStatus.Running) {
+                val p = job.progress
+                // A real bar when the length is known, otherwise the endless one.
+                if (p != null) LinearProgressIndicator(progress = { p }, modifier = Modifier.fillMaxWidth())
+                else LinearProgressIndicator(Modifier.fillMaxWidth())
+                val parts = listOfNotNull(
+                    p?.let { "${(it * 100).toInt()}%" },
+                    job.outputBytes.takeIf { it > 0 }?.let { Formatter.formatFileSize(ctx, it) + " written" },
+                )
+                if (parts.isNotEmpty()) Text(parts.joinToString("  ·  "), style = MaterialTheme.typography.labelLarge, color = scheme.primary)
+            }
             if (job.status == JobStatus.Success && job.outputPath != null) {
                 Text(OutputPaths.display(job.outputPath), style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 if (isFile) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
