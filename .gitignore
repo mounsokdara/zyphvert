@@ -1,4 +1,4 @@
-# Keystore / signing — NEVER commit these
+# Keystore / signing: NEVER commit these
 *.jks
 *.keystore
 *.p12

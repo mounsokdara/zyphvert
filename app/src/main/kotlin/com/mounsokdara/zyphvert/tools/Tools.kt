@@ -62,7 +62,7 @@ private fun audioJobs(r: ToolRequest, files: List<PickedFile>, cover: PickedFile
             " -map 1:v $enc -disposition:v:0 attached_pic$id3"
         } else ""
         val tags = tagArgs(r, f).joinToString(" ")
-        val cmd = "$inputs $select$coverArgs ${audioCodecArgs(fmt, br, sr, ch, comp)} ${fmt.mux} -map_metadata 0 $tags ${out.path}"
+        val cmd = "$inputs $select$coverArgs ${audioCodecArgs(fmt, br, sr, ch, comp)} ${fmt.mux} -map_metadata 0 $tags ${q(out.path)}"
         r.job(f, out, cmd)
     }
 }
@@ -92,7 +92,7 @@ private fun videoJobs(r: ToolRequest, files: List<PickedFile>, fmtKey: String, s
         when (fmt.kind) {
             VFmt.Kind.Remux -> {
                 val out = r.out("Video", f, fmt.ext, slot = slot)
-                r.job(f, out, "$inp -map ${q("0:v?")} -map ${q("0:a?")} -c copy ${out.path}")
+                r.job(f, out, "$inp -map ${q("0:v?")} -map ${q("0:a?")} -c copy ${q(out.path)}")
             }
             VFmt.Kind.LivePair -> {
                 // iPhone-style pair: Zyphvert/Live Photos/<name>.mov next to <name>.jpg. Length comes from the "Live Photo length" option.
@@ -100,7 +100,7 @@ private fun videoJobs(r: ToolRequest, files: List<PickedFile>, fmtKey: String, s
                 val id = java.util.UUID.randomUUID().toString().uppercase()
                 val vf = listOfNotNull(scale, if (fps > 0) "fps=$fps" else null, VID_TAIL).joinToString(",")
                 r.job(f, out, "$inp$liveLen -vf ${q(vf)} -c:v h264_mediacodec -b:v ${hwK}k -c:a aac -b:a 128k " +
-                    "-movflags use_metadata_tags -metadata com.apple.quicktime.content.identifier=$id -f mov ${out.path}")
+                    "-movflags use_metadata_tags -metadata com.apple.quicktime.content.identifier=$id -f mov ${q(out.path)}")
             }
             VFmt.Kind.MotionPhoto -> {
                 // One FFmpeg run makes the clip and the still; then both are joined into a single Motion Photo JPG.
@@ -109,8 +109,8 @@ private fun videoJobs(r: ToolRequest, files: List<PickedFile>, fmtKey: String, s
                 val tmpStill = File(r.ctx.cacheDir, "mp_${out.nameWithoutExtension}.jpg").also { it.delete() }
                 val vf = listOfNotNull(scale, if (fps > 0) "fps=$fps" else null, VID_TAIL).joinToString(",")
                 ToolJob(r.toolTitle, f.name, out.path,
-                    "$inp$liveLen -vf ${q(vf)} -c:v h264_mediacodec -b:v ${hwK}k -c:a aac -b:a 128k -movflags +faststart ${tmpClip.path} " +
-                        "-frames:v 1 -q:v 2 ${tmpStill.path}",
+                    "$inp$liveLen -vf ${q(vf)} -c:v h264_mediacodec -b:v ${hwK}k -c:a aac -b:a 128k -movflags +faststart ${q(tmpClip.path)} " +
+                        "-frames:v 1 -q:v 2 ${q(tmpStill.path)}",
                     after = {
                         try { buildMotionPhoto(tmpStill, tmpClip, out) } finally { tmpClip.delete(); tmpStill.delete() }
                     })
@@ -119,17 +119,17 @@ private fun videoJobs(r: ToolRequest, files: List<PickedFile>, fmtKey: String, s
                 val out = r.out("Images", f, "gif", slot = slot)
                 val vf = "fps=${if (fps > 0) fps else 12},${scale?.replace("scale=-2", "scale=-1") ?: "scale=480:-1"}:flags=lanczos," +
                     "split[s0][s1];[s0]palettegen=stats_mode=diff[p];[s1][p]paletteuse=dither=bayer:bayer_scale=5"
-                r.job(f, out, "$inp -vf ${q(vf)} -loop 0 -an ${out.path}")
+                r.job(f, out, "$inp -vf ${q(vf)} -loop 0 -an ${q(out.path)}")
             }
             VFmt.Kind.Webp -> {
                 val out = r.out("Images", f, "webp", slot = slot)
                 val vf = "fps=${if (fps > 0) fps else 12},${scale ?: "scale=480:-2"}:flags=lanczos"
-                r.job(f, out, "$inp -vf ${q(vf)} -c:v libwebp -q:v 70 -loop 0 -an ${out.path}")
+                r.job(f, out, "$inp -vf ${q(vf)} -c:v libwebp -q:v 70 -loop 0 -an ${q(out.path)}")
             }
             VFmt.Kind.Apng -> {
                 val out = r.out("Images", f, "png", slot = slot)
                 val vf = "fps=${if (fps > 0) fps else 12},${scale ?: "scale=480:-2"}:flags=lanczos"
-                r.job(f, out, "$inp -vf ${q(vf)} -f apng -plays 0 -an ${out.path}")
+                r.job(f, out, "$inp -vf ${q(vf)} -f apng -plays 0 -an ${q(out.path)}")
             }
             VFmt.Kind.FramesJpg, VFmt.Kind.FramesPng -> {
                 val ext = fmt.ext
@@ -138,7 +138,7 @@ private fun videoJobs(r: ToolRequest, files: List<PickedFile>, fmtKey: String, s
                 val every = if (fps == 0) "-fps_mode passthrough " else ""
                 val qa = if (ext == "jpg") "-q:v 2 " else ""
                 ToolJob(r.toolTitle, f.name, folder.path,
-                    "$inp ${if (vf.isNotEmpty()) "-vf ${q(vf)} " else ""}$every$qa${folder.path}/frame_%04d.$ext")
+                    "$inp ${if (vf.isNotEmpty()) "-vf ${q(vf)} " else ""}$every$qa${q("${folder.path}/frame_%04d.$ext")}")
             }
             else -> {
                 val out = r.out("Video", f, fmt.ext, slot = slot)
@@ -167,7 +167,7 @@ private fun videoJobs(r: ToolRequest, files: List<PickedFile>, fmtKey: String, s
                     fmt.ext == "mpg" -> "-c:a mp2 -b:a ${abr}k"
                     else -> "-c:a aac -b:a ${abr}k"
                 }
-                r.job(f, out, "$inp -vf ${q(vf)} $v $a ${out.path}")
+                r.job(f, out, "$inp -vf ${q(vf)} $v $a ${q(out.path)}")
             }
         }
     }
@@ -201,7 +201,7 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
                 // the matching still, saved beside the clip so the two stay a pair
                 val mov = File(j.output!!)
                 val still = File(mov.parentFile, mov.nameWithoutExtension + ".jpg")
-                listOf(j, ToolJob(r.toolTitle, files[i].name, still.path, "-i ${r.saf(files[i])} -frames:v 1 -q:v 2 ${still.path}"))
+                listOf(j, ToolJob(r.toolTitle, files[i].name, still.path, "-i ${r.saf(files[i])} -frames:v 1 -q:v 2 ${q(still.path)}"))
             }
         },
     ),
@@ -252,15 +252,15 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
                         "live_gif" -> {
                             val out = r.out("Images", f, "gif")
                             val g = "fps=15,scale=480:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse"
-                            r.job(f, out, "-i $src -vf ${q(g)} -loop 0 -an ${out.path}")
+                            r.job(f, out, "-i $src -vf ${q(g)} -loop 0 -an ${q(out.path)}")
                         }
                         "live_webp" -> {
                             val out = r.out("Images", f, "webp")
-                            r.job(f, out, "-i $src -vf ${q("fps=15,scale=480:-2:flags=lanczos")} -c:v libwebp -q:v 70 -loop 0 -an ${out.path}")
+                            r.job(f, out, "-i $src -vf ${q("fps=15,scale=480:-2:flags=lanczos")} -c:v libwebp -q:v 70 -loop 0 -an ${q(out.path)}")
                         }
                         else -> {
                             val out = r.out("Video", f, "mp4")
-                            r.job(f, out, "-i $src -c copy ${out.path}")
+                            r.job(f, out, "-i $src -c copy ${q(out.path)}")
                         }
                     }
                 }
@@ -274,7 +274,7 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
                 }
                 val strip = if (r.bool("istrip")) "-map_metadata -1 " else ""
                 val one = if (fmt in setOf("jpg", "png", "bmp", "tiff", "jp2", "tga", "ppm", "ico", "qoi")) "-frames:v 1 " else ""
-                val cmd = "-i ${r.saf(f)} $vf$one$qv$strip${out.path}"
+                val cmd = "-i ${r.saf(f)} $vf$one$qv$strip${q(out.path)}"
                 val nativeOk = fmt in setOf("jpg", "png", "webp") && w == 0
                 ToolJob(r.toolTitle, f.name, out.path, cmd,
                     native = if (nativeOk) ({ convertImageNative(r.ctx, f.uri, out, fmt, qual) }) else null)
@@ -308,11 +308,11 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
             val cat = if (hasV) "Video" else "Audio"
             if (!trim.remove && r.str("tmode") == "fast") {
                 val out = r.out(cat, f, ext, "_cut")
-                listOf(r.job(f, out, "${keepArgs(trim)}-i ${r.saf(f)} -c copy -avoid_negative_ts make_zero ${out.path}"))
+                listOf(r.job(f, out, "${keepArgs(trim)}-i ${r.saf(f)} -c copy -avoid_negative_ts make_zero ${q(out.path)}"))
             } else if (!trim.remove) {
                 val out = r.out(cat, f, if (hasV) "mp4" else "m4a", "_cut")
                 val enc = if (hasV) "-vf ${q(VID_TAIL)} $H264" else "-vn -c:a aac -b:a 192k"
-                listOf(r.job(f, out, "${keepArgs(trim)}-i ${r.saf(f)} $enc ${out.path}"))
+                listOf(r.job(f, out, "${keepArgs(trim)}-i ${r.saf(f)} $enc ${q(out.path)}"))
             } else {
                 val s = num(trim.start); val e = num(trim.end)
                 val g = StringBuilder()
@@ -327,7 +327,7 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
                 val maps = (if (hasV) "-map ${q("[v]")} " else "") + (if (hasA) "-map ${q("[a]")} " else "")
                 val out = r.out(cat, f, if (hasV) "mp4" else "m4a", "_cut")
                 val enc = if (hasV) H264 else "-c:a aac -b:a 192k"
-                listOf(r.job(f, out, "-i ${r.saf(f)} -filter_complex ${q(g.toString())} $maps$enc ${out.path}"))
+                listOf(r.job(f, out, "-i ${r.saf(f)} -filter_complex ${q(g.toString())} $maps$enc ${q(out.path)}"))
             }
         },
     ),
@@ -357,10 +357,10 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
                 if (isImageName(f.name)) {
                     val ext = nameExt(f.name).takeIf { it in photoExts } ?: "jpg"
                     val out = r.out("Images", f, ext, "_edit")
-                    r.job(f, out, "-i ${r.saf(f)} -vf ${q(parts.joinToString(","))} -frames:v 1 -q:v 2 ${out.path}")
+                    r.job(f, out, "-i ${r.saf(f)} -vf ${q(parts.joinToString(","))} -frames:v 1 -q:v 2 ${q(out.path)}")
                 } else {
                     val out = r.out("Video", f, "mp4", "_edit")
-                    r.job(f, out, "-i ${r.saf(f)} -vf ${q((parts + VID_TAIL).joinToString(","))} $H264 ${out.path}")
+                    r.job(f, out, "-i ${r.saf(f)} -vf ${q((parts + VID_TAIL).joinToString(","))} $H264 ${q(out.path)}")
                 }
             }
         },
@@ -382,7 +382,7 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
             val vf = (if (rev) "reverse," else "") + "setpts=PTS/${num(s)},$VID_TAIL"
             val af = (if (rev) "areverse," else "") + atempoChain(s)
             val out = r.out("Video", f, "mp4", "_speed")
-            listOf(r.job(f, out, "-i ${r.saf(f)} -vf ${q(vf)} -af ${q(af)} $H264 ${out.path}"))
+            listOf(r.job(f, out, "-i ${r.saf(f)} -vf ${q(vf)} -af ${q(af)} $H264 ${q(out.path)}"))
         },
     ),
 
@@ -413,10 +413,10 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
                 if (isImageName(f.name)) {
                     val ext = nameExt(f.name).takeIf { it in photoExts } ?: "jpg"
                     val out = r.out("Images", f, ext, "_filter")
-                    r.job(f, out, "-i ${r.saf(f)} -vf ${q(flt)} -frames:v 1 -q:v 2 ${out.path}")
+                    r.job(f, out, "-i ${r.saf(f)} -vf ${q(flt)} -frames:v 1 -q:v 2 ${q(out.path)}")
                 } else {
                     val out = r.out("Video", f, "mp4", "_filter")
-                    r.job(f, out, "-i ${r.saf(f)} -vf ${q("$flt,$VID_TAIL")} $H264 ${out.path}")
+                    r.job(f, out, "-i ${r.saf(f)} -vf ${q("$flt,$VID_TAIL")} $H264 ${q(out.path)}")
                 }
             }
         },
@@ -472,7 +472,7 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
             val out = if (image) r.out("Images", f, nameExt(f.name).takeIf { it in photoExts } ?: "jpg", "_wm")
                       else r.out("Video", f, "mp4", "_wm")
             val enc = if (image) "-frames:v 1 -q:v 2" else "-map ${q("0:a?")} $H264"
-            listOf(r.job(f, out, "$inputs -filter_complex ${q(graph)} -map ${q("[v]")} $enc ${out.path}"))
+            listOf(r.job(f, out, "$inputs -filter_complex ${q(graph)} -map ${q("[v]")} $enc ${q(out.path)}"))
         },
     ),
 
@@ -503,9 +503,9 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
                 val cmd = if (cover != null && audio) {
                     val enc = if (nameExt(cover.name) in setOf("jpg", "jpeg", "png")) "-c:v copy" else "-c:v mjpeg -pix_fmt yuvj420p -q:v 2"
                     val id3 = if (ext == "mp3") "-id3v2_version 3 " else ""
-                    "-i ${r.saf(f)} -i ${r.saf(cover)} -map 0:a -map 1:v -c:a copy $enc -disposition:v:0 attached_pic $id3-map_metadata 0 $tags ${out.path}"
+                    "-i ${r.saf(f)} -i ${r.saf(cover)} -map 0:a -map 1:v -c:a copy $enc -disposition:v:0 attached_pic $id3-map_metadata 0 $tags ${q(out.path)}"
                 } else {
-                    "-i ${r.saf(f)} -map 0 -c copy -map_metadata 0 $tags ${out.path}"
+                    "-i ${r.saf(f)} -map 0 -c copy -map_metadata 0 $tags ${q(out.path)}"
                 }
                 listOf(r.job(f, out, cmd))
             }
@@ -522,7 +522,7 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
             r.files("media").map { f ->
                 val ext = nameExt(f.name).ifEmpty { "bin" }
                 val out = r.out("Clean", f, ext, "_clean")
-                r.job(f, out, "-i ${r.saf(f)} -map 0 -map_metadata -1 -map_chapters -1 -c copy -fflags +bitexact -flags:v +bitexact -flags:a +bitexact ${out.path}")
+                r.job(f, out, "-i ${r.saf(f)} -map 0 -map_metadata -1 -map_chapters -1 -c copy -fflags +bitexact -flags:v +bitexact -flags:a +bitexact ${q(out.path)}")
             }
         },
     ),
@@ -574,7 +574,7 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
             }
             val out = r.out("Video", null, fmt.ext, slot = "images", defaultBase = "slideshow")
             val audio = if (music != null) " -map ${imgs.size}:a -af apad -shortest" else ""
-            listOf(r.job(null, out, "$inputs -filter_complex ${q(graph)} -map ${q("[v]")}$audio $enc ${out.path}", "slideshow (${imgs.size} photos)"))
+            listOf(r.job(null, out, "$inputs -filter_complex ${q(graph)} -map ${q("[v]")}$audio $enc ${q(out.path)}", "slideshow (${imgs.size} photos)"))
         },
     ),
 
@@ -594,15 +594,15 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
                 "gif" -> {
                     val out = r.out("Images", f, "gif")
                     val g = "fps=15,scale=480:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse"
-                    listOf(r.job(f, out, "-i $src -vf ${q(g)} -loop 0 -an ${out.path}"))
+                    listOf(r.job(f, out, "-i $src -vf ${q(g)} -loop 0 -an ${q(out.path)}"))
                 }
                 "still" -> {
                     val out = r.out("Images", f, "jpg")
-                    listOf(r.job(f, out, "-i $src -frames:v 1 -q:v 2 ${out.path}"))
+                    listOf(r.job(f, out, "-i $src -frames:v 1 -q:v 2 ${q(out.path)}"))
                 }
                 else -> {
                     val out = r.out("Video", f, "mp4")
-                    listOf(r.job(f, out, "-i $src -c copy ${out.path}"))
+                    listOf(r.job(f, out, "-i $src -c copy ${q(out.path)}"))
                 }
             }
         },
@@ -627,7 +627,7 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
             val still = if (isImageName(f.name)) " -frames:v 1" else ""
             val vf = (if (still.isEmpty()) "fps=15," else "") + "$fit,format=rgba"
             val out = r.out("Stickers", f, "webp")
-            listOf(r.job(f, out, "-t ${r.int("dur")} -i ${r.saf(f)} -vf ${q(vf)} -c:v libwebp -lossless 0 -q:v ${r.str("sq")} -loop 0 -preset default$still -an ${out.path}"))
+            listOf(r.job(f, out, "-t ${r.int("dur")} -i ${r.saf(f)} -vf ${q(vf)} -c:v libwebp -lossless 0 -q:v ${r.str("sq")} -loop 0 -preset default$still -an ${q(out.path)}"))
         },
     ),
 
@@ -652,7 +652,7 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
             val dir = if (r.bool("sys")) OutputPaths.ringtones(r.ctx) else OutputPaths.dir(r.ctx, "Audio")
             val out = r.out("Audio", f, a.ext, "_ring", dir = dir)
             val af = if (r.bool("fade") && len > 2.5) " -af ${q("afade=t=in:st=0:d=1,afade=t=out:st=${num(len - 1)}:d=1")}" else ""
-            listOf(r.job(f, out, "-ss ${num(t.start)} -t ${num(len)} -i ${r.saf(f)} -vn$af ${audioCodecArgs(a, "auto", "auto", "auto", "auto")} ${a.mux} ${out.path}"))
+            listOf(r.job(f, out, "-ss ${num(t.start)} -t ${num(len)} -i ${r.saf(f)} -vn$af ${audioCodecArgs(a, "auto", "auto", "auto", "auto")} ${a.mux} ${q(out.path)}"))
         },
     ),
 
@@ -678,23 +678,23 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
                     "jpg", "png", "webp" -> {
                         val out = r.out("Images", f, t)
                         ToolJob(r.toolTitle, f.name, out.path,
-                            "-i ${r.saf(f)} -frames:v 1${if (t == "jpg") " -q:v 2" else ""} ${out.path}",
+                            "-i ${r.saf(f)} -frames:v 1${if (t == "jpg") " -q:v 2" else ""} ${q(out.path)}",
                             native = { convertImageNative(r.ctx, f.uri, out, t, 92) })
                     }
                     "mp3", "m4a", "flac", "wav", "opus", "tgvoice" -> {
                         val a = audioFmt(t)
                         val out = r.out("Audio", f, a.ext)
-                        r.job(f, out, "-i ${r.saf(f)} -vn -map 0:a:0 ${audioCodecArgs(a, "auto", "auto", "auto", "auto")} ${a.mux} ${out.path}")
+                        r.job(f, out, "-i ${r.saf(f)} -vn -map 0:a:0 ${audioCodecArgs(a, "auto", "auto", "auto", "auto")} ${a.mux} ${q(out.path)}")
                     }
                     "gif" -> {
                         val out = r.out("Images", f, "gif")
                         val g = "fps=12,scale=480:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse"
-                        r.job(f, out, "-i ${r.saf(f)} -vf ${q(g)} -loop 0 -an ${out.path}")
+                        r.job(f, out, "-i ${r.saf(f)} -vf ${q(g)} -loop 0 -an ${q(out.path)}")
                     }
                     else -> {
                         val out = r.out("Video", f, if (t == "webm") "webm" else "mp4")
                         val enc = if (t == "webm") "-c:v libvpx-vp9 -crf 34 -b:v 0 -deadline realtime -cpu-used 8 -row-mt 1 -c:a libopus -b:a 128k" else H264
-                        r.job(f, out, "-i ${r.saf(f)} -vf ${q(VID_TAIL)} $enc ${out.path}")
+                        r.job(f, out, "-i ${r.saf(f)} -vf ${q(VID_TAIL)} $enc ${q(out.path)}")
                     }
                 }
             }
@@ -721,18 +721,18 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
                         val qv = when (lvl) { "light" -> 4; "strong" -> 14; else -> 8 }
                         val w = when (lvl) { "light" -> 2560; "strong" -> 1280; else -> 1920 }
                         val out = r.out("Images", f, "jpg", "_small")
-                        r.job(f, out, "-i ${r.saf(f)} -vf ${q("scale=w=(iw+$w-abs(iw-$w))/2:h=-2")} -frames:v 1 -q:v $qv ${out.path}")
+                        r.job(f, out, "-i ${r.saf(f)} -vf ${q("scale=w=(iw+$w-abs(iw-$w))/2:h=-2")} -frames:v 1 -q:v $qv ${q(out.path)}")
                     }
                     isVideoStream(r, f) -> {
                         val (br, h, ab) = when (lvl) { "light" -> Triple(6000, 0, 160); "strong" -> Triple(1200, 480, 96); else -> Triple(2800, 720, 128) }
                         val vf = listOfNotNull(if (h > 0) "scale=-2:$h" else null, VID_TAIL).joinToString(",")
                         val out = r.out("Video", f, "mp4", "_small")
-                        r.job(f, out, "-i ${r.saf(f)} -vf ${q(vf)} -c:v h264_mediacodec -b:v ${br}k -c:a aac -b:a ${ab}k ${out.path}")
+                        r.job(f, out, "-i ${r.saf(f)} -vf ${q(vf)} -c:v h264_mediacodec -b:v ${br}k -c:a aac -b:a ${ab}k ${q(out.path)}")
                     }
                     else -> {
                         val ab = when (lvl) { "light" -> 160; "strong" -> 64; else -> 96 }
                         val out = r.out("Audio", f, "m4a", "_small")
-                        r.job(f, out, "-i ${r.saf(f)} -vn -map 0:a:0 -c:a aac -b:a ${ab}k ${out.path}")
+                        r.job(f, out, "-i ${r.saf(f)} -vn -map 0:a:0 -c:a aac -b:a ${ab}k ${q(out.path)}")
                     }
                 }
             }
@@ -767,12 +767,12 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
                 if (allAudio) g.append("[a]")
                 val out = r.out("Video", null, "mp4", defaultBase = "merged")
                 val maps = "-map ${q("[v]")}" + if (allAudio) " -map ${q("[a]")}" else ""
-                listOf(r.job(null, out, "$inputs -filter_complex ${q(g.toString())} $maps $H264 ${out.path}", "${files.size} videos"))
+                listOf(r.job(null, out, "$inputs -filter_complex ${q(g.toString())} $maps $H264 ${q(out.path)}", "${files.size} videos"))
             } else {
                 val a = audioFmt(r.str("mfmt").ifEmpty { "mp3" })
                 val g = files.indices.joinToString("") { "[$it:a]" } + "concat=n=${files.size}:v=0:a=1[a]"
                 val out = r.out("Audio", null, a.ext, defaultBase = "merged")
-                listOf(r.job(null, out, "$inputs -filter_complex ${q(g)} -map ${q("[a]")} ${audioCodecArgs(a, "auto", "auto", "auto", "auto")} ${a.mux} ${out.path}", "${files.size} audio files"))
+                listOf(r.job(null, out, "$inputs -filter_complex ${q(g)} -map ${q("[a]")} ${audioCodecArgs(a, "auto", "auto", "auto", "auto")} ${a.mux} ${q(out.path)}", "${files.size} audio files"))
             }
         },
     ),
@@ -802,8 +802,8 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
                     "mp3" -> "libmp3lame"; "flac" -> "flac"; "wav" -> "pcm_s16le"; "ogg", "oga" -> "libvorbis"
                     "opus", "webm" -> "libopus"; else -> "aac"
                 }
-                val cmd = if (v == "mute") "-i ${r.saf(f)} -map ${q("0:v?")} -c copy -an ${out.path}"
-                          else "-i ${r.saf(f)} -map ${q("0:v?")} -map ${q("0:a?")} -c:v copy -af ${q(v)} -c:a $codec ${out.path}"
+                val cmd = if (v == "mute") "-i ${r.saf(f)} -map ${q("0:v?")} -c copy -an ${q(out.path)}"
+                          else "-i ${r.saf(f)} -map ${q("0:v?")} -map ${q("0:a?")} -c:v copy -af ${q(v)} -c:a $codec ${q(out.path)}"
                 r.job(f, out, cmd)
             }
         },
@@ -822,7 +822,7 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
             val f = r.file("media")!!
             val fmt = r.str("sfmt").ifEmpty { "srt" }
             val out = r.out("Subtitles", f, fmt, "_subs")
-            listOf(r.job(f, out, "-i ${r.saf(f)} -map 0:s:${r.int("track") - 1} ${out.path}"))
+            listOf(r.job(f, out, "-i ${r.saf(f)} -map 0:s:${r.int("track") - 1} ${q(out.path)}"))
         },
     ),
 ).associateBy { it.id }

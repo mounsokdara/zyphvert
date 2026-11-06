@@ -138,7 +138,7 @@ val allTools: List<Tool> = listOf(
     Tool(
         "video",
         "Video converter",
-        "Convert any video to whatever you need — another video, audio, a GIF, or images.",
+        "Convert any video to whatever you need: another video, audio, a GIF, or images.",
         Icons.Rounded.Movie,
         ToolCategory.Convert,
         formats = listOf("MP4", "MKV", "MOV", "WebM", "AVI", "WMV", "3GP", "TS", "FLV", "MPG", "GIF", "WebP", "APNG", "Live Photo", "Motion Photo", "Images", "Remux"),
@@ -146,7 +146,7 @@ val allTools: List<Tool> = listOf(
     Tool(
         "audio",
         "Audio converter",
-        "Convert any audio to whatever you need — MP3, AAC, WAV, FLAC, OGG, OPUS, or a video.",
+        "Convert any audio to whatever you need: MP3, AAC, WAV, FLAC, OGG, OPUS, or a video.",
         Icons.Rounded.GraphicEq,
         ToolCategory.Convert,
         formats = listOf("MP3", "AAC", "M4A", "M4B", "OPUS", "OGG", "TG VOICE", "OGA", "MKA", "FLAC", "WAV", "ALAC", "AIFF", "WMA", "WV", "AC3"),

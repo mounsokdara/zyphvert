@@ -144,7 +144,7 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.5.0")
     implementation("androidx.media3:media3-ui:1.5.0")
 
-    // FFmpegKitNext — built locally from source (official arthenica continuation).
+    // FFmpegKitNext: built locally from source (official arthenica continuation).
     // See docs/FFMPEG.md. Placeholder module ref until scripts/build-ffmpeg-kit.sh
     // has produced libs/ffmpeg-kit-next-release.aar in CI.
     // Built by .github/workflows/ffmpeg-aar.yml, fetched by scripts/fetch-ffmpeg-aar.sh.

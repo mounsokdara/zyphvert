@@ -80,7 +80,7 @@ jobs:
           path: out/app-${{ matrix.abi }}-release.apk
           if-no-files-found: error
 
-  # ── Universal APK + AAB (no ABI filter — includes all architectures) ──────
+  # ── Universal APK + AAB (no ABI filter, includes all architectures) ──────
   build-universal:
     name: APK · universal + AAB
     runs-on: ubuntu-latest

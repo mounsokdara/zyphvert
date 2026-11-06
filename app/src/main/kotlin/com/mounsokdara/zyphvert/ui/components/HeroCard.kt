@@ -70,7 +70,7 @@ fun HeroCard(modifier: Modifier = Modifier) {
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Video, audio, or image — one converter each, and it can turn the file into anything else. No ads, no tracking, no account.",
+                    "Video, audio, or image: one converter each, and it can turn the file into anything else. No ads, no tracking, no account.",
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.fillMaxWidth(if (isWideLayout()) 0.72f else 0.92f),
                 )

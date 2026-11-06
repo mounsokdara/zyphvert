@@ -233,5 +233,6 @@ internal val liveLengthItems = listOf(
     Item("3", "3 seconds", "Like a phone camera"),
     Item("5", "5 seconds"), Item("10", "10 seconds"), Item("15", "15 seconds"), Item("30", "30 seconds"),
     Item("60", "1 minute"), Item("120", "2 minutes"), Item("300", "5 minutes"), Item("600", "10 minutes"),
+    Item("1200", "20 minutes"), Item("1800", "30 minutes"), Item("3600", "1 hour"), Item("7200", "2 hours"),
     Item("0", "Whole video", "No limit. Use the start and end sliders to pick the part."),
 )

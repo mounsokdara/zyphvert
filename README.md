@@ -49,7 +49,7 @@ with progress, cancel, open and share, and plain-words error messages.
 - **Fully offline:** all processing happens on the device.
 - **No ads, no tracking, no analytics.**
 - **All-files access:** optional `MANAGE_EXTERNAL_STORAGE` so tools can use any path; SAF still works without it.
-- **Any file format:** pickers accept `*/*` — no dummy MIME filters.
+- **Any file format:** pickers accept `*/*`, no dummy MIME filters.
 - **Per-ABI builds:** `arm64-v8a`, `armeabi-v7a`, `x86_64`, plus a universal APK. Android 7.0+ (minSdk 24).
 - **Adaptive layout:** bottom bar on phones, navigation rail and width-capped content on tablets.
 

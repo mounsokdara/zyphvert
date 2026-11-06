@@ -81,7 +81,7 @@ fun SettingsScreen(vm: SettingsViewModel, onBack: () -> Unit) {
             InfoTile(
                 Icons.Rounded.FolderOpen,
                 "All files access",
-                if (hasAllFiles) "Granted — tools can use any path"
+                if (hasAllFiles) "Granted: tools can use any path"
                 else "Required for full converter access. Tap to grant",
                 onClick = {
                     if (!hasAllFiles) StorageAccess.openAllFilesSettings(ctx)
