@@ -95,8 +95,13 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Set up Android SDK build-tools (for apksigner)
-        uses: android-actions/setup-android@v3
+      - name: Add Android build-tools (apksigner, zipalign) to PATH
+        run: |
+          # Preinstalled on GitHub's runners: no extra download that can fail.
+          BT="$(ls -d "${ANDROID_HOME:-$ANDROID_SDK_ROOT}"/build-tools/* | sort -V | tail -1)"
+          echo "Using $BT"
+          test -x "$BT/apksigner" && test -x "$BT/zipalign"
+          echo "$BT" >> "$GITHUB_PATH"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -153,8 +158,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Android SDK build-tools (for apksigner)
-        uses: android-actions/setup-android@v3
+      - name: Add Android build-tools (apksigner, zipalign) to PATH
+        run: |
+          # Preinstalled on GitHub's runners: no extra download that can fail.
+          BT="$(ls -d "${ANDROID_HOME:-$ANDROID_SDK_ROOT}"/build-tools/* | sort -V | tail -1)"
+          echo "Using $BT"
+          test -x "$BT/apksigner" && test -x "$BT/zipalign"
+          echo "$BT" >> "$GITHUB_PATH"
 
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
