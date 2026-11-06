@@ -97,15 +97,22 @@ private fun highlight(text: String): AnnotatedString = buildAnnotatedString {
     }
 }
 
-/** "PS /storage/emulated/0/DCIM> " becomes "PS /storage/emulated/0/DCIM" on a line of its own: always the full path. */
-private fun promptLine(prompt: String): AnnotatedString = buildAnnotatedString {
-    val path = prompt.removePrefix("PS ").removeSuffix("> ")
-    withStyle(SpanStyle(color = Dim)) { append("PS ") }
-    withStyle(SpanStyle(color = Blue)) { append(path) }
+/** The prompt, e.g. "/storage/emulated/0/DCIM> ": the full path, then ">". */
+private fun promptText(prompt: String): AnnotatedString = buildAnnotatedString {
+    withStyle(SpanStyle(color = Blue)) { append(prompt.removeSuffix("> ")) }
+    withStyle(SpanStyle(color = Fg)) { append("> ") }
 }
 
-private object HighlightTransformation : VisualTransformation {
-    override fun filter(text: AnnotatedString) = TransformedText(highlight(text.text), OffsetMapping.Identity)
+/** Draws the prompt in front of the command inside the text field itself, so a long command wraps across the full width. */
+private class PromptTransformation(private val prompt: AnnotatedString) : VisualTransformation {
+    override fun filter(text: AnnotatedString): TransformedText {
+        val n = prompt.length
+        val shown = buildAnnotatedString { append(prompt); append(highlight(text.text)) }
+        return TransformedText(shown, object : OffsetMapping {
+            override fun originalToTransformed(offset: Int) = offset + n
+            override fun transformedToOriginal(offset: Int) = (offset - n).coerceAtLeast(0)
+        })
+    }
 }
 
 private val examples = listOf(
@@ -213,13 +220,10 @@ fun TerminalScreen(vm: TerminalViewModel, onBack: () -> Unit) {
                     items(s.lines.size) { i ->
                         val l = s.lines.getOrNull(i) ?: return@items
                         when (l.kind) {
-                            LineKind.Command -> Column(Modifier.padding(top = 6.dp)) {
-                                Text(promptLine(l.prompt.orEmpty()), style = term)
-                                Text(buildAnnotatedString {
-                                    withStyle(SpanStyle(color = Green)) { append("> ") }
-                                    append(highlight(l.text))
-                                }, style = term)
-                            }
+                            LineKind.Command -> Text(buildAnnotatedString {
+                                append(promptText(l.prompt.orEmpty()))
+                                append(highlight(l.text))
+                            }, style = term, modifier = Modifier.padding(top = 6.dp))
                             LineKind.Error -> Text(l.text, style = term.copy(color = Red))
                             LineKind.Info -> Text(l.text, style = term.copy(color = Cyan))
                             LineKind.Dir -> Text(l.text, style = term.copy(color = Blue))
@@ -227,29 +231,23 @@ fun TerminalScreen(vm: TerminalViewModel, onBack: () -> Unit) {
                         }
                     }
                     if (!s.running) item(key = "prompt") {
-                        Column(Modifier.padding(top = 6.dp)) {
-                            Text(promptLine(s.prompt), style = term)
-                            // The field gets the full width on its own row, so a long command wraps
-                            // across the whole screen instead of down a narrow column.
-                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-                                Text("> ", style = term.copy(color = Green))
-                                BasicTextField(
-                                    value = s.input,
-                                    onValueChange = vm::onInputChanged,
-                                    modifier = Modifier.weight(1f).focusRequester(focus),
-                                    textStyle = term,
-                                    cursorBrush = SolidColor(Fg),
-                                    visualTransformation = HighlightTransformation,
-                                    keyboardOptions = KeyboardOptions(
-                                        capitalization = KeyboardCapitalization.None,
-                                        autoCorrectEnabled = false,
-                                        keyboardType = KeyboardType.Uri,
-                                        imeAction = ImeAction.Send,
-                                    ),
-                                    keyboardActions = KeyboardActions(onSend = { vm.submit() }),
-                                )
-                            }
-                        }
+                        val promptStr = remember(s.cwd) { promptText(s.prompt) }
+                        val transformation = remember(promptStr) { PromptTransformation(promptStr) }
+                        BasicTextField(
+                            value = s.input,
+                            onValueChange = vm::onInputChanged,
+                            modifier = Modifier.fillMaxWidth().padding(top = 6.dp).focusRequester(focus),
+                            textStyle = term,
+                            cursorBrush = SolidColor(Fg),
+                            visualTransformation = transformation,
+                            keyboardOptions = KeyboardOptions(
+                                capitalization = KeyboardCapitalization.None,
+                                autoCorrectEnabled = false,
+                                keyboardType = KeyboardType.Uri,
+                                imeAction = ImeAction.Send,
+                            ),
+                            keyboardActions = KeyboardActions(onSend = { vm.submit() }),
+                        )
                     } else item(key = "running") {
                         Text("running…  press ^C to stop", style = term.copy(color = Dim), modifier = Modifier.padding(top = 6.dp))
                     }

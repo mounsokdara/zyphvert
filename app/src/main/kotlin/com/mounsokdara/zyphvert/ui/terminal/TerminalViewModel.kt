@@ -56,7 +56,7 @@ class Session(val id: Int, startDir: File) {
     var draft = ""
     var job: Job? = null
 
-    val prompt: String get() = "PS ${cwd.path}> "
+    val prompt: String get() = "${cwd.path}> "
 }
 
 private const val MAX_LINES = 3000
