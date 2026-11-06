@@ -142,7 +142,9 @@ fun FilePicker(
     val storageRoot = remember { Environment.getExternalStorageDirectory() }
     // Whole drives: going "up" from one of these shows the home list of storages.
     val volumePaths = remember { rootList.filter { it.first == "Internal storage" || it.first == "SD card" }.map { it.second.path }.toSet() }
-    var dir by rememberSaveable { mutableStateOf(lastDir ?: storageRoot.path) }
+    var dir by rememberSaveable { mutableStateOf(lastDir?.takeIf { it != HOME } ?: storageRoot.path) }
+    // True after the user picks "Root (/)", so they can still walk up out of a drive from there.
+    var fromRoot by rememberSaveable { mutableStateOf(false) }
     var showAll by rememberSaveable { mutableStateOf(kind.exts == null) }
     var sort by rememberSaveable { mutableStateOf(Sort.Newest) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -158,7 +160,8 @@ fun FilePicker(
     var entries by remember { mutableStateOf<List<Entry>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     val byPath = remember(entries) { entries.associateBy { it.file.path } }
-    val atHome = dir == HOME
+    // The old "choose a location" screen is gone: the picker always opens in a folder and the title menu switches location.
+    val atHome = false
     val dateFmt = remember { SimpleDateFormat("M/d/yy h:mm a", Locale.getDefault()) }
 
     LaunchedEffect(dir, showAll, showHidden, granted, refreshTick) {
@@ -169,10 +172,10 @@ fun FilePicker(
         loading = false
     }
 
-    val canUp = !atHome
+    val canUp = dir != "/" && (dir !in volumePaths || fromRoot)
     fun goUp() {
         query = ""
-        dir = if (dir in volumePaths) HOME else File(dir).parentFile?.path ?: HOME
+        dir = File(dir).parentFile?.path ?: dir
     }
     BackHandler(enabled = canUp) { goUp() }
 
@@ -250,29 +253,23 @@ fun FilePicker(
                                 }
                             }
                             DropdownMenu(expanded = placesMenu, onDismissRequest = { placesMenu = false }) {
-                                DropdownMenuItem(
-                                    text = { Text("All locations") }, leadingIcon = { Icon(Icons.Rounded.Home, null) },
-                                    onClick = { dir = HOME; query = ""; placesMenu = false },
-                                )
                                 rootList.forEach { (label, f) ->
                                     DropdownMenuItem(
                                         text = { Text(label) },
                                         leadingIcon = { Icon(if (label == "Internal storage" || label == "SD card") Icons.Rounded.Storage else Icons.Rounded.Folder, null) },
-                                        onClick = { dir = f.path; query = ""; placesMenu = false },
+                                        onClick = { dir = f.path; fromRoot = f.path == "/"; query = ""; placesMenu = false },
                                     )
                                 }
                             }
                         }
                     },
                     navigationIcon = {
-                        if (canUp) IconButton(onClick = { goUp() }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Up one folder") }
-                        else IconButton(onClick = onDismiss) { Icon(Icons.Rounded.Close, "Close") }
+                        IconButton(onClick = onDismiss) { Icon(Icons.Rounded.Close, "Close") }
                     },
                     actions = {
                         if (!atHome) IconButton(onClick = { searching = !searching; if (!searching) query = "" }) {
                             Icon(if (searching) Icons.Rounded.SearchOff else Icons.Rounded.Search, "Search")
                         }
-                        if (canUp) IconButton(onClick = onDismiss) { Icon(Icons.Rounded.Close, "Close") }
                         if (!atHome) Box {
                             IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, "More") }
                             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
@@ -350,7 +347,7 @@ fun FilePicker(
                                 }
                             }
                             if (grid) LazyVerticalGrid(GridCells.Adaptive(110.dp), Modifier.fillMaxSize(), contentPadding = PaddingValues(8.dp)) {
-                                item(key = "..up", span = { GridItemSpan(maxLineSpan) }) { UpFolderRow(Modifier.animateItem()) { goUp() } }
+                                if (canUp) item(key = "..up", span = { GridItemSpan(maxLineSpan) }) { UpFolderRow(Modifier.animateItem()) { goUp() } }
                                 item(key = "..hint", span = { GridItemSpan(maxLineSpan) }) { emptyHint() }
                                 gridItems(shown, key = { it.file.path }) { e ->
                                     FileTile(
@@ -359,7 +356,7 @@ fun FilePicker(
                                     ) { onRow(e) }
                                 }
                             } else LazyColumn(Modifier.fillMaxSize()) {
-                                item(key = "..up") { UpFolderRow(Modifier.animateItem()) { goUp() } }
+                                if (canUp) item(key = "..up") { UpFolderRow(Modifier.animateItem()) { goUp() } }
                                 item(key = "..hint") { emptyHint() }
                                 items(shown, key = { it.file.path }) { e ->
                                     FileRow(

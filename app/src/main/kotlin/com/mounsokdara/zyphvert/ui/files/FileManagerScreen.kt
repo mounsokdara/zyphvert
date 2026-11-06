@@ -2,7 +2,10 @@
 
 package com.mounsokdara.zyphvert.ui.files
 
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.text.selection.SelectionContainer
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -57,9 +60,23 @@ fun FileManagerScreen(
     var kinds by remember { mutableStateOf(emptySet<SearchKind>()) }
     fun closeSearch() { searching = false; vm.query = ""; showFolders = true; kinds = emptySet() }
     val rootList = remember { roots(ctx) }
+    var renameFor by remember { mutableStateOf<FileEntry?>(null) }
+    var deleteFor by remember { mutableStateOf<FileEntry?>(null) }
+    var propsFor by remember { mutableStateOf<FileEntry?>(null) }
+    LaunchedEffect(vm.message) {
+        vm.message?.let { Toast.makeText(ctx, it, Toast.LENGTH_SHORT).show(); vm.message = null }
+    }
     val list = vm.filtered().filter { !searching || passesSearchFilters(it.isDirectory, it.extension, showFolders, kinds) }
 
     val managerMenu: @Composable ColumnScope.(() -> Unit) -> Unit = { dismiss ->
+        vm.clip?.let { c ->
+            DropdownMenuItem(
+                text = { Text("Paste here (${c.files.size})") },
+                leadingIcon = { Icon(Icons.Rounded.ContentPaste, null) },
+                onClick = { vm.paste(); dismiss() },
+            )
+            HorizontalDivider()
+        }
                     DropdownMenuItem(
                         text = { Text("Show hidden files") },
                         leadingIcon = { Icon(if (vm.showHidden) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff, null) },
@@ -164,6 +181,22 @@ fun FileManagerScreen(
             }
         }
 
+        vm.clip?.let { c ->
+            Surface(
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).clip(RoundedCornerShape(12.dp)),
+            ) {
+                Row(Modifier.padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        (if (c.cut) "Cut: " else "Copied: ") + (if (c.files.size == 1) c.files[0].name else "${c.files.size} items"),
+                        Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                    TextButton(onClick = { vm.paste() }) { Text("Paste here") }
+                    IconButton(onClick = { vm.clearClip() }) { Icon(Icons.Rounded.Close, "Clear clipboard") }
+                }
+            }
+        }
+
         // Pull down to refresh; there is no refresh button.
         PullToRefreshBox(isRefreshing = vm.refreshing, onRefresh = vm::pullRefresh, modifier = Modifier.weight(1f).fillMaxWidth()) {
             val hint: @Composable () -> Unit = {
@@ -206,6 +239,10 @@ fun FileManagerScreen(
         }
     }
 
+    EntryDialogs(
+        vm, renameFor, { renameFor = null }, deleteFor, { deleteFor = null }, propsFor, { propsFor = null },
+    )
+
     val selected = vm.selected
     if (selected != null && selected.isDirectory) {
         AppSheet({ vm.selected = null }) { close ->
@@ -214,6 +251,7 @@ fun FileManagerScreen(
                 Text(selected.dateLabel, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(16.dp))
                 ActionRow(Icons.Rounded.Folder, "Open folder") { vm.open(selected); close() }
+                EntryActions(vm, selected, close, { renameFor = selected }, { deleteFor = selected }, { propsFor = selected })
                 Spacer(Modifier.height(24.dp))
             }
         }
@@ -224,6 +262,8 @@ fun FileManagerScreen(
                 Text(selected.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text("${selected.sizeLabel} · ${selected.dateLabel}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(16.dp))
+                EntryActions(vm, selected, close, { renameFor = selected }, { deleteFor = selected }, { propsFor = selected })
+                HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 ActionRow(Icons.Rounded.Info, "Media info") { onMediaInfo(selected.file.absolutePath); close() }
                 ActionRow(Icons.Rounded.Transform, "Open in converter…") {
                     val id = when (selected.extension) {
@@ -243,6 +283,93 @@ fun FileManagerScreen(
                 Spacer(Modifier.height(24.dp))
             }
         }
+    }
+}
+
+@Composable
+private fun EntryDialogs(
+    vm: FileManagerViewModel,
+    renameFor: FileEntry?, onRenameDone: () -> Unit,
+    deleteFor: FileEntry?, onDeleteDone: () -> Unit,
+    propsFor: FileEntry?, onPropsDone: () -> Unit,
+) {
+    renameFor?.let { e ->
+        var text by remember(e) { mutableStateOf(e.name) }
+        AlertDialog(
+            onDismissRequest = onRenameDone, title = { Text("Rename") },
+            text = { OutlinedTextField(text, { text = it }, singleLine = true, modifier = Modifier.fillMaxWidth()) },
+            confirmButton = { TextButton(onClick = { vm.rename(e, text); onRenameDone() }) { Text("Rename") } },
+            dismissButton = { TextButton(onClick = onRenameDone) { Text("Cancel") } },
+        )
+    }
+    deleteFor?.let { e ->
+        AlertDialog(
+            onDismissRequest = onDeleteDone, title = { Text("Delete ${if (e.isDirectory) "folder" else "file"}?") },
+            text = { Text(if (e.isDirectory) "\"${e.name}\" and everything inside it will be deleted. This can't be undone." else "\"${e.name}\" will be deleted. This can't be undone.") },
+            confirmButton = { TextButton(onClick = { vm.delete(e); onDeleteDone() }) { Text("Delete", color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton(onClick = onDeleteDone) { Text("Cancel") } },
+        )
+    }
+    propsFor?.let { e -> PropertiesDialog(vm, e, onPropsDone) }
+}
+
+@Composable
+private fun EntryActions(
+    vm: FileManagerViewModel, e: FileEntry, close: () -> Unit,
+    onRename: () -> Unit, onDelete: () -> Unit, onProps: () -> Unit,
+) {
+    ActionRow(Icons.Rounded.ContentCopy, "Copy") { vm.copy(e); close() }
+    ActionRow(Icons.Rounded.ContentCut, "Cut") { vm.cut(e); close() }
+    if (e.isDirectory && vm.clip != null) ActionRow(Icons.Rounded.ContentPaste, "Paste into this folder") { vm.paste(e.file); close() }
+    ActionRow(Icons.Rounded.DriveFileRenameOutline, "Rename") { onRename(); close() }
+    ActionRow(Icons.Rounded.Delete, "Delete") { onDelete(); close() }
+    ActionRow(Icons.Rounded.Info, "Properties") { onProps(); close() }
+}
+
+@Composable
+private fun PropertiesDialog(vm: FileManagerViewModel, e: FileEntry, onDismiss: () -> Unit) {
+    val stats by produceState<FileStats?>(null, e) { value = vm.stats(e.file) }
+    var sums by remember(e) { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var busy by remember(e) { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Properties") },
+        text = {
+            SelectionContainer {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    PropRow("Name", e.name)
+                    PropRow("Location", e.file.parent ?: "/")
+                    PropRow("Type", if (e.isDirectory) "Folder" else e.extension.uppercase().ifEmpty { "File" })
+                    PropRow(
+                        "Size",
+                        stats?.let {
+                            FileEntry.humanSize(it.bytes) + if (e.isDirectory) " (${it.files} files, ${it.folders} folders)" else " (${it.bytes} bytes)"
+                        } ?: "Calculating…",
+                    )
+                    PropRow("Modified", e.dateLabel)
+                    PropRow("Access", listOfNotNull(if (e.file.canRead()) "Read" else null, if (e.file.canWrite()) "Write" else null).joinToString(", ").ifEmpty { "None" })
+                    if (!e.isDirectory) {
+                        listOf("MD5", "SHA-256").forEach { algo ->
+                            val v = sums[algo]
+                            if (v != null) PropRow(algo, v)
+                            else TextButton(onClick = { scope.launch { busy = algo; sums = sums + (algo to vm.checksum(e.file, algo)); busy = null } }, enabled = busy == null) {
+                                Text(if (busy == algo) "Working out $algo…" else "Show $algo checksum")
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+    )
+}
+
+@Composable
+private fun PropRow(label: String, value: String) {
+    Column {
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+        Text(value, style = MaterialTheme.typography.bodyMedium)
     }
 }
 

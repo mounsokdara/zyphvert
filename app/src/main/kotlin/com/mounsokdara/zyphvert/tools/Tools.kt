@@ -80,7 +80,7 @@ private fun videoJobs(r: ToolRequest, files: List<PickedFile>, fmtKey: String, s
     val abr = when (aKey) { "128" -> 128; "96" -> 96; else -> 192 }
     val hwK = when (qual) { "high" -> 10000; "low" -> 2500; "tiny" -> 1000; else -> 6000 }
     // Live and Motion Photo length: 0 means the whole video, with no limit.
-    val liveSecs = r.str("llen").ifEmpty { "3" }.toIntOrNull() ?: 3
+    val liveSecs = r.str("llen").ifEmpty { "0" }.toIntOrNull() ?: 0
     val liveLen = if (liveSecs > 0) " -t $liveSecs" else ""
     return files.map { f ->
         val dur = durationSec(r.ctx, f.uri)

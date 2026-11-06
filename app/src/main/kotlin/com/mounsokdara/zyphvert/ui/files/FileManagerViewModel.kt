@@ -18,6 +18,11 @@ import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
 
+/** Files waiting to be pasted. [cut] moves them, otherwise they are copied. */
+data class Clip(val files: List<File>, val cut: Boolean)
+
+data class FileStats(val bytes: Long, val files: Int, val folders: Int)
+
 enum class SortMode { NameAsc, NameDesc, SizeDesc, DateDesc, Type }
 enum class ViewMode { List, Grid }
 
@@ -65,6 +70,10 @@ class FileManagerViewModel @Inject constructor() : ViewModel() {
     var viewMode by mutableStateOf(ViewMode.List)
     var showHidden by mutableStateOf(false)
     var selected by mutableStateOf<FileEntry?>(null)
+    var clip by mutableStateOf<Clip?>(null)
+        private set
+    /** One-shot text for a Toast; the screen shows it and clears it. */
+    var message by mutableStateOf<String?>(null)
 
     val breadcrumbs: List<Pair<String, String>>
         get() {
@@ -112,6 +121,122 @@ class FileManagerViewModel @Inject constructor() : ViewModel() {
             error = result.error
             loading = false
         }
+    }
+
+    // ------------------------------------------------------------ copy, cut, paste, rename, delete
+
+    fun copy(e: FileEntry) { clip = Clip(listOf(e.file), cut = false); message = "Copied ${e.name}" }
+
+    fun cut(e: FileEntry) { clip = Clip(listOf(e.file), cut = true); message = "Cut ${e.name}" }
+
+    fun clearClip() { clip = null }
+
+    /** Pastes the clipboard into [into] (the open folder by default). */
+    fun paste(into: File = File(currentPath)) {
+        val c = clip ?: return
+        viewModelScope.launch {
+            val (done, failed) = withContext(Dispatchers.IO) { pasteInto(c, into) }
+            message = when {
+                failed == 0 -> "Pasted $done item" + if (done == 1) "" else "s"
+                done == 0 -> "Couldn't paste. Check All files access."
+                else -> "Pasted $done, $failed failed"
+            }
+            if (c.cut && failed == 0) clip = null
+            reload()
+        }
+    }
+
+    private fun pasteInto(c: Clip, into: File): Pair<Int, Int> {
+        var done = 0
+        var failed = 0
+        val intoPath = runCatching { into.canonicalPath }.getOrDefault(into.path)
+        for (src in c.files) {
+            val ok = runCatching {
+                if (!src.exists()) return@runCatching false
+                val srcPath = src.canonicalPath
+                // A folder can't go inside itself.
+                if (src.isDirectory && (intoPath == srcPath || intoPath.startsWith("$srcPath/"))) return@runCatching false
+                // Cutting into the folder it is already in changes nothing.
+                if (c.cut && src.parentFile?.canonicalPath == intoPath) return@runCatching true
+                val target = uniqueTarget(into, src)
+                if (c.cut) {
+                    if (!src.renameTo(target)) {
+                        copyAny(src, target)
+                        if (!src.deleteRecursively()) return@runCatching false
+                    }
+                } else copyAny(src, target)
+                true
+            }.getOrDefault(false)
+            if (ok) done++ else failed++
+        }
+        return done to failed
+    }
+
+    private fun copyAny(src: File, target: File) {
+        if (src.isDirectory) {
+            if (!src.copyRecursively(target, overwrite = false)) throw java.io.IOException("copy failed")
+        } else src.copyTo(target, overwrite = false)
+    }
+
+    /** `name.ext`, or `name_2.ext`, `name_3.ext`... when the name is taken. */
+    private fun uniqueTarget(dir: File, src: File): File {
+        var f = File(dir, src.name)
+        if (!f.exists()) return f
+        val base = if (src.isDirectory) src.name else src.nameWithoutExtension
+        val ext = if (src.isDirectory || src.extension.isEmpty()) "" else "." + src.extension
+        var n = 2
+        while (f.exists()) f = File(dir, "${base}_${n++}$ext")
+        return f
+    }
+
+    fun rename(e: FileEntry, newName: String) {
+        val name = newName.trim()
+        when {
+            name.isEmpty() || name == "." || name == ".." || '/' in name -> { message = "That name isn't allowed"; return }
+            name == e.name -> return
+        }
+        viewModelScope.launch {
+            val target = File(e.file.parentFile, name)
+            val ok = withContext(Dispatchers.IO) { !target.exists() && runCatching { e.file.renameTo(target) }.getOrDefault(false) }
+            message = if (ok) "Renamed to $name" else if (target.exists()) "$name already exists" else "Couldn't rename"
+            selected = null
+            reload()
+        }
+    }
+
+    fun delete(e: FileEntry) {
+        viewModelScope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                runCatching { if (e.file.isDirectory) e.file.deleteRecursively() else e.file.delete() }.getOrDefault(false)
+            }
+            message = if (ok) "Deleted ${e.name}" else "Couldn't delete ${e.name}"
+            if (clip?.files?.contains(e.file) == true) clip = null
+            selected = null
+            reload()
+        }
+    }
+
+    suspend fun stats(f: File): FileStats = withContext(Dispatchers.IO) {
+        if (!f.isDirectory) return@withContext FileStats(f.length(), 1, 0)
+        var bytes = 0L
+        var files = 0
+        var folders = 0
+        runCatching {
+            f.walkTopDown().drop(1).forEach { if (it.isDirectory) folders++ else { files++; bytes += it.length() } }
+        }
+        FileStats(bytes, files, folders)
+    }
+
+    /** Hex digest of a file: "MD5" or "SHA-256". */
+    suspend fun checksum(f: File, algo: String): String = withContext(Dispatchers.IO) {
+        runCatching {
+            val md = java.security.MessageDigest.getInstance(algo)
+            f.inputStream().use { input ->
+                val buf = ByteArray(64 * 1024)
+                while (true) { val n = input.read(buf); if (n < 0) break; md.update(buf, 0, n) }
+            }
+            md.digest().joinToString("") { "%02x".format(it) }
+        }.getOrDefault("Couldn't read this file")
     }
 
     fun pullRefresh() {
