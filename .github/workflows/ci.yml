@@ -4,6 +4,7 @@ on:
   push:
     branches: ["**"]
   pull_request:
+  workflow_dispatch:   # adds the "Run workflow" button on the Actions page
 
 jobs:
   # Lint + unit tests run once (they do not depend on the CPU type).
