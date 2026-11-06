@@ -4,6 +4,8 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.ImageDecoder
+import android.media.MediaExtractor
+import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
@@ -216,3 +218,89 @@ internal fun buildMotionPhoto(still: File, clip: File, out: File, presentationUs
         clip.inputStream().use { it.copyTo(o) }
     }
 }
+
+// ------------------------------------------------------------------ smart bitrate
+
+/** What the platform can tell us about a video, so the output is never bigger than it needs to be. */
+internal data class VideoInfo(
+    val width: Int,
+    val height: Int,
+    val fps: Float?,
+    val videoKbps: Int?,
+    val videoMime: String?,
+    val audioMime: String?,
+    val audioKbps: Int?,
+)
+
+internal const val AAC_MIME = "audio/mp4a-latm"
+internal const val AVC_MIME = "video/avc"
+
+/** Size (after rotation), frame rate, bitrates and codecs of the first video and audio track, or null if unreadable. */
+internal fun videoInfo(ctx: Context, uri: Uri): VideoInfo? = runCatching {
+    val ex = MediaExtractor()
+    try {
+        ex.setDataSource(ctx, uri, null)
+        var w = 0; var h = 0; var rot = 0
+        var fps: Float? = null; var vKbps: Int? = null; var vMime: String? = null
+        var aMime: String? = null; var aKbps: Int? = null
+        for (i in 0 until ex.trackCount) {
+            val f = ex.getTrackFormat(i)
+            val mime = f.getString(MediaFormat.KEY_MIME) ?: continue
+            fun int(key: String): Int? = if (f.containsKey(key)) runCatching { f.getInteger(key) }.getOrNull() else null
+            if (mime.startsWith("video/") && vMime == null) {
+                vMime = mime
+                w = int(MediaFormat.KEY_WIDTH) ?: 0
+                h = int(MediaFormat.KEY_HEIGHT) ?: 0
+                rot = int(MediaFormat.KEY_ROTATION) ?: 0
+                vKbps = int(MediaFormat.KEY_BIT_RATE)?.div(1000)
+                if (f.containsKey(MediaFormat.KEY_FRAME_RATE)) {
+                    fps = runCatching { f.getFloat(MediaFormat.KEY_FRAME_RATE) }.getOrNull()
+                        ?: int(MediaFormat.KEY_FRAME_RATE)?.toFloat()
+                }
+            } else if (mime.startsWith("audio/") && aMime == null) {
+                aMime = mime
+                aKbps = int(MediaFormat.KEY_BIT_RATE)?.div(1000)
+            }
+        }
+        if (vMime == null || w <= 0 || h <= 0) return@runCatching null
+        if (vKbps == null) {
+            // Many files only report one overall bitrate: take the audio share off it.
+            val overall = MediaMetadataRetriever().let { r ->
+                try { r.setDataSource(ctx, uri); r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE)?.toLongOrNull() }
+                finally { r.release() }
+            }
+            if (overall != null && overall > 0) vKbps = ((overall / 1000) - (aKbps ?: if (aMime != null) 128 else 0)).toInt().takeIf { it > 100 }
+        }
+        val (rw, rh) = if (rot == 90 || rot == 270) h to w else w to h
+        VideoInfo(rw, rh, fps?.takeIf { it in 1f..240f }, vKbps, vMime, aMime, aKbps)
+    } finally { ex.release() }
+}.getOrNull()
+
+/** How many bits a codec needs for the same picture, relative to H.264. */
+private fun codecNeed(mime: String?): Double = when (mime) {
+    "video/hevc", "video/x-vnd.on2.vp9" -> 0.65
+    "video/av01" -> 0.5
+    "video/mp4v-es", "video/3gpp", "video/mpeg2", "video/x-ms-wmv" -> 1.6
+    else -> 1.0
+}
+
+/**
+ * Video bitrate (kb/s) for the hardware encoder. It follows the picture size and frame rate and never goes
+ * above what the source needed, so a 1.5 Mb/s clip is not blown up to 10 Mb/s for no gain. [fallback] is used
+ * when the source can't be read.
+ */
+internal fun hwVideoKbps(info: VideoInfo?, outHeight: Int, outFps: Int, qual: String, hevc: Boolean, fallback: Int): Int {
+    if (info == null) return fallback
+    val oh = if (outHeight in 1 until info.height) outHeight else info.height
+    val ow = info.width.toDouble() * oh / info.height
+    val srcFps = info.fps ?: 30f
+    val f = (if (outFps > 0) minOf(outFps.toFloat(), srcFps) else srcFps).coerceIn(10f, 60f)
+    val bpp = when (qual) { "high" -> 0.13; "low" -> 0.055; "tiny" -> 0.03; else -> 0.09 }
+    val target = codecNeed(if (hevc) "video/hevc" else AVC_MIME)
+    val estimate = ow * oh * f * bpp * target / 1000.0
+    val cap = info.videoKbps?.let { it * target / codecNeed(info.videoMime) * (if (qual == "high") 1.25 else 1.0) }
+    return minOf(estimate, cap ?: estimate).toInt().coerceAtLeast(250)
+}
+
+/** AAC bitrate that matches the source instead of always forcing 192 kb/s. */
+internal fun audioKbpsFor(info: VideoInfo?): Int = (info?.audioKbps ?: 128).coerceIn(64, 192)

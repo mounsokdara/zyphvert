@@ -24,6 +24,8 @@ import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,6 +50,7 @@ fun ToolScreen(tool: Tool, seedPath: String?, onBack: () -> Unit, onQueued: () -
     val spec = toolSpecs[tool.id]
     val ctx = LocalContext.current
     var askStorage by remember { mutableStateOf(false) }
+    var askWarn by remember { mutableStateOf(false) }
     var advancedOpen by rememberSaveable { mutableStateOf(false) }
     val notif = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
@@ -81,7 +84,7 @@ fun ToolScreen(tool: Tool, seedPath: String?, onBack: () -> Unit, onQueued: () -
             Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
                 Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp), contentAlignment = Alignment.Center) {
                     Button(
-                        onClick = { if (!StorageAccess.hasAllFilesAccess()) askStorage = true else start() },
+                        onClick = { if (!StorageAccess.hasAllFilesAccess()) askStorage = true else askWarn = true },
                         enabled = ready && !vm.busy,
                         modifier = Modifier.widthIn(max = 640.dp).fillMaxWidth().height(56.dp),
                         shape = CircleShape,
@@ -155,7 +158,29 @@ fun ToolScreen(tool: Tool, seedPath: String?, onBack: () -> Unit, onQueued: () -
             title = { Text("Allow access to all files?") },
             text = { Text("With all-files access, converted files are saved to Zyphvert/ on your phone and you can pick files from anywhere. Without it, files go to the app's own folder.") },
             confirmButton = { TextButton(onClick = { askStorage = false; StorageAccess.openAllFilesSettings(ctx) }) { Text("Allow") } },
-            dismissButton = { TextButton(onClick = { askStorage = false; start() }) { Text("Use app folder") } },
+            dismissButton = { TextButton(onClick = { askStorage = false; askWarn = true }) { Text("Use app folder") } },
+        )
+    }
+
+    if (askWarn) {
+        AlertDialog(
+            onDismissRequest = { askWarn = false },
+            icon = { Icon(Icons.Rounded.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+            title = {
+                Text(
+                    "DO NOT EXIT THE APP",
+                    Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.error,
+                    fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center,
+                )
+            },
+            text = {
+                Text(
+                    "Please keep the app open. Do not lock your screen or switch to another app while converting or running any other task, otherwise your progress will be lost.",
+                    textAlign = TextAlign.Center,
+                )
+            },
+            confirmButton = { Button(onClick = { askWarn = false; start() }) { Text("OK, start") } },
+            dismissButton = { TextButton(onClick = { askWarn = false }) { Text("Cancel") } },
         )
     }
 }

@@ -23,6 +23,12 @@ private fun isVideoStream(r: ToolRequest, f: PickedFile): Boolean {
 /** Hardware H.264 encode with AAC audio: the default for edits that must re-encode. */
 private const val H264 = "-c:v h264_mediacodec -b:v 6M -c:a aac -b:a 192k"
 
+/** Same as [H264] but sized from the source file, so edits don't make the video bigger than it was. */
+private fun smartH264(r: ToolRequest, f: PickedFile?): String {
+    val info = f?.let { videoInfo(r.ctx, it.uri) } ?: return H264
+    return "-c:v h264_mediacodec -b:v ${hwVideoKbps(info, 0, 0, "auto", false, 6000)}k -c:a aac -b:a ${audioKbpsFor(info)}k"
+}
+
 // ------------------------------------------------------------------ audio
 
 private fun audioJobs(r: ToolRequest, files: List<PickedFile>, cover: PickedFile?, fmtKey: String, slot: String = "media"): List<ToolJob> {
@@ -77,7 +83,6 @@ private fun videoJobs(r: ToolRequest, files: List<PickedFile>, fmtKey: String, s
     val fps = r.int("fps")
     val qual = r.str("vq").ifEmpty { "auto" }
     val aKey = r.str("vaud").ifEmpty { "keep" }
-    val abr = when (aKey) { "128" -> 128; "96" -> 96; else -> 192 }
     val hwK = when (qual) { "high" -> 10000; "low" -> 2500; "tiny" -> 1000; else -> 6000 }
     // Live and Motion Photo length: 0 means the whole video, with no limit.
     val liveSecs = r.str("llen").ifEmpty { "0" }.toIntOrNull() ?: 0
@@ -89,6 +94,14 @@ private fun videoJobs(r: ToolRequest, files: List<PickedFile>, fmtKey: String, s
         val len = trim?.let { it.end - it.start } ?: dur
         val inp = "$pre-i ${r.saf(f)}"
         val scale = if (h > 0) "scale=-2:$h" else null
+        // Size the output from the source: no upscaling, no frame-rate increase, bitrate that matches the picture.
+        val info = videoInfo(r.ctx, f.uri)
+        val vScale = if (h > 0 && (info == null || h < info.height)) "scale=-2:$h" else null
+        val srcFps = info?.fps
+        val vFps = if (fps > 0 && (srcFps == null || fps < srcFps - 0.5f)) fps else 0
+        val keepAudio = aKey == "keep"
+        val abr = when (aKey) { "128" -> 128; "96" -> 96; else -> audioKbpsFor(info) }
+        val liveK = hwVideoKbps(info, h, fps, qual, false, hwK)
         when (fmt.kind) {
             VFmt.Kind.Remux -> {
                 val out = r.out("Video", f, fmt.ext, slot = slot)
@@ -98,8 +111,8 @@ private fun videoJobs(r: ToolRequest, files: List<PickedFile>, fmtKey: String, s
                 // iPhone-style pair: Zyphvert/Live Photos/<name>.mov next to <name>.jpg. Length comes from the "Live Photo length" option.
                 val out = r.out("Video", f, "mov", slot = slot, dir = OutputPaths.dir(r.ctx, "Live Photos"))
                 val id = java.util.UUID.randomUUID().toString().uppercase()
-                val vf = listOfNotNull(scale, if (fps > 0) "fps=$fps" else null, VID_TAIL).joinToString(",")
-                r.job(f, out, "$inp$liveLen -vf ${q(vf)} -c:v h264_mediacodec -b:v ${hwK}k -c:a aac -b:a 128k " +
+                val vf = listOfNotNull(vScale, if (vFps > 0) "fps=$vFps" else null, VID_TAIL).joinToString(",")
+                r.job(f, out, "$inp$liveLen -vf ${q(vf)} -c:v h264_mediacodec -b:v ${liveK}k -c:a aac -b:a 128k " +
                     "-movflags use_metadata_tags -metadata com.apple.quicktime.content.identifier=$id -f mov ${q(out.path)}")
             }
             VFmt.Kind.MotionPhoto -> {
@@ -107,9 +120,9 @@ private fun videoJobs(r: ToolRequest, files: List<PickedFile>, fmtKey: String, s
                 val out = r.out("Images", f, "jpg", slot = slot, dir = OutputPaths.dir(r.ctx, "Live Photos"))
                 val tmpClip = File(r.ctx.cacheDir, "mp_${out.nameWithoutExtension}.mp4").also { it.delete() }
                 val tmpStill = File(r.ctx.cacheDir, "mp_${out.nameWithoutExtension}.jpg").also { it.delete() }
-                val vf = listOfNotNull(scale, if (fps > 0) "fps=$fps" else null, VID_TAIL).joinToString(",")
+                val vf = listOfNotNull(vScale, if (vFps > 0) "fps=$vFps" else null, VID_TAIL).joinToString(",")
                 ToolJob(r.toolTitle, f.name, out.path,
-                    "$inp$liveLen -vf ${q(vf)} -c:v h264_mediacodec -b:v ${hwK}k -c:a aac -b:a 128k -movflags +faststart ${q(tmpClip.path)} " +
+                    "$inp$liveLen -vf ${q(vf)} -c:v h264_mediacodec -b:v ${liveK}k -c:a aac -b:a 128k -movflags +faststart ${q(tmpClip.path)} " +
                         "-frames:v 1 -q:v 2 ${q(tmpStill.path)}",
                     after = {
                         try { buildMotionPhoto(tmpStill, tmpClip, out) } finally { tmpClip.delete(); tmpStill.delete() }
@@ -142,16 +155,17 @@ private fun videoJobs(r: ToolRequest, files: List<PickedFile>, fmtKey: String, s
             }
             else -> {
                 val out = r.out("Video", f, fmt.ext, slot = slot)
-                val vf = listOfNotNull(scale, if (fps > 0) "fps=$fps" else null, VID_TAIL).joinToString(",")
+                val vf = listOfNotNull(vScale, if (vFps > 0) "fps=$vFps" else null, VID_TAIL).joinToString(",")
                 val target = r.str("target").toDoubleOrNull()
                 val audioKbps = if (aKey == "mute") 0 else abr
                 val vk: Int? = if (target != null && len != null && len > 0)
                     max(100, (target * 8192 / len - audioKbps).toInt()) else null
-                val hw = when (qual) { "high" -> 10000; "low" -> 2500; "tiny" -> 1000; else -> 6000 }
+                val hw = hwVideoKbps(info, h, fps, qual, false, hwK)
+                val hwHevc = hwVideoKbps(info, h, fps, qual, true, hwK * 6 / 10)
                 val mq = when (qual) { "high" -> 2; "low" -> 9; "tiny" -> 15; else -> 4 }
                 val crf = when (qual) { "high" -> 28; "low" -> 40; "tiny" -> 48; else -> 34 }
                 val v = when (fmt.kind) {
-                    VFmt.Kind.HwHevc -> "-c:v hevc_mediacodec -b:v ${vk ?: (hw * 6 / 10)}k"
+                    VFmt.Kind.HwHevc -> "-c:v hevc_mediacodec -b:v ${vk ?: hwHevc}k"
                     VFmt.Kind.Wmv -> "-c:v wmv2 " + (if (vk != null) "-b:v ${vk}k" else "-q:v $mq")
                     VFmt.Kind.Mpeg2 -> "-c:v mpeg2video " + (if (vk != null) "-b:v ${vk}k" else "-q:v $mq")
                     VFmt.Kind.Mpeg4 -> "-c:v mpeg4 " + (if (vk != null) "-b:v ${vk}k" else "-q:v $mq")
@@ -159,15 +173,25 @@ private fun videoJobs(r: ToolRequest, files: List<PickedFile>, fmtKey: String, s
                     VFmt.Kind.Vp8 -> "-c:v libvpx -deadline realtime -cpu-used 8 " + (if (vk != null) "-b:v ${vk}k" else "-crf ${crf / 3 + 4} -b:v 2M")
                     else -> "-c:v h264_mediacodec -b:v ${vk ?: hw}k"
                 }
+                // The source's own AAC track is copied as it is: no quality loss and no extra size.
+                val copyAudio = keepAudio && info?.audioMime == AAC_MIME
                 val a = when {
                     aKey == "mute" -> "-an"
                     fmt.ext == "webm" || (fmt.ext == "mkv" && fmt.kind == VFmt.Kind.Vp9) -> "-c:a libopus -b:a ${abr}k"
                     fmt.ext == "avi" -> "-c:a libmp3lame -b:a ${abr}k"
                     fmt.ext == "wmv" -> "-c:a wmav2 -b:a ${abr}k"
                     fmt.ext == "mpg" -> "-c:a mp2 -b:a ${abr}k"
+                    copyAudio -> "-c:a copy"
                     else -> "-c:a aac -b:a ${abr}k"
                 }
-                r.job(f, out, "$inp -vf ${q(vf)} $v $a ${q(out.path)}")
+                // H.264 in, H.264 out, nothing to change: re-encoding can only make it bigger or worse. Copy the video as it is.
+                val nothingToChange = fmt.kind == VFmt.Kind.Hw264 && info?.videoMime == AVC_MIME && trim == null &&
+                    vScale == null && vFps == 0 && target == null && qual in setOf("auto", "high")
+                if (nothingToChange) {
+                    r.job(f, out, "$inp -map ${q("0:v:0")} -map ${q("0:a:0?")} -dn -c:v copy $a ${q(out.path)}")
+                } else {
+                    r.job(f, out, "$inp -vf ${q(vf)} $v $a -dn ${q(out.path)}")
+                }
             }
         }
     }
@@ -311,7 +335,7 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
                 listOf(r.job(f, out, "${keepArgs(trim)}-i ${r.saf(f)} -c copy -avoid_negative_ts make_zero ${q(out.path)}"))
             } else if (!trim.remove) {
                 val out = r.out(cat, f, if (hasV) "mp4" else "m4a", "_cut")
-                val enc = if (hasV) "-vf ${q(VID_TAIL)} $H264" else "-vn -c:a aac -b:a 192k"
+                val enc = if (hasV) "-vf ${q(VID_TAIL)} ${smartH264(r, f)}" else "-vn -c:a aac -b:a 192k"
                 listOf(r.job(f, out, "${keepArgs(trim)}-i ${r.saf(f)} $enc ${q(out.path)}"))
             } else {
                 val s = num(trim.start); val e = num(trim.end)
@@ -326,7 +350,7 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
                 }
                 val maps = (if (hasV) "-map ${q("[v]")} " else "") + (if (hasA) "-map ${q("[a]")} " else "")
                 val out = r.out(cat, f, if (hasV) "mp4" else "m4a", "_cut")
-                val enc = if (hasV) H264 else "-c:a aac -b:a 192k"
+                val enc = if (hasV) smartH264(r, f) else "-c:a aac -b:a 192k"
                 listOf(r.job(f, out, "-i ${r.saf(f)} -filter_complex ${q(g.toString())} $maps$enc ${q(out.path)}"))
             }
         },
@@ -360,7 +384,7 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
                     r.job(f, out, "-i ${r.saf(f)} -vf ${q(parts.joinToString(","))} -frames:v 1 -q:v 2 ${q(out.path)}")
                 } else {
                     val out = r.out("Video", f, "mp4", "_edit")
-                    r.job(f, out, "-i ${r.saf(f)} -vf ${q((parts + VID_TAIL).joinToString(","))} $H264 ${q(out.path)}")
+                    r.job(f, out, "-i ${r.saf(f)} -vf ${q((parts + VID_TAIL).joinToString(","))} ${smartH264(r, f)} ${q(out.path)}")
                 }
             }
         },
@@ -382,7 +406,7 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
             val vf = (if (rev) "reverse," else "") + "setpts=PTS/${num(s)},$VID_TAIL"
             val af = (if (rev) "areverse," else "") + atempoChain(s)
             val out = r.out("Video", f, "mp4", "_speed")
-            listOf(r.job(f, out, "-i ${r.saf(f)} -vf ${q(vf)} -af ${q(af)} $H264 ${q(out.path)}"))
+            listOf(r.job(f, out, "-i ${r.saf(f)} -vf ${q(vf)} -af ${q(af)} ${smartH264(r, f)} ${q(out.path)}"))
         },
     ),
 
@@ -416,7 +440,7 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
                     r.job(f, out, "-i ${r.saf(f)} -vf ${q(flt)} -frames:v 1 -q:v 2 ${q(out.path)}")
                 } else {
                     val out = r.out("Video", f, "mp4", "_filter")
-                    r.job(f, out, "-i ${r.saf(f)} -vf ${q("$flt,$VID_TAIL")} $H264 ${q(out.path)}")
+                    r.job(f, out, "-i ${r.saf(f)} -vf ${q("$flt,$VID_TAIL")} ${smartH264(r, f)} ${q(out.path)}")
                 }
             }
         },
@@ -471,7 +495,7 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
             }
             val out = if (image) r.out("Images", f, nameExt(f.name).takeIf { it in photoExts } ?: "jpg", "_wm")
                       else r.out("Video", f, "mp4", "_wm")
-            val enc = if (image) "-frames:v 1 -q:v 2" else "-map ${q("0:a?")} $H264"
+            val enc = if (image) "-frames:v 1 -q:v 2" else "-map ${q("0:a?")} ${smartH264(r, f)}"
             listOf(r.job(f, out, "$inputs -filter_complex ${q(graph)} -map ${q("[v]")} $enc ${q(out.path)}"))
         },
     ),
@@ -693,7 +717,7 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
                     }
                     else -> {
                         val out = r.out("Video", f, if (t == "webm") "webm" else "mp4")
-                        val enc = if (t == "webm") "-c:v libvpx-vp9 -crf 34 -b:v 0 -deadline realtime -cpu-used 8 -row-mt 1 -c:a libopus -b:a 128k" else H264
+                        val enc = if (t == "webm") "-c:v libvpx-vp9 -crf 34 -b:v 0 -deadline realtime -cpu-used 8 -row-mt 1 -c:a libopus -b:a 128k" else smartH264(r, f)
                         r.job(f, out, "-i ${r.saf(f)} -vf ${q(VID_TAIL)} $enc ${q(out.path)}")
                     }
                 }
@@ -724,10 +748,14 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
                         r.job(f, out, "-i ${r.saf(f)} -vf ${q("scale=w=(iw+$w-abs(iw-$w))/2:h=-2")} -frames:v 1 -q:v $qv ${q(out.path)}")
                     }
                     isVideoStream(r, f) -> {
-                        val (br, h, ab) = when (lvl) { "light" -> Triple(6000, 0, 160); "strong" -> Triple(1200, 480, 96); else -> Triple(2800, 720, 128) }
-                        val vf = listOfNotNull(if (h > 0) "scale=-2:$h" else null, VID_TAIL).joinToString(",")
+                        val (br0, h, ab0) = when (lvl) { "light" -> Triple(6000, 0, 160); "strong" -> Triple(1200, 480, 96); else -> Triple(2800, 720, 128) }
+                        val info = videoInfo(r.ctx, f.uri)
+                        // A "smaller" file must never end up bigger: stay under the source's own bitrate and size.
+                        val br = info?.videoKbps?.let { minOf(br0, maxOf(300, (it * 0.9).toInt())) } ?: br0
+                        val ab = info?.audioKbps?.let { minOf(ab0, maxOf(64, it)) } ?: ab0
+                        val vf = listOfNotNull(if (h > 0 && (info == null || h < info.height)) "scale=-2:$h" else null, VID_TAIL).joinToString(",")
                         val out = r.out("Video", f, "mp4", "_small")
-                        r.job(f, out, "-i ${r.saf(f)} -vf ${q(vf)} -c:v h264_mediacodec -b:v ${br}k -c:a aac -b:a ${ab}k ${q(out.path)}")
+                        r.job(f, out, "-i ${r.saf(f)} -vf ${q(vf)} -c:v h264_mediacodec -b:v ${br}k -c:a aac -b:a ${ab}k -dn ${q(out.path)}")
                     }
                     else -> {
                         val ab = when (lvl) { "light" -> 160; "strong" -> 64; else -> 96 }

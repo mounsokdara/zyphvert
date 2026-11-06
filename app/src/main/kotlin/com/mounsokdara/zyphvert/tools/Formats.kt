@@ -151,7 +151,7 @@ internal val qualityItems = listOf(
     Item("low", "Small file"), Item("tiny", "Tiny file", "Lowest quality"),
 )
 internal val vAudioItems = listOf(
-    Item("keep", "Keep audio (192 kb/s)"), Item("128", "Compress audio (128 kb/s)"),
+    Item("keep", "Keep original audio"), Item("128", "Compress audio (128 kb/s)"),
     Item("96", "Compress audio (96 kb/s)"), Item("mute", "Remove audio"),
 )
 

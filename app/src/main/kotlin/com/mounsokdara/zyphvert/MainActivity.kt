@@ -2,6 +2,7 @@ package com.mounsokdara.zyphvert
 
 import android.graphics.Color
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -12,6 +13,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import com.mounsokdara.zyphvert.data.JobHistory
+import com.mounsokdara.zyphvert.data.JobStatus
 import com.mounsokdara.zyphvert.data.ThemeMode
 import com.mounsokdara.zyphvert.ui.LocalHaptics
 import com.mounsokdara.zyphvert.ui.ZyphvertShell
@@ -41,6 +44,14 @@ class MainActivity : ComponentActivity() {
                     ) { dark },
                 )
                 onDispose { }
+            }
+            // While anything is queued or running, the screen stays on so it can't lock in the middle of a conversion.
+            val jobs by JobHistory.jobs.collectAsState()
+            val converting = jobs.any { it.status == JobStatus.Queued || it.status == JobStatus.Running }
+            DisposableEffect(converting) {
+                if (converting) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                onDispose { window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
             }
             ZyphvertTheme(darkTheme = dark, dynamicColor = s.dynamicColor, amoled = s.themeMode == ThemeMode.Amoled) {
                 CompositionLocalProvider(LocalHaptics provides s.haptics) {
