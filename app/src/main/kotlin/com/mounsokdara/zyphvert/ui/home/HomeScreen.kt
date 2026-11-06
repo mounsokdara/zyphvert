@@ -39,7 +39,6 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.mounsokdara.zyphvert.ui.components.CenteredContent
-import com.mounsokdara.zyphvert.ui.components.HeroCard
 import com.mounsokdara.zyphvert.ui.components.isWideLayout
 import com.mounsokdara.zyphvert.ui.components.SearchField
 import com.mounsokdara.zyphvert.ui.components.ConverterCard
@@ -53,21 +52,18 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
-    var selected by rememberSaveable { mutableStateOf<ToolCategory?>(null) }
 
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
-    val visible = remember(query, selected) {
+    val visible = remember(query) {
         allTools.filter { tool ->
-            (selected == null || tool.category == selected) &&
-                (query.isBlank() ||
+            (query.isBlank() ||
                     tool.title.contains(query, ignoreCase = true) ||
                     tool.description.contains(query, ignoreCase = true) ||
                     tool.formats.any { it.contains(query, ignoreCase = true) })
         }
     }
     val groups = remember(visible) { visible.groupBy { it.category } }
-    val showHero = query.isBlank() && selected == null
 
     Scaffold(
         modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -107,28 +103,6 @@ fun HomeScreen(
                 )
             }
 
-            item(key = "chips", span = { GridItemSpan(maxLineSpan) }) {
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(vertical = 2.dp),
-                ) {
-                    item {
-                        CategoryChip("All", selected == null) { selected = null }
-                    }
-                    items(ToolCategory.entries) { cat ->
-                        CategoryChip(cat.label, selected == cat) {
-                            selected = if (selected == cat) null else cat
-                        }
-                    }
-                }
-            }
-
-            if (showHero) {
-                item(key = "hero", span = { GridItemSpan(maxLineSpan) }) {
-                    HeroCard(Modifier.padding(top = 4.dp))
-                }
-            }
-
             if (visible.isEmpty()) {
                 item(key = "empty", span = { GridItemSpan(maxLineSpan) }) {
                     EmptyResults(query)
@@ -156,19 +130,6 @@ fun HomeScreen(
         }
         }
     }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun CategoryChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    FilterChip(
-        selected = selected,
-        onClick = onClick,
-        label = { Text(label) },
-        leadingIcon = if (selected) {
-            { Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
-        } else null,
-    )
 }
 
 @Composable

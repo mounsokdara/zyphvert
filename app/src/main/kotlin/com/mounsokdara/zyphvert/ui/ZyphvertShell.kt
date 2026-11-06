@@ -1,6 +1,14 @@
 package com.mounsokdara.zyphvert.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -103,79 +111,94 @@ fun ZyphvertShell(settingsVm: SettingsViewModel, hapticsEnabled: Boolean) {
                     }
                 }
             }
-            Box(Modifier.weight(1f).fillMaxSize()) {
+            val infoPath = mediaInfoPath
+            val toolId = openToolId?.takeIf { id -> allTools.any { it.id == id } }
+            val subRoute = sub
+            val screen: Screen = when {
+                infoPath != null -> Screen.MediaInfo(infoPath)
+                toolId != null -> Screen.ToolS(toolId)
+                current == Destination.More && subRoute != null -> Screen.MoreSub(subRoute)
+                else -> Screen.Tab(current)
+            }
 
-                val infoPath = mediaInfoPath
-                if (infoPath != null) {
-                    MediaInfoScreen(path = infoPath, onBack = { mediaInfoPath = null })
-                    return@Box
-                }
-
-                val activeTool = openToolId?.let { id -> allTools.find { it.id == id } }
-                if (activeTool != null) {
-                    if (activeTool.id == "ffmpeg") {
-                        val tvm = hiltViewModel<TerminalViewModel>()
-                        val seed = pendingFilePath
-                        LaunchedEffect(seed) {
-                            if (seed != null) {
-                                tvm.insert("\"$seed\"")
-                                pendingFilePath = null
-                            }
-                        }
-                        TerminalScreen(tvm, onBack = { openToolId = null; pendingFilePath = null })
-                    } else {
-                        // Key ViewModel per tool so form state does not leak across tools
-                        val tvm = hiltViewModel<ToolViewModel>(key = activeTool.id)
-                        ToolScreen(
-                            tool = activeTool,
-                            seedPath = pendingFilePath,
-                            onBack = { openToolId = null; pendingFilePath = null },
-                            onQueued = { openToolId = null; pendingFilePath = null; current = Destination.Queue },
-                            vm = tvm,
-                        )
+            AnimatedContent(
+                targetState = screen,
+                modifier = Modifier.weight(1f).fillMaxSize(),
+                label = "screen",
+                transitionSpec = {
+                    val enteringSub = targetState !is Screen.Tab
+                    val wasSub = initialState !is Screen.Tab
+                    when {
+                        enteringSub && !wasSub ->
+                            (slideInHorizontally(tween(280)) { it / 8 } + fadeIn(tween(240))) togetherWith
+                                (slideOutHorizontally(tween(280)) { -it / 12 } + fadeOut(tween(160)))
+                        !enteringSub && wasSub ->
+                            (slideInHorizontally(tween(280)) { -it / 12 } + fadeIn(tween(240))) togetherWith
+                                (slideOutHorizontally(tween(280)) { it / 8 } + fadeOut(tween(160)))
+                        else -> (fadeIn(tween(220)) + scaleIn(tween(220), initialScale = 0.98f)) togetherWith fadeOut(tween(120))
                     }
-                } else when (current) {
-                    Destination.Tools -> HomeScreen(
-                        bottomPadding = bottom,
-                        onToolClick = { tool ->
-                            tick()
-                            openToolId = tool.id
-                        },
-                    )
-                    Destination.Files -> FileManagerScreen(
-                        bottomPadding = bottom,
-                        onOpenInTool = { toolId, path ->
-                            tick()
-                            pendingFilePath = path
-                            openToolId = toolId
-                        },
-                        onMediaInfo = { path ->
-                            tick()
-                            mediaInfoPath = path
-                        },
-                    )
-                    Destination.Queue -> QueueScreen(bottomPadding = bottom)
-                    Destination.More -> when (sub) {
-                        null -> MoreScreen(bottomPadding = bottom, onOpen = { tick(); sub = it })
+                },
+            ) { sc ->
+                when (sc) {
+                    is Screen.MediaInfo -> MediaInfoScreen(path = sc.path, onBack = { mediaInfoPath = null })
+                    is Screen.ToolS -> {
+                        val tool = allTools.first { it.id == sc.id }
+                        if (tool.id == "ffmpeg") {
+                            val tvm = hiltViewModel<TerminalViewModel>()
+                            val seed = pendingFilePath
+                            LaunchedEffect(seed) {
+                                if (seed != null) {
+                                    tvm.insert("\"$seed\"")
+                                    pendingFilePath = null
+                                }
+                            }
+                            TerminalScreen(tvm, onBack = { openToolId = null; pendingFilePath = null })
+                        } else {
+                            // Key ViewModel per tool so form state does not leak across tools
+                            val tvm = hiltViewModel<ToolViewModel>(key = tool.id)
+                            ToolScreen(
+                                tool = tool,
+                                seedPath = pendingFilePath,
+                                onBack = { openToolId = null; pendingFilePath = null },
+                                onQueued = { openToolId = null; pendingFilePath = null; current = Destination.Queue },
+                                vm = tvm,
+                            )
+                        }
+                    }
+                    is Screen.MoreSub -> when (sc.route) {
                         MoreRoute.Settings -> SettingsScreen(settingsVm, onBack = { sub = null })
                         MoreRoute.Terminal -> TerminalScreen(hiltViewModel(), onBack = { sub = null })
                         MoreRoute.About -> AboutScreen(onBack = { sub = null }, onLicenses = { sub = MoreRoute.Licenses })
                         MoreRoute.Licenses -> LicensesScreen(onBack = { sub = MoreRoute.About })
                         MoreRoute.Files -> FileManagerScreen(
                             bottomPadding = bottom,
-                            onOpenInTool = { toolId, path ->
-                                sub = null
-                                pendingFilePath = path
-                                openToolId = toolId
-                            },
-                            onMediaInfo = { path ->
-                                sub = null
-                                mediaInfoPath = path
-                            },
+                            onOpenInTool = { id, path -> sub = null; pendingFilePath = path; openToolId = id },
+                            onMediaInfo = { path -> sub = null; mediaInfoPath = path },
                         )
+                    }
+                    is Screen.Tab -> when (sc.dest) {
+                        Destination.Tools -> HomeScreen(
+                            bottomPadding = bottom,
+                            onToolClick = { tool -> tick(); openToolId = tool.id },
+                        )
+                        Destination.Files -> FileManagerScreen(
+                            bottomPadding = bottom,
+                            onOpenInTool = { id, path -> tick(); pendingFilePath = path; openToolId = id },
+                            onMediaInfo = { path -> tick(); mediaInfoPath = path },
+                        )
+                        Destination.Queue -> QueueScreen(bottomPadding = bottom)
+                        Destination.More -> MoreScreen(bottomPadding = bottom, onOpen = { tick(); sub = it })
                     }
                 }
             }
         }
     }
+}
+
+/** What the shell is showing. A tool is identified by its id only, so picking a file for it doesn't re-trigger the transition. */
+private sealed interface Screen {
+    data class MediaInfo(val path: String) : Screen
+    data class ToolS(val id: String) : Screen
+    data class MoreSub(val route: MoreRoute) : Screen
+    data class Tab(val dest: Destination) : Screen
 }

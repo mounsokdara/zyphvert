@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.webkit.MimeTypeMap
 import android.widget.Toast
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -82,14 +83,14 @@ fun QueueScreen(bottomPadding: Dp, modifier: Modifier = Modifier, vm: QueueViewM
                 verticalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier.widthIn(max = 720.dp),
             ) {
-                items(jobs, key = { it.id }) { job -> JobCard(job, onCancel = { vm.manager.cancel(job.id) }) }
+                items(jobs, key = { it.id }) { job -> JobCard(job, onCancel = { vm.manager.cancel(job.id) }, modifier = Modifier.animateItem()) }
             }
         }
     }
 }
 
 @Composable
-private fun JobCard(job: ConversionJob, onCancel: () -> Unit) {
+private fun JobCard(job: ConversionJob, onCancel: () -> Unit, modifier: Modifier = Modifier) {
     val ctx = LocalContext.current
     var showDetails by remember { mutableStateOf(job.status == JobStatus.Success && job.details != null && job.outputPath == null) }
     val scheme = MaterialTheme.colorScheme
@@ -104,7 +105,7 @@ private fun JobCard(job: ConversionJob, onCancel: () -> Unit) {
     val file = job.outputPath?.let { File(it) }
     val isFile = file?.isFile == true
 
-    Surface(shape = RoundedCornerShape(20.dp), color = scheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
+    Surface(shape = RoundedCornerShape(20.dp), color = scheme.surfaceContainerLow, modifier = modifier.fillMaxWidth().animateContentSize()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Icon(icon, null, tint = tint, modifier = Modifier.size(28.dp))

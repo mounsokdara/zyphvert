@@ -57,43 +57,68 @@ internal fun mediaSize(ctx: Context, uri: Uri, image: Boolean): Pair<Int, Int>? 
     }
 }.getOrNull()
 
-/** Android Motion Photo: a JPEG with an MP4 appended. Returns false if no embedded video is found. */
+/**
+ * Android Motion Photo: a JPEG with an MP4 appended. Works on the file in chunks, so a Motion Photo
+ * with a very long video (hundreds of MB) doesn't need to fit in memory. Returns false if no video is found.
+ */
 internal fun extractMotionVideo(ctx: Context, uri: Uri, out: File): Boolean {
-    val bytes = ctx.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return false
-    // Newer files say exactly where the video starts: XMP MicroVideoOffset or the Container item length, counted from the end.
-    val head = String(bytes, 0, minOf(bytes.size, 262144), Charsets.ISO_8859_1)
-    val declared = Regex("MicroVideoOffset=\"(\\d+)\"").find(head)?.groupValues?.get(1)?.toLongOrNull()
-        ?: Regex("<Container:Item[^>]*video/mp4[^>]*>").find(head)?.value
-            ?.let { Regex("Item:Length=\"(\\d+)\"").find(it)?.groupValues?.get(1)?.toLongOrNull() }
-    if (declared != null && declared in 16 until bytes.size.toLong()) {
-        val s = bytes.size - declared.toInt()
-        if (s + 8 <= bytes.size && bytes[s + 4] == 'f'.code.toByte() && bytes[s + 5] == 't'.code.toByte() &&
-            bytes[s + 6] == 'y'.code.toByte() && bytes[s + 7] == 'p'.code.toByte()) {
-            out.parentFile?.mkdirs()
-            out.outputStream().use { it.write(bytes, s, bytes.size - s) }
-            return true
-        }
+    // Seekable file: the picked file itself, or a streamed copy in the cache for content:// documents.
+    val src: File = if (uri.scheme == "file") File(uri.path ?: return false) else {
+        val tmp = File(ctx.cacheDir, "motion_src_${System.nanoTime()}")
+        ctx.contentResolver.openInputStream(uri)?.use { i -> tmp.outputStream().use { o -> i.copyTo(o) } } ?: return false
+        tmp
     }
-    val sig = byteArrayOf('f'.code.toByte(), 't'.code.toByte(), 'y'.code.toByte(), 'p'.code.toByte())
-    var from = 100
-    while (from < bytes.size - 8) {
-        var idx = -1
-        var i = from
-        while (i <= bytes.size - 4) {
-            if (bytes[i] == sig[0] && bytes[i + 1] == sig[1] && bytes[i + 2] == sig[2] && bytes[i + 3] == sig[3]) { idx = i; break }
-            i++
+    val isCopy = uri.scheme != "file"
+    try {
+        java.io.RandomAccessFile(src, "r").use { raf ->
+            val total = raf.length()
+            fun isFtyp(pos: Long): Boolean {
+                if (pos < 0 || pos + 8 > total) return false
+                val b = ByteArray(8); raf.seek(pos); raf.readFully(b)
+                return b[4] == 'f'.code.toByte() && b[5] == 't'.code.toByte() && b[6] == 'y'.code.toByte() && b[7] == 'p'.code.toByte()
+            }
+            fun copyFrom(start: Long): Boolean {
+                out.parentFile?.mkdirs()
+                raf.seek(start)
+                out.outputStream().use { o ->
+                    val buf = ByteArray(1 shl 20)
+                    while (true) { val n = raf.read(buf); if (n <= 0) break; o.write(buf, 0, n) }
+                }
+                return true
+            }
+            // Newer files say exactly where the video starts: XMP MicroVideoOffset or the container item length, counted from the end.
+            val headLen = minOf(total, 262144L).toInt()
+            val headBytes = ByteArray(headLen); raf.seek(0); raf.readFully(headBytes)
+            val head = String(headBytes, Charsets.ISO_8859_1)
+            val declared = Regex("MicroVideoOffset=\"(\\d+)\"").find(head)?.groupValues?.get(1)?.toLongOrNull()
+                ?: Regex("<Container:Item[^>]*video/mp4[^>]*>").find(head)?.value
+                    ?.let { Regex("Item:Length=\"(\\d+)\"").find(it)?.groupValues?.get(1)?.toLongOrNull() }
+            if (declared != null && declared in 16 until total && isFtyp(total - declared)) return copyFrom(total - declared)
+
+            // Otherwise scan for an "ftyp" box with a plausible size, a megabyte at a time.
+            val sig = byteArrayOf('f'.code.toByte(), 't'.code.toByte(), 'y'.code.toByte(), 'p'.code.toByte())
+            val buf = ByteArray((1 shl 20) + 8)
+            var pos = 100L
+            while (pos < total - 8) {
+                raf.seek(pos)
+                val n = raf.read(buf)
+                if (n < 8) break
+                var i = 0
+                while (i <= n - 4) {
+                    if (buf[i] == sig[0] && buf[i + 1] == sig[1] && buf[i + 2] == sig[2] && buf[i + 3] == sig[3] && pos + i >= 4) {
+                        val b = ByteArray(4); raf.seek(pos + i - 4); raf.readFully(b)
+                        val size = ((b[0].toInt() and 0xFF) shl 24) or ((b[1].toInt() and 0xFF) shl 16) or ((b[2].toInt() and 0xFF) shl 8) or (b[3].toInt() and 0xFF)
+                        if (size in 16..128) return copyFrom(pos + i - 4)
+                    }
+                    i++
+                }
+                pos += n - 3
+            }
+            return false
         }
-        if (idx < 4) return false
-        val size = ((bytes[idx - 4].toInt() and 0xFF) shl 24) or ((bytes[idx - 3].toInt() and 0xFF) shl 16) or
-            ((bytes[idx - 2].toInt() and 0xFF) shl 8) or (bytes[idx - 1].toInt() and 0xFF)
-        if (size in 16..128) {
-            out.parentFile?.mkdirs()
-            out.outputStream().use { it.write(bytes, idx - 4, bytes.size - (idx - 4)) }
-            return true
-        }
-        from = idx + 1
+    } finally {
+        if (isCopy) src.delete()
     }
-    return false
 }
 
 @Suppress("DEPRECATION")

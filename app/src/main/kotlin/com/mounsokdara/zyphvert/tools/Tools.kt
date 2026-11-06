@@ -78,6 +78,10 @@ private fun videoJobs(r: ToolRequest, files: List<PickedFile>, fmtKey: String, s
     val qual = r.str("vq").ifEmpty { "auto" }
     val aKey = r.str("vaud").ifEmpty { "keep" }
     val abr = when (aKey) { "128" -> 128; "96" -> 96; else -> 192 }
+    val hwK = when (qual) { "high" -> 10000; "low" -> 2500; "tiny" -> 1000; else -> 6000 }
+    // Live and Motion Photo length: 0 means the whole video, with no limit.
+    val liveSecs = r.str("llen").ifEmpty { "3" }.toIntOrNull() ?: 3
+    val liveLen = if (liveSecs > 0) " -t $liveSecs" else ""
     return files.map { f ->
         val dur = durationSec(r.ctx, f.uri)
         val trim = trimOf(r, "range", dur)
@@ -91,21 +95,21 @@ private fun videoJobs(r: ToolRequest, files: List<PickedFile>, fmtKey: String, s
                 r.job(f, out, "$inp -map ${q("0:v?")} -map ${q("0:a?")} -c copy ${out.path}")
             }
             VFmt.Kind.LivePair -> {
-                // iPhone-style pair: Zyphvert/Live Photos/<name>.mov (max 3 s) next to <name>.jpg
+                // iPhone-style pair: Zyphvert/Live Photos/<name>.mov next to <name>.jpg. Length comes from the "Live Photo length" option.
                 val out = r.out("Video", f, "mov", slot = slot, dir = OutputPaths.dir(r.ctx, "Live Photos"))
                 val id = java.util.UUID.randomUUID().toString().uppercase()
                 val vf = listOfNotNull(scale, if (fps > 0) "fps=$fps" else null, VID_TAIL).joinToString(",")
-                r.job(f, out, "$inp -t 3 -vf ${q(vf)} -c:v h264_mediacodec -b:v 6M -c:a aac -b:a 128k " +
+                r.job(f, out, "$inp$liveLen -vf ${q(vf)} -c:v h264_mediacodec -b:v ${hwK}k -c:a aac -b:a 128k " +
                     "-movflags use_metadata_tags -metadata com.apple.quicktime.content.identifier=$id -f mov ${out.path}")
             }
             VFmt.Kind.MotionPhoto -> {
-                // One FFmpeg run makes the 3 s clip and the still; then both are joined into a single Motion Photo JPG.
+                // One FFmpeg run makes the clip and the still; then both are joined into a single Motion Photo JPG.
                 val out = r.out("Images", f, "jpg", slot = slot, dir = OutputPaths.dir(r.ctx, "Live Photos"))
                 val tmpClip = File(r.ctx.cacheDir, "mp_${out.nameWithoutExtension}.mp4").also { it.delete() }
                 val tmpStill = File(r.ctx.cacheDir, "mp_${out.nameWithoutExtension}.jpg").also { it.delete() }
                 val vf = listOfNotNull(scale, if (fps > 0) "fps=$fps" else null, VID_TAIL).joinToString(",")
                 ToolJob(r.toolTitle, f.name, out.path,
-                    "$inp -t 3 -vf ${q(vf)} -c:v h264_mediacodec -b:v 6M -c:a aac -b:a 128k -movflags +faststart ${tmpClip.path} " +
+                    "$inp$liveLen -vf ${q(vf)} -c:v h264_mediacodec -b:v ${hwK}k -c:a aac -b:a 128k -movflags +faststart ${tmpClip.path} " +
                         "-frames:v 1 -q:v 2 ${tmpStill.path}",
                     after = {
                         try { buildMotionPhoto(tmpStill, tmpClip, out) } finally { tmpClip.delete(); tmpStill.delete() }
@@ -180,6 +184,7 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
             Opt.Name(),
             Opt.Presets("preset", "Quick preset", videoPresets),
             Opt.Choice("vfmt", "Format", videoItems),
+            Opt.Choice("llen", "Live Photo length", liveLengthItems, showIf = { videoKind(it) in setOf(VFmt.Kind.LivePair, VFmt.Kind.MotionPhoto) }),
             Opt.Choice("res", "Resolution", resItems),
             Opt.Choice("fps", "Frame rate", fpsItems),
             Opt.Choice("vq", "Quality", qualityItems, showIf = { videoKind(it) in setOf(VFmt.Kind.Hw264, VFmt.Kind.HwHevc, VFmt.Kind.Mpeg4, VFmt.Kind.Vp9, VFmt.Kind.Vp8, VFmt.Kind.Wmv, VFmt.Kind.Mpeg2, VFmt.Kind.LivePair, VFmt.Kind.MotionPhoto) }),

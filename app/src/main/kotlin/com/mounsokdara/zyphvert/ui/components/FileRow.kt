@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -24,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.InsertDriveFile
 import androidx.compose.material.icons.rounded.AudioFile
 import androidx.compose.material.icons.rounded.ClosedCaption
+import androidx.compose.material.icons.rounded.DriveFolderUpload
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.MotionPhotosOn
@@ -225,5 +227,77 @@ fun FileRow(
             ) { Text("${selectedOrder + 1}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimary) }
             else Icon(Icons.Rounded.RadioButtonUnchecked, null, Modifier.size(26.dp), tint = MaterialTheme.colorScheme.outline)
         }
+    }
+}
+
+/** The ".." row: a folder with an up arrow, shown first in every folder, including empty ones. */
+@Composable
+fun UpFolderRow(modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Row(
+        modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 6.dp).heightIn(min = 56.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(56.dp), contentAlignment = Alignment.Center) {
+            Icon(Icons.Rounded.DriveFolderUpload, null, Modifier.size(52.dp), tint = FolderOrange)
+        }
+        Text("..", Modifier.padding(start = 12.dp), style = MaterialTheme.typography.bodyLarge)
+    }
+}
+
+/** Grid version of [FileRow]: a square thumbnail with the name under it. */
+@Composable
+fun FileTile(
+    name: String,
+    file: File?,
+    isDir: Boolean,
+    modifier: Modifier = Modifier,
+    live: Boolean = false,
+    selectedOrder: Int = -1,
+    showSelect: Boolean = false,
+    onClick: () -> Unit,
+) {
+    val ext = file?.extension?.lowercase().orEmpty()
+    val isVideo = !isDir && ext in VIDEO_EXTS
+    val isImage = !isDir && ext in IMAGE_EXTS
+    val isAudio = !isDir && ext in AUDIO_EXTS
+    val preview = rememberPreview(file, isVideo || isImage || isAudio)
+    val selected = selectedOrder >= 0
+    Column(
+        modifier.clip(RoundedCornerShape(14.dp))
+            .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else Color.Transparent)
+            .clickable(onClick = onClick).padding(6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
+            val thumb = preview?.thumb
+            when {
+                isDir -> Icon(Icons.Rounded.Folder, null, Modifier.fillMaxSize(0.7f), tint = FolderOrange)
+                thumb != null -> Image(thumb.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                else -> Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerHighest), contentAlignment = Alignment.Center) {
+                    Icon(
+                        when {
+                            live -> Icons.Rounded.MotionPhotosOn
+                            isVideo -> Icons.Rounded.Movie
+                            isImage -> Icons.Rounded.Image
+                            isAudio -> Icons.Rounded.AudioFile
+                            ext in SUBTITLE_EXTS -> Icons.Rounded.ClosedCaption
+                            else -> Icons.AutoMirrored.Rounded.InsertDriveFile
+                        },
+                        null, Modifier.fillMaxSize(0.4f), tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            if (live) Surface(Modifier.align(Alignment.TopStart).padding(4.dp), shape = RoundedCornerShape(6.dp), color = MaterialTheme.colorScheme.tertiaryContainer) {
+                Text("LIVE", Modifier.padding(horizontal = 5.dp, vertical = 1.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onTertiaryContainer)
+            }
+            if (showSelect) Box(Modifier.align(Alignment.TopEnd).padding(4.dp)) {
+                if (selected) Box(
+                    Modifier.size(24.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
+                    contentAlignment = Alignment.Center,
+                ) { Text("${selectedOrder + 1}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimary) }
+                else Icon(Icons.Rounded.RadioButtonUnchecked, null, Modifier.size(24.dp), tint = Color.White)
+            }
+        }
+        Text(name, Modifier.padding(top = 4.dp), style = MaterialTheme.typography.labelMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
 }

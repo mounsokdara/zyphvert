@@ -34,7 +34,15 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.mounsokdara.zyphvert.tools.*
 import com.mounsokdara.zyphvert.ui.components.FileRow
+import com.mounsokdara.zyphvert.ui.components.FileTile
 import com.mounsokdara.zyphvert.ui.components.SearchField
+import com.mounsokdara.zyphvert.ui.components.UpFolderRow
+import com.mounsokdara.zyphvert.util.FsFallback
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import com.mounsokdara.zyphvert.util.StorageAccess
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -61,8 +69,8 @@ private fun motionName(n: String): Boolean {
     return l.startsWith("mvimg_") || ".mp." in l || "_mp." in l || l.contains("motionphoto")
 }
 
-private fun listDir(dir: File, kind: InKind, showAll: Boolean): List<Entry> {
-    val all = dir.listFiles()?.filter { !it.name.startsWith(".") } ?: return emptyList()
+private fun listDir(dir: File, kind: InKind, showAll: Boolean, showHidden: Boolean): List<Entry> {
+    val all = FsFallback.children(dir)?.filter { showHidden || !it.name.startsWith(".") } ?: return emptyList()
     val videoBases = all.filter { it.isFile && it.extension.lowercase() in LIVE_VIDEO_EXTS }
         .associateBy { it.nameWithoutExtension.lowercase() }
     val exts = kind.exts
@@ -88,6 +96,7 @@ private fun roots(ctx: android.content.Context): List<Pair<String, File>> {
         if (f.isDirectory) list += label to f
     }
     File(base, "Zyphvert").takeIf { it.isDirectory }?.let { list += "Zyphvert" to it }
+    list += "Root (/)" to File("/")
     // SD cards and USB drives show up as extra app-files dirs; walk up to the volume root.
     ctx.getExternalFilesDirs(null).drop(1).filterNotNull().forEach { d ->
         val root = d.path.substringBefore("/Android/")
@@ -134,6 +143,9 @@ fun FilePicker(
     var sort by rememberSaveable { mutableStateOf(Sort.Newest) }
     var query by rememberSaveable { mutableStateOf("") }
     var searching by rememberSaveable { mutableStateOf(false) }
+    var showHidden by rememberSaveable { mutableStateOf(false) }
+    var grid by rememberSaveable { mutableStateOf(false) }
+    var refreshTick by remember { mutableIntStateOf(0) }
     var menu by remember { mutableStateOf(false) }
     var placesMenu by remember { mutableStateOf(false) }
     val selected = remember { mutableStateListOf<String>() }
@@ -143,10 +155,10 @@ fun FilePicker(
     val atHome = dir == HOME
     val dateFmt = remember { SimpleDateFormat("M/d/yy h:mm a", Locale.getDefault()) }
 
-    LaunchedEffect(dir, showAll, granted) {
+    LaunchedEffect(dir, showAll, showHidden, granted, refreshTick) {
         if (dir == HOME) { entries = emptyList(); loading = false; return@LaunchedEffect }
         loading = true
-        entries = withContext(Dispatchers.IO) { listDir(File(dir), kind, showAll) }
+        entries = withContext(Dispatchers.IO) { listDir(File(dir), kind, showAll, showHidden) }
         lastDir = dir
         loading = false
     }
@@ -226,17 +238,28 @@ fun FilePicker(
                         if (!atHome) Box {
                             IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, "More") }
                             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                                Sort.entries.forEach { s ->
+                                DropdownMenuItem(
+                                    text = { Text("Show hidden files") },
+                                    leadingIcon = { Icon(if (showHidden) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff, null) },
+                                    trailingIcon = { if (showHidden) Icon(Icons.Rounded.Check, null) },
+                                    onClick = { showHidden = !showHidden; menu = false },
+                                )
+                                HorizontalDivider()
+                                Text("View", Modifier.padding(horizontal = 16.dp, vertical = 6.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                                listOf(false to "List", true to "Grid").forEach { (isGrid, label) ->
                                     DropdownMenuItem(
-                                        text = { Text(s.label) }, onClick = { sort = s; menu = false },
-                                        leadingIcon = { if (sort == s) Icon(Icons.Rounded.Check, null) else Spacer(Modifier.size(24.dp)) },
+                                        text = { Text(label) },
+                                        leadingIcon = { Icon(if (isGrid) Icons.Rounded.GridView else Icons.Rounded.ViewList, null) },
+                                        trailingIcon = { if (grid == isGrid) Icon(Icons.Rounded.Check, null) },
+                                        onClick = { grid = isGrid; menu = false },
                                     )
                                 }
-                                if (kind.exts != null) {
-                                    HorizontalDivider()
+                                HorizontalDivider()
+                                Text("Sort by", Modifier.padding(horizontal = 16.dp, vertical = 6.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                                Sort.entries.forEach { s2 ->
                                     DropdownMenuItem(
-                                        text = { Text("Show all files") }, onClick = { showAll = !showAll; menu = false },
-                                        leadingIcon = { if (showAll) Icon(Icons.Rounded.Check, null) else Spacer(Modifier.size(24.dp)) },
+                                        text = { Text(s2.label) }, onClick = { sort = s2; menu = false },
+                                        trailingIcon = { if (sort == s2) Icon(Icons.Rounded.Check, null) },
                                     )
                                 }
                             }
@@ -255,6 +278,19 @@ fun FilePicker(
                             }
                         }
                     }
+                }
+
+                if (!atHome && kind.exts != null) Row(
+                    Modifier.padding(horizontal = 16.dp, vertical = 2.dp), horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    FilterChip(
+                        selected = !showAll, onClick = { showAll = false }, label = { Text(kindLabel(kind)) },
+                        leadingIcon = if (!showAll) ({ Icon(Icons.Rounded.Check, null, Modifier.size(18.dp)) }) else null,
+                    )
+                    FilterChip(
+                        selected = showAll, onClick = { showAll = true }, label = { Text("All files") },
+                        leadingIcon = if (showAll) ({ Icon(Icons.Rounded.Check, null, Modifier.size(18.dp)) }) else null,
+                    )
                 }
 
                 if (searching && !atHome) SearchField(query, { query = it }, "Search in this folder", Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
@@ -282,41 +318,43 @@ fun FilePicker(
                                 }
                             }
                         }
-                        loading && entries.isEmpty() -> CircularProgressIndicator(Modifier.align(Alignment.Center))
-                        shown.isEmpty() -> Column(Modifier.align(Alignment.Center).padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(Icons.Rounded.FolderOff, null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Spacer(Modifier.height(8.dp))
-                            Text(if (query.isNotBlank()) "No matches" else "Nothing to pick here", style = MaterialTheme.typography.titleMedium)
-                            if (!showAll && kind.exts != null && query.isBlank()) {
-                                TextButton(onClick = { showAll = true }) { Text("Show all files") }
-                            }
-                        }
-                        else -> LazyColumn(Modifier.fillMaxSize()) {
-                            item(key = "..up") {
-                                Row(
-                                    Modifier.fillMaxWidth().clickable { goUp() }.padding(horizontal = 12.dp, vertical = 6.dp).heightIn(min = 56.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Icon(Icons.Rounded.DriveFolderUpload, null, Modifier.size(52.dp), tint = FolderOrange)
-                                    Text("..", Modifier.padding(start = 12.dp), style = MaterialTheme.typography.bodyLarge)
+                        else -> PullToRefreshBox(isRefreshing = loading, onRefresh = { refreshTick++ }, modifier = Modifier.fillMaxSize()) {
+                            val onRow: (Entry) -> Unit = { e ->
+                                val order = selected.indexOf(e.file.path)
+                                when {
+                                    e.isDir -> { dir = e.file.path; query = "" }
+                                    !multiple -> finish(listOf(e.file.path))
+                                    order >= 0 -> selected.remove(e.file.path)
+                                    else -> selected.add(e.file.path)
                                 }
                             }
-                            items(shown, key = { it.file.path }) { e ->
-                                val order = selected.indexOf(e.file.path)
-                                FileRow(
-                                    name = e.file.name, file = e.file, isDir = e.isDir,
-                                    size = if (e.isDir) null else Formatter.formatFileSize(ctx, e.size),
-                                    date = dateFmt.format(Date(e.modified)),
-                                    live = e.live, selectedOrder = order, showSelect = multiple && !e.isDir,
-                                    onClick = {
-                                        when {
-                                            e.isDir -> { dir = e.file.path; query = "" }
-                                            !multiple -> finish(listOf(e.file.path))
-                                            order >= 0 -> selected.remove(e.file.path)
-                                            else -> selected.add(e.file.path)
-                                        }
-                                    },
-                                )
+                            val emptyHint: @Composable () -> Unit = {
+                                if (shown.isEmpty() && !loading) Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(if (query.isNotBlank()) "No matches" else "Nothing to pick here", style = MaterialTheme.typography.titleMedium)
+                                    if (!showAll && kind.exts != null && query.isBlank()) TextButton(onClick = { showAll = true }) { Text("Show all files") }
+                                }
+                            }
+                            if (grid) LazyVerticalGrid(GridCells.Adaptive(110.dp), Modifier.fillMaxSize(), contentPadding = PaddingValues(8.dp)) {
+                                item(key = "..up", span = { GridItemSpan(maxLineSpan) }) { UpFolderRow(Modifier.animateItem()) { goUp() } }
+                                item(key = "..hint", span = { GridItemSpan(maxLineSpan) }) { emptyHint() }
+                                gridItems(shown, key = { it.file.path }) { e ->
+                                    FileTile(
+                                        e.file.name, e.file, e.isDir, Modifier.animateItem(), live = e.live,
+                                        selectedOrder = selected.indexOf(e.file.path), showSelect = multiple && !e.isDir,
+                                    ) { onRow(e) }
+                                }
+                            } else LazyColumn(Modifier.fillMaxSize()) {
+                                item(key = "..up") { UpFolderRow(Modifier.animateItem()) { goUp() } }
+                                item(key = "..hint") { emptyHint() }
+                                items(shown, key = { it.file.path }) { e ->
+                                    FileRow(
+                                        name = e.file.name, file = e.file, isDir = e.isDir,
+                                        size = if (e.isDir) null else Formatter.formatFileSize(ctx, e.size),
+                                        date = dateFmt.format(Date(e.modified)),
+                                        live = e.live, selectedOrder = selected.indexOf(e.file.path), showSelect = multiple && !e.isDir,
+                                        modifier = Modifier.animateItem(), onClick = { onRow(e) },
+                                    )
+                                }
                             }
                         }
                     }
@@ -336,4 +374,13 @@ fun FilePicker(
             }
         }
     }
+}
+
+private fun kindLabel(kind: InKind) = when (kind) {
+    InKind.Video -> "Video"
+    InKind.Audio -> "Audio"
+    InKind.Media -> "Video & audio"
+    InKind.Image -> "Images"
+    InKind.Visual -> "Video & images"
+    InKind.Any -> "All files"
 }

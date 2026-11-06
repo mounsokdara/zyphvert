@@ -129,7 +129,7 @@ internal val videoTable = listOf(
     VFmt("wmv", "WMV", "Windows Media Video", "wmv", VFmt.Kind.Wmv),
     VFmt("mpg_mpeg2", "MPG · MPEG-2", "DVD-style video", "mpg", VFmt.Kind.Mpeg2),
     VFmt("motion_photo", "Motion Photo (JPG with video)", "One file for Google Photos and Android galleries", "jpg", VFmt.Kind.MotionPhoto),
-    VFmt("live_pair", "Live Photo (JPG + MOV)", "A still and a 3 s clip with the same name", "mov", VFmt.Kind.LivePair),
+    VFmt("live_pair", "Live Photo (JPG + MOV)", "A still and a clip with the same name", "mov", VFmt.Kind.LivePair),
     VFmt("gif", "GIF animation", null, "gif", VFmt.Kind.Gif),
     VFmt("webp", "Animated WebP", null, "webp", VFmt.Kind.Webp),
     VFmt("apng", "Animated PNG", null, "png", VFmt.Kind.Apng),
@@ -227,3 +227,11 @@ internal fun keepArgs(t: Trim?): String =
     if (t != null && !t.remove) "-ss ${num(t.start)} -to ${num(t.end)} " else ""
 
 internal fun fileExt(f: File) = f.extension
+
+/** How long the video inside a Live or Motion Photo is. 0 = the whole video. */
+internal val liveLengthItems = listOf(
+    Item("3", "3 seconds", "Like a phone camera"),
+    Item("5", "5 seconds"), Item("10", "10 seconds"), Item("15", "15 seconds"), Item("30", "30 seconds"),
+    Item("60", "1 minute"), Item("120", "2 minutes"), Item("300", "5 minutes"), Item("600", "10 minutes"),
+    Item("0", "Whole video", "No limit. Use the start and end sliders to pick the part."),
+)

@@ -6,6 +6,8 @@ import android.Manifest
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -108,7 +110,7 @@ fun ToolScreen(tool: Tool, seedPath: String?, onBack: () -> Unit, onQueued: () -
                 val advanced = visible.filter { it.advanced }
                 basic.forEach { OptionRow(it, vm, spec) }
                 if (advanced.isNotEmpty()) {
-                    Surface(shape = CardShape, color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
+                    Surface(shape = CardShape, color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth().animateContentSize()) {
                         Column {
                             Row(
                                 Modifier.fillMaxWidth().clickable { advancedOpen = !advancedOpen }.padding(horizontal = 20.dp, vertical = 16.dp),
@@ -118,8 +120,10 @@ fun ToolScreen(tool: Tool, seedPath: String?, onBack: () -> Unit, onQueued: () -
                                 Text("Advanced options", Modifier.weight(1f).padding(start = 16.dp), style = MaterialTheme.typography.titleMedium)
                                 Icon(if (advancedOpen) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, null)
                             }
-                            if (advancedOpen) Column(Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                advanced.forEach { OptionRow(it, vm, spec) }
+                            AnimatedVisibility(advancedOpen) {
+                                Column(Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    advanced.forEach { OptionRow(it, vm, spec) }
+                                }
                             }
                         }
                     }
@@ -347,12 +351,12 @@ private fun ValueTile(label: String, value: String, onClick: () -> Unit) {
 private fun PickerSheet(title: String, items: List<Item>, selected: String, onDismiss: () -> Unit, onPick: (String) -> Unit) {
     val idx = items.indexOfFirst { it.key == selected }.coerceAtLeast(0)
     val list = rememberLazyListState(initialFirstVisibleItemIndex = (idx - 2).coerceAtLeast(0))
-    AppSheet(onDismiss) {
+    AppSheet(onDismiss) { close ->
         Text(title, Modifier.padding(horizontal = 24.dp, vertical = 8.dp), style = MaterialTheme.typography.titleLarge)
         LazyColumn(state = list, modifier = Modifier.weight(1f, fill = false).navigationBarsPadding()) {
             itemsIndexed(items, key = { _, it -> it.key }) { _, it ->
                 Row(
-                    Modifier.fillMaxWidth().clickable { onPick(it.key); onDismiss() }.padding(horizontal = 16.dp, vertical = 12.dp),
+                    Modifier.fillMaxWidth().clickable { onPick(it.key); close() }.padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     RadioButton(selected = it.key == selected, onClick = null)
@@ -441,7 +445,7 @@ private fun TagsRow(opt: Opt.Tags, vm: ToolViewModel) {
     ValueTile(opt.label, summary.ifEmpty { "Edit file details such as title, artist and album" }) { open = true }
     if (open) {
         var genreOpen by remember { mutableStateOf(false) }
-        AppSheet({ open = false }) {
+        AppSheet({ open = false }) { close ->
             Column(
                 Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).navigationBarsPadding().imePadding(),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -470,7 +474,7 @@ private fun TagsRow(opt: Opt.Tags, vm: ToolViewModel) {
                         )
                     }
                 }
-                Button(onClick = { open = false }, Modifier.fillMaxWidth().height(52.dp), shape = CircleShape) { Text("Done") }
+                Button(onClick = close, Modifier.fillMaxWidth().height(52.dp), shape = CircleShape) { Text("Done") }
                 Spacer(Modifier.height(16.dp))
             }
         }

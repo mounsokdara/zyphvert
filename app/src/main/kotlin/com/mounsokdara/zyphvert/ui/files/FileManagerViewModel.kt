@@ -11,6 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.mounsokdara.zyphvert.util.FsFallback
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -46,8 +47,6 @@ data class FileEntry(
     }
 }
 
-data class QuickPlace(val label: String, val path: String)
-
 @HiltViewModel
 class FileManagerViewModel @Inject constructor() : ViewModel() {
     var currentPath by mutableStateOf(defaultRoot())
@@ -76,20 +75,6 @@ class FileManagerViewModel @Inject constructor() : ViewModel() {
             return list
         }
 
-    val quickPlaces: List<QuickPlace>
-        get() {
-            val places = mutableListOf<QuickPlace>()
-            val storage = Environment.getExternalStorageDirectory()
-            places += QuickPlace("Internal storage", storage.absolutePath)
-            places += QuickPlace("Downloads", File(storage, Environment.DIRECTORY_DOWNLOADS).absolutePath)
-            places += QuickPlace("DCIM", File(storage, Environment.DIRECTORY_DCIM).absolutePath)
-            places += QuickPlace("Movies", File(storage, Environment.DIRECTORY_MOVIES).absolutePath)
-            places += QuickPlace("Music", File(storage, Environment.DIRECTORY_MUSIC).absolutePath)
-            places += QuickPlace("Documents", File(storage, Environment.DIRECTORY_DOCUMENTS).absolutePath)
-            places += QuickPlace("Pictures", File(storage, Environment.DIRECTORY_PICTURES).absolutePath)
-            return places.filter { File(it.path).exists() }
-        }
-
     private var loadJob: Job? = null
 
     init {
@@ -101,6 +86,8 @@ class FileManagerViewModel @Inject constructor() : ViewModel() {
         selected = null
         reload()
     }
+
+    val canGoUp: Boolean get() = currentPath != "/"
 
     fun goUp() {
         val parent = File(currentPath).parentFile ?: return
@@ -147,8 +134,8 @@ class FileManagerViewModel @Inject constructor() : ViewModel() {
         val dir = File(path)
         if (!dir.exists()) return ListResult(emptyList(), "Path does not exist")
         if (!dir.isDirectory) return ListResult(emptyList(), "Not a directory")
-        if (!dir.canRead()) return ListResult(emptyList(), "Permission denied — grant All files access in Settings")
-        val files = dir.listFiles() ?: return ListResult(emptyList(), "Cannot list this folder")
+        val files = FsFallback.children(dir)
+            ?: return ListResult(emptyList(), if (!dir.canRead()) "Permission denied. Grant All files access in Settings." else "Cannot list this folder")
         val mapped = files.map { f ->
             FileEntry(
                 file = f,

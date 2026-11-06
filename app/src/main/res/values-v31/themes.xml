@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12+: animated splash with the app icon on the brand colour. -->
+    <style name="Theme.Zyphvert" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowAnimationStyle">@style/Zyphvert.WindowAnimation</item>
+        <item name="android:windowSplashScreenBackground">#FF004D36</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="android:windowSplashScreenAnimationDuration">400</item>
+    </style>
+</resources>
