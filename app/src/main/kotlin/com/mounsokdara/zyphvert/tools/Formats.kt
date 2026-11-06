@@ -228,10 +228,10 @@ internal fun keepArgs(t: Trim?): String =
 
 internal fun fileExt(f: File) = f.extension
 
-/** How long the video inside a Live or Motion Photo is. 0 = the whole video. */
+/** How long the video inside a Live or Motion Photo is. 0 = Auto: as long as the video. */
 internal val liveLengthItems = listOf(
-    // First item is the default: keep the whole clip, so a long video stays a long Live or Motion Photo.
-    Item("0", "Whole video", "No limit. Use the start and end sliders to pick the part."),
+    // First item is the default. Auto sets no limit, so the length follows the video itself (or the start/end range).
+    Item("0", "Auto", "Matches the video length, or the part you pick with the start and end sliders"),
     Item("3", "3 seconds", "Like a phone camera"),
     Item("5", "5 seconds"), Item("10", "10 seconds"), Item("15", "15 seconds"), Item("30", "30 seconds"),
     Item("60", "1 minute"), Item("120", "2 minutes"), Item("300", "5 minutes"), Item("600", "10 minutes"),

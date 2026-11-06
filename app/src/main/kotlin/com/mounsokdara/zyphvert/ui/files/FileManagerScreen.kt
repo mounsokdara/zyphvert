@@ -328,7 +328,8 @@ private fun EntryActions(
 
 @Composable
 private fun PropertiesDialog(vm: FileManagerViewModel, e: FileEntry, onDismiss: () -> Unit) {
-    val stats by produceState<FileStats?>(null, e) { value = vm.stats(e.file) }
+    var stats by remember(e) { mutableStateOf<FileStats?>(null) }
+    LaunchedEffect(e) { stats = vm.stats(e.file) }
     var sums by remember(e) { mutableStateOf<Map<String, String>>(emptyMap()) }
     var busy by remember(e) { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
