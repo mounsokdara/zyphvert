@@ -26,8 +26,12 @@ import kotlinx.coroutines.launch
 fun AppSheet(onDismiss: () -> Unit, content: @Composable ColumnScope.(close: () -> Unit) -> Unit) {
     val state = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
+    // Always remove the sheet once the hide animation ends, even if it was interrupted, so a button
+    // like "Done" can never leave the sheet stuck on screen.
     val close: () -> Unit = {
-        scope.launch { state.hide() }.invokeOnCompletion { if (!state.isVisible) onDismiss() }
+        scope.launch {
+            try { state.hide() } finally { onDismiss() }
+        }
     }
     ModalBottomSheet(
         onDismissRequest = onDismiss,

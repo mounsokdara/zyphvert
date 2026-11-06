@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -156,6 +157,7 @@ fun TerminalScreen(vm: TerminalViewModel, onBack: () -> Unit) {
             Box {
                 IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, "More", tint = Fg) }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(text = { Text("Pick a file") }, leadingIcon = { Icon(Icons.Rounded.AttachFile, null) }, onClick = { menu = false; picker = true })
                     DropdownMenuItem(text = { Text("Saved commands") }, leadingIcon = { Icon(Icons.Rounded.Bookmarks, null) }, onClick = { menu = false; sheet = "saved" })
                     DropdownMenuItem(text = { Text("Examples") }, leadingIcon = { Icon(Icons.Rounded.Lightbulb, null) }, onClick = { menu = false; sheet = "examples" })
                     DropdownMenuItem(text = { Text("Copy output") }, leadingIcon = { Icon(Icons.Rounded.ContentCopy, null) }, onClick = { menu = false; clipboard.setText(AnnotatedString(vm.outputText())) })
@@ -169,6 +171,7 @@ fun TerminalScreen(vm: TerminalViewModel, onBack: () -> Unit) {
             Modifier.weight(1f).fillMaxWidth()
                 .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { runCatching { focus.requestFocus() } },
         ) {
+            SelectionContainer {
             LazyColumn(state = listState, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp), modifier = Modifier.fillMaxSize()) {
                 if (!vm.engineReady) item(key = "warn") {
                     Text("FFmpeg isn't part of this build, so only built-in commands work.", style = TermText.copy(color = Yellow))
@@ -205,15 +208,16 @@ fun TerminalScreen(vm: TerminalViewModel, onBack: () -> Unit) {
                     Text("running…  press ^C to stop", style = TermText.copy(color = Dim))
                 }
             }
+            }
         }
 
         // ---- key bar
         Row(Modifier.fillMaxWidth().background(TabBg).horizontalScroll(rememberScrollState()).padding(horizontal = 6.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            KeyButton("File") { picker = true }
             KeyButton("Tab") { vm.complete() }
             KeyButton("↑") { vm.historyStep(-1) }
             KeyButton("↓") { vm.historyStep(1) }
             KeyButton("^C", tint = if (s.running) Red else Fg) { vm.interrupt() }
-            KeyButton("File") { picker = true }
             KeyButton("-") { type("-") }
             KeyButton("/") { type("/") }
             KeyButton("\"") { type("\"") }

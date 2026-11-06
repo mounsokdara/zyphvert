@@ -57,6 +57,9 @@ class FileManagerViewModel @Inject constructor() : ViewModel() {
         private set
     var error by mutableStateOf<String?>(null)
         private set
+    /** True only for a pull-down refresh, so opening a folder never shows the pull indicator. */
+    var refreshing by mutableStateOf(false)
+        private set
     var query by mutableStateOf("")
     var sort by mutableStateOf(SortMode.NameAsc)
     var viewMode by mutableStateOf(ViewMode.List)
@@ -108,6 +111,18 @@ class FileManagerViewModel @Inject constructor() : ViewModel() {
             entries = result.entries
             error = result.error
             loading = false
+        }
+    }
+
+    fun pullRefresh() {
+        if (refreshing) return
+        refreshing = true
+        reload()
+        viewModelScope.launch {
+            // Listing a folder takes a few ms; hold the indicator long enough to finish its animation.
+            kotlinx.coroutines.delay(600)
+            loadJob?.join()
+            refreshing = false
         }
     }
 

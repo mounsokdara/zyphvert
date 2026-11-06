@@ -36,7 +36,10 @@ import androidx.lifecycle.LifecycleEventObserver
 import com.mounsokdara.zyphvert.tools.*
 import com.mounsokdara.zyphvert.ui.components.FileRow
 import com.mounsokdara.zyphvert.ui.components.FileTile
-import com.mounsokdara.zyphvert.ui.components.SearchField
+import com.mounsokdara.zyphvert.ui.components.SearchAppBar
+import com.mounsokdara.zyphvert.ui.components.SearchFilters
+import com.mounsokdara.zyphvert.ui.components.SearchKind
+import com.mounsokdara.zyphvert.ui.components.passesSearchFilters
 import com.mounsokdara.zyphvert.ui.components.UpFolderRow
 import com.mounsokdara.zyphvert.util.FsFallback
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -85,7 +88,7 @@ private fun listDir(dir: File, kind: InKind, showAll: Boolean, showHidden: Boole
     }
 }
 
-private fun roots(ctx: android.content.Context): List<Pair<String, File>> {
+internal fun roots(ctx: android.content.Context): List<Pair<String, File>> {
     val base = Environment.getExternalStorageDirectory()
     val list = mutableListOf("Internal storage" to base)
     for ((label, dir) in listOf(
@@ -149,6 +152,8 @@ fun FilePicker(
     var refreshTick by remember { mutableIntStateOf(0) }
     var menu by remember { mutableStateOf(false) }
     var placesMenu by remember { mutableStateOf(false) }
+    var showFolders by rememberSaveable { mutableStateOf(true) }
+    var kinds by remember { mutableStateOf(emptySet<SearchKind>()) }
     val selected = remember { mutableStateListOf<String>() }
     var entries by remember { mutableStateOf<List<Entry>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
@@ -171,9 +176,10 @@ fun FilePicker(
     }
     BackHandler(enabled = canUp) { goUp() }
 
-    val shown = remember(entries, query, sort) {
+    val shown = remember(entries, query, sort, searching, showFolders, kinds) {
         val q = query.trim()
-        val filtered = if (q.isEmpty()) entries else entries.filter { it.file.name.contains(q, ignoreCase = true) }
+        val byName = if (q.isEmpty()) entries else entries.filter { it.file.name.contains(q, ignoreCase = true) }
+        val filtered = if (!searching) byName else byName.filter { passesSearchFilters(it.isDir, it.file.extension, showFolders, kinds) }
         val cmp: Comparator<Entry> = when (sort) {
             Sort.Newest -> compareByDescending { it.modified }
             Sort.Name -> compareBy { it.file.name.lowercase() }
@@ -195,10 +201,41 @@ fun FilePicker(
         else -> File(dir).name.ifEmpty { "/" }
     }
 
+    val pickerMenu: @Composable ColumnScope.(() -> Unit) -> Unit = { dismiss ->
+                                DropdownMenuItem(
+                                    text = { Text("Show hidden files") },
+                                    leadingIcon = { Icon(if (showHidden) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff, null) },
+                                    trailingIcon = { if (showHidden) Icon(Icons.Rounded.Check, null) },
+                                    onClick = { showHidden = !showHidden; dismiss() },
+                                )
+                                HorizontalDivider()
+                                Text("View", Modifier.padding(horizontal = 16.dp, vertical = 6.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                                listOf(false to "List", true to "Grid").forEach { (isGrid, label) ->
+                                    DropdownMenuItem(
+                                        text = { Text(label) },
+                                        leadingIcon = { Icon(if (isGrid) Icons.Rounded.GridView else Icons.Rounded.ViewList, null) },
+                                        trailingIcon = { if (grid == isGrid) Icon(Icons.Rounded.Check, null) },
+                                        onClick = { grid = isGrid; dismiss() },
+                                    )
+                                }
+                                HorizontalDivider()
+                                Text("Sort by", Modifier.padding(horizontal = 16.dp, vertical = 6.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                                Sort.entries.forEach { s2 ->
+                                    DropdownMenuItem(
+                                        text = { Text(s2.label) }, onClick = { sort = s2; dismiss() },
+                                        trailingIcon = { if (sort == s2) Icon(Icons.Rounded.Check, null) },
+                                    )
+                                }
+                                }
+
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
             Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
-                TopAppBar(
+                if (searching && !atHome) SearchAppBar(
+                    query = query, onQueryChange = { query = it },
+                    onClose = { searching = false; query = ""; showFolders = true; kinds = emptySet() },
+                    grid = grid, onToggleGrid = { grid = !grid }, menuContent = pickerMenu,
+                ) else TopAppBar(
                     title = {
                         Box {
                             Column(Modifier.clip(RoundedCornerShape(8.dp)).clickable { placesMenu = true }.padding(vertical = 2.dp, horizontal = 4.dp)) {
@@ -239,30 +276,7 @@ fun FilePicker(
                         if (!atHome) Box {
                             IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, "More") }
                             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                                DropdownMenuItem(
-                                    text = { Text("Show hidden files") },
-                                    leadingIcon = { Icon(if (showHidden) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff, null) },
-                                    trailingIcon = { if (showHidden) Icon(Icons.Rounded.Check, null) },
-                                    onClick = { showHidden = !showHidden; menu = false },
-                                )
-                                HorizontalDivider()
-                                Text("View", Modifier.padding(horizontal = 16.dp, vertical = 6.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                                listOf(false to "List", true to "Grid").forEach { (isGrid, label) ->
-                                    DropdownMenuItem(
-                                        text = { Text(label) },
-                                        leadingIcon = { Icon(if (isGrid) Icons.Rounded.GridView else Icons.Rounded.ViewList, null) },
-                                        trailingIcon = { if (grid == isGrid) Icon(Icons.Rounded.Check, null) },
-                                        onClick = { grid = isGrid; menu = false },
-                                    )
-                                }
-                                HorizontalDivider()
-                                Text("Sort by", Modifier.padding(horizontal = 16.dp, vertical = 6.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                                Sort.entries.forEach { s2 ->
-                                    DropdownMenuItem(
-                                        text = { Text(s2.label) }, onClick = { sort = s2; menu = false },
-                                        trailingIcon = { if (sort == s2) Icon(Icons.Rounded.Check, null) },
-                                    )
-                                }
+                                pickerMenu { menu = false }
                             }
                         }
                     },
@@ -294,7 +308,7 @@ fun FilePicker(
                     )
                 }
 
-                if (searching && !atHome) SearchField(query, { query = it }, "Search in this folder", Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
+                if (searching && !atHome) SearchFilters(showFolders, { showFolders = it }, kinds, { kinds = it })
 
                 Box(Modifier.weight(1f).fillMaxWidth()) {
                     when {

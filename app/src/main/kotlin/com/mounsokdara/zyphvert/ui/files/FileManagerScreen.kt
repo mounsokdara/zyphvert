@@ -20,6 +20,7 @@ import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -32,9 +33,13 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.mounsokdara.zyphvert.ui.components.AppSheet
 import com.mounsokdara.zyphvert.ui.components.FileRow
 import com.mounsokdara.zyphvert.ui.components.FileTile
-import com.mounsokdara.zyphvert.ui.components.SearchField
+import com.mounsokdara.zyphvert.ui.components.SearchAppBar
+import com.mounsokdara.zyphvert.ui.components.SearchFilters
+import com.mounsokdara.zyphvert.ui.components.SearchKind
+import com.mounsokdara.zyphvert.ui.components.passesSearchFilters
 import com.mounsokdara.zyphvert.ui.components.UpFolderRow
 import com.mounsokdara.zyphvert.ui.home.allTools
+import com.mounsokdara.zyphvert.ui.picker.roots
 import com.mounsokdara.zyphvert.util.StorageAccess
 
 @Composable
@@ -45,23 +50,21 @@ fun FileManagerScreen(
     vm: FileManagerViewModel = hiltViewModel(),
 ) {
     val ctx = LocalContext.current
-    val list = vm.filtered()
     var menu by remember { mutableStateOf(false) }
+    var places by remember { mutableStateOf(false) }
+    var searching by rememberSaveable { mutableStateOf(false) }
+    var showFolders by rememberSaveable { mutableStateOf(true) }
+    var kinds by remember { mutableStateOf(emptySet<SearchKind>()) }
+    fun closeSearch() { searching = false; vm.query = ""; showFolders = true; kinds = emptySet() }
+    val rootList = remember { roots(ctx) }
+    val list = vm.filtered().filter { !searching || passesSearchFilters(it.isDirectory, it.extension, showFolders, kinds) }
 
-    // Back goes up one folder; at the top of the tree it falls through to the app.
-    BackHandler(enabled = vm.canGoUp) { vm.goUp() }
-
-    Column(Modifier.fillMaxSize().statusBarsPadding().padding(bottom = bottomPadding)) {
-        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Files", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
-            Box {
-                IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, contentDescription = "More options") }
-                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+    val managerMenu: @Composable ColumnScope.(() -> Unit) -> Unit = { dismiss ->
                     DropdownMenuItem(
                         text = { Text("Show hidden files") },
                         leadingIcon = { Icon(if (vm.showHidden) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff, null) },
                         trailingIcon = { if (vm.showHidden) Icon(Icons.Rounded.Check, null) },
-                        onClick = { vm.showHidden = !vm.showHidden; menu = false },
+                        onClick = { vm.showHidden = !vm.showHidden; dismiss() },
                     )
                     HorizontalDivider()
                     MenuLabel("View")
@@ -70,7 +73,7 @@ fun FileManagerScreen(
                             text = { Text(if (mode == ViewMode.List) "List" else "Grid") },
                             leadingIcon = { Icon(if (mode == ViewMode.List) Icons.Rounded.ViewList else Icons.Rounded.GridView, null) },
                             trailingIcon = { if (vm.viewMode == mode) Icon(Icons.Rounded.Check, null) },
-                            onClick = { vm.viewMode = mode; menu = false },
+                            onClick = { vm.viewMode = mode; dismiss() },
                         )
                     }
                     HorizontalDivider()
@@ -89,9 +92,48 @@ fun FileManagerScreen(
                                 )
                             },
                             trailingIcon = { if (vm.sort == mode) Icon(Icons.Rounded.Check, null) },
-                            onClick = { vm.sort = mode; menu = false },
+                            onClick = { vm.sort = mode; dismiss() },
                         )
                     }
+                    }
+
+    // Back goes up one folder; at the top of the tree it falls through to the app.
+    BackHandler(enabled = vm.canGoUp) { vm.goUp() }
+    BackHandler(enabled = searching) { closeSearch() }
+
+    Column(Modifier.fillMaxSize().statusBarsPadding().padding(bottom = bottomPadding)) {
+        if (searching) {
+            SearchAppBar(
+                query = vm.query, onQueryChange = { vm.query = it }, onClose = { closeSearch() },
+                grid = vm.viewMode == ViewMode.Grid,
+                onToggleGrid = { vm.viewMode = if (vm.viewMode == ViewMode.Grid) ViewMode.List else ViewMode.Grid },
+                menuContent = managerMenu,
+            )
+            SearchFilters(showFolders, { showFolders = it }, kinds, { kinds = it })
+        } else         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f)) {
+                Row(
+                    Modifier.clip(RoundedCornerShape(8.dp)).clickable { places = true }.padding(horizontal = 4.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Files", style = MaterialTheme.typography.headlineSmall)
+                    Icon(Icons.Rounded.ArrowDropDown, "Choose a location")
+                }
+                DropdownMenu(expanded = places, onDismissRequest = { places = false }) {
+                    rootList.forEach { (label, f) ->
+                        DropdownMenuItem(
+                            text = { Text(label) },
+                            leadingIcon = { Icon(if (label == "Internal storage" || label == "SD card") Icons.Rounded.Storage else Icons.Rounded.Folder, null) },
+                            onClick = { vm.navigateTo(f.path); places = false },
+                        )
+                    }
+                }
+            }
+            IconButton(onClick = { searching = true }) { Icon(Icons.Rounded.Search, contentDescription = "Search") }
+            Box {
+                IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, contentDescription = "More options") }
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    managerMenu { menu = false }
                 }
             }
         }
@@ -122,10 +164,8 @@ fun FileManagerScreen(
             }
         }
 
-        SearchField(vm.query, { vm.query = it }, "Search this folder", Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
-
         // Pull down to refresh; there is no refresh button.
-        PullToRefreshBox(isRefreshing = vm.loading, onRefresh = vm::reload, modifier = Modifier.weight(1f).fillMaxWidth()) {
+        PullToRefreshBox(isRefreshing = vm.refreshing, onRefresh = vm::pullRefresh, modifier = Modifier.weight(1f).fillMaxWidth()) {
             val hint: @Composable () -> Unit = {
                 when {
                     vm.error != null -> Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -147,7 +187,7 @@ fun FileManagerScreen(
                     if (vm.canGoUp) item(key = "..up", span = { GridItemSpan(maxLineSpan) }) { UpFolderRow(Modifier.animateItem()) { vm.goUp() } }
                     item(key = "..hint", span = { GridItemSpan(maxLineSpan) }) { hint() }
                     items(list, key = { it.file.absolutePath }) { e ->
-                        FileTile(e.name, e.file, e.isDirectory, Modifier.animateItem()) { vm.open(e) }
+                        FileTile(e.name, e.file, e.isDirectory, Modifier.animateItem(), onLongClick = { vm.selected = e }) { vm.open(e) }
                     }
                 }
             } else {
@@ -158,7 +198,7 @@ fun FileManagerScreen(
                         FileRow(
                             name = e.name, file = e.file, isDir = e.isDirectory,
                             size = if (e.isDirectory) null else e.sizeLabel, date = e.dateLabel,
-                            modifier = Modifier.animateItem(), onClick = { vm.open(e) },
+                            modifier = Modifier.animateItem(), onLongClick = { vm.selected = e }, onClick = { vm.open(e) },
                         )
                     }
                 }
@@ -167,6 +207,17 @@ fun FileManagerScreen(
     }
 
     val selected = vm.selected
+    if (selected != null && selected.isDirectory) {
+        AppSheet({ vm.selected = null }) { close ->
+            Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp)) {
+                Text(selected.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(selected.dateLabel, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(16.dp))
+                ActionRow(Icons.Rounded.Folder, "Open folder") { vm.open(selected); close() }
+                Spacer(Modifier.height(24.dp))
+            }
+        }
+    }
     if (selected != null && !selected.isDirectory) {
         AppSheet({ vm.selected = null }) { close ->
             Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp)) {

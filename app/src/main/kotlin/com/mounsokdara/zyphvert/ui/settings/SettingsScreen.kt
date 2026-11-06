@@ -97,7 +97,6 @@ fun SettingsScreen(vm: SettingsViewModel, onBack: () -> Unit) {
 
             SectionLabel("Data")
             InfoTile(Icons.Rounded.Delete, "Clear saved commands", "Remove saved FFmpeg terminal commands", onClick = { clearDialog = true })
-            InfoTile(Icons.Rounded.Apps, "Privacy", "Zyphvert is fully offline. It requests no internet permission.")
         }
     }
 

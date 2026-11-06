@@ -445,6 +445,7 @@ private fun TagsRow(opt: Opt.Tags, vm: ToolViewModel) {
     ValueTile(opt.label, summary.ifEmpty { "Edit file details such as title, artist and album" }) { open = true }
     if (open) {
         var genreOpen by remember { mutableStateOf(false) }
+        val focus = androidx.compose.ui.platform.LocalFocusManager.current
         AppSheet({ open = false }) { close ->
             Column(
                 Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).navigationBarsPadding().imePadding(),
@@ -474,7 +475,7 @@ private fun TagsRow(opt: Opt.Tags, vm: ToolViewModel) {
                         )
                     }
                 }
-                Button(onClick = close, Modifier.fillMaxWidth().height(52.dp), shape = CircleShape) { Text("Done") }
+                Button(onClick = { focus.clearFocus(); close() }, Modifier.fillMaxWidth().height(52.dp), shape = CircleShape) { Text("Done") }
                 Spacer(Modifier.height(16.dp))
             }
         }

@@ -6,7 +6,11 @@ import android.media.MediaMetadataRetriever
 import android.util.LruCache
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -148,6 +152,7 @@ private val FolderOrange = Color(0xFFFFA726)
  * One file or folder, laid out like ZArchiver: a picture on the left, the name, then the size and length
  * with the date on the right. Videos and photos show a real thumbnail.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun FileRow(
     name: String,
@@ -159,8 +164,10 @@ fun FileRow(
     live: Boolean = false,
     selectedOrder: Int = -1,
     showSelect: Boolean = false,
+    onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit,
 ) {
+    val haptic = LocalHapticFeedback.current
     val ext = file?.extension?.lowercase().orEmpty()
     val isVideo = !isDir && ext in VIDEO_EXTS
     val isImage = !isDir && ext in IMAGE_EXTS
@@ -173,7 +180,10 @@ fun FileRow(
         modifier
             .fillMaxWidth()
             .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else Color.Transparent)
-            .clickable(onClick = onClick)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick?.let { cb -> { haptic.performHapticFeedback(HapticFeedbackType.LongPress); cb() } },
+            )
             .padding(horizontal = 12.dp, vertical = 6.dp)
             .heightIn(min = 56.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -245,6 +255,7 @@ fun UpFolderRow(modifier: Modifier = Modifier, onClick: () -> Unit) {
 }
 
 /** Grid version of [FileRow]: a square thumbnail with the name under it. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun FileTile(
     name: String,
@@ -254,8 +265,10 @@ fun FileTile(
     live: Boolean = false,
     selectedOrder: Int = -1,
     showSelect: Boolean = false,
+    onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit,
 ) {
+    val haptic = LocalHapticFeedback.current
     val ext = file?.extension?.lowercase().orEmpty()
     val isVideo = !isDir && ext in VIDEO_EXTS
     val isImage = !isDir && ext in IMAGE_EXTS
@@ -265,7 +278,10 @@ fun FileTile(
     Column(
         modifier.clip(RoundedCornerShape(14.dp))
             .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else Color.Transparent)
-            .clickable(onClick = onClick).padding(6.dp),
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick?.let { cb -> { haptic.performHapticFeedback(HapticFeedbackType.LongPress); cb() } },
+            ).padding(6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
