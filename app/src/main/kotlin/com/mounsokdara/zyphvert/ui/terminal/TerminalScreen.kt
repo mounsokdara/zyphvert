@@ -97,9 +97,9 @@ private fun highlight(text: String): AnnotatedString = buildAnnotatedString {
     }
 }
 
-/** "PS /storage/emulated/0/DCIM> " becomes "PS ~/DCIM", on a line of its own. */
+/** "PS /storage/emulated/0/DCIM> " becomes "PS /storage/emulated/0/DCIM" on a line of its own: always the full path. */
 private fun promptLine(prompt: String): AnnotatedString = buildAnnotatedString {
-    val path = prompt.removePrefix("PS ").removeSuffix("> ").replaceFirst("/storage/emulated/0", "~")
+    val path = prompt.removePrefix("PS ").removeSuffix("> ")
     withStyle(SpanStyle(color = Dim)) { append("PS ") }
     withStyle(SpanStyle(color = Blue)) { append(path) }
 }
