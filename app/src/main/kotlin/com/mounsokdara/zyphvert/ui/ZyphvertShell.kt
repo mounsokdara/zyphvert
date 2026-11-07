@@ -42,6 +42,8 @@ import com.mounsokdara.zyphvert.ui.home.HomeScreen
 import com.mounsokdara.zyphvert.ui.home.allTools
 import com.mounsokdara.zyphvert.ui.more.AboutScreen
 import com.mounsokdara.zyphvert.ui.more.LicensesScreen
+import com.mounsokdara.zyphvert.ui.more.ChangelogScreen
+import com.mounsokdara.zyphvert.ui.more.ConsoleScreen
 import com.mounsokdara.zyphvert.ui.more.MoreRoute
 import com.mounsokdara.zyphvert.ui.more.MoreScreen
 import com.mounsokdara.zyphvert.ui.screens.QueueScreen
@@ -75,7 +77,7 @@ fun ZyphvertShell(settingsVm: SettingsViewModel, hapticsEnabled: Boolean) {
         pendingFilePath = null
     }
     BackHandler(enabled = mediaInfoPath == null && openToolId == null && sub != null) {
-        sub = if (sub == MoreRoute.Licenses) MoreRoute.About else null
+        sub = if (sub == MoreRoute.Licenses || sub == MoreRoute.Changelog || sub == MoreRoute.Console) MoreRoute.About else null
     }
 
     val inSub = (current == Destination.More && sub != null) || openToolId != null || mediaInfoPath != null
@@ -168,8 +170,13 @@ fun ZyphvertShell(settingsVm: SettingsViewModel, hapticsEnabled: Boolean) {
                     is Screen.MoreSub -> when (sc.route) {
                         MoreRoute.Settings -> SettingsScreen(settingsVm, onBack = { sub = null })
                         MoreRoute.Terminal -> TerminalScreen(hiltViewModel(), onBack = { sub = null })
-                        MoreRoute.About -> AboutScreen(onBack = { sub = null }, onLicenses = { sub = MoreRoute.Licenses })
+                        MoreRoute.About -> AboutScreen(
+                            settingsVm, onBack = { sub = null }, onLicenses = { sub = MoreRoute.Licenses },
+                            onChangelog = { sub = MoreRoute.Changelog }, onConsole = { sub = MoreRoute.Console },
+                        )
                         MoreRoute.Licenses -> LicensesScreen(onBack = { sub = MoreRoute.About })
+                        MoreRoute.Changelog -> ChangelogScreen(onBack = { sub = MoreRoute.About })
+                        MoreRoute.Console -> ConsoleScreen(onBack = { sub = MoreRoute.About })
                     }
                     is Screen.Tab -> when (sc.dest) {
                         Destination.Tools -> HomeScreen(

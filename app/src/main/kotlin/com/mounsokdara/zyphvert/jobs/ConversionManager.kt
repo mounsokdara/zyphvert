@@ -10,6 +10,7 @@ import com.mounsokdara.zyphvert.engine.EngineFactory
 import com.mounsokdara.zyphvert.engine.MediaEngine
 import com.mounsokdara.zyphvert.service.ConversionForegroundService
 import com.mounsokdara.zyphvert.tools.ToolJob
+import com.mounsokdara.zyphvert.util.DeveloperLog
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -89,6 +90,7 @@ class ConversionManager @Inject constructor(@ApplicationContext private val ctx:
             return
         }
         runningId = item.id
+        DeveloperLog.job("start ${item.toolTitle}: ${job.command ?: "(native)"}")
         JobHistory.patch(item.id) { it.copy(status = JobStatus.Running, startedAt = System.currentTimeMillis()) }
 
         var ok = false
@@ -168,6 +170,7 @@ class ConversionManager @Inject constructor(@ApplicationContext private val ctx:
             JobStatus.Cancelled -> "Cancelled"
             else -> error ?: explain(tail.joinToString("\n"))
         }
+        DeveloperLog.job("end ${item.toolTitle}: $status, $message" + if (status == JobStatus.Failed && tail.isNotEmpty()) "\n" + tail.joinToString("\n") else "")
         JobHistory.patch(item.id) {
             it.copy(
                 status = status, message = message, finishedAt = System.currentTimeMillis(),

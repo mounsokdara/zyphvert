@@ -24,6 +24,10 @@ data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.System,
     val dynamicColor: Boolean = true,
     val haptics: Boolean = true,
+    /** Unlocked by tapping the version in About ten times. */
+    val developerEnabled: Boolean = false,
+    val debugLog: Boolean = false,
+    val logJobs: Boolean = false,
 )
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
@@ -36,6 +40,9 @@ class SettingsRepository @Inject constructor(
         val theme = stringPreferencesKey("theme_mode")
         val dynamic = booleanPreferencesKey("dynamic_color")
         val haptics = booleanPreferencesKey("haptics")
+        val developer = booleanPreferencesKey("developer_enabled")
+        val debugLog = booleanPreferencesKey("debug_log")
+        val logJobs = booleanPreferencesKey("log_jobs")
         val saved = stringSetPreferencesKey("saved_commands")
     }
 
@@ -44,6 +51,9 @@ class SettingsRepository @Inject constructor(
             themeMode = runCatching { ThemeMode.valueOf(p[Keys.theme] ?: "") }.getOrDefault(ThemeMode.System),
             dynamicColor = p[Keys.dynamic] ?: true,
             haptics = p[Keys.haptics] ?: true,
+            developerEnabled = p[Keys.developer] ?: false,
+            debugLog = p[Keys.debugLog] ?: false,
+            logJobs = p[Keys.logJobs] ?: false,
         )
     }
 
@@ -54,6 +64,9 @@ class SettingsRepository @Inject constructor(
     suspend fun setThemeMode(mode: ThemeMode) = context.dataStore.edit { it[Keys.theme] = mode.name }
     suspend fun setDynamicColor(on: Boolean) = context.dataStore.edit { it[Keys.dynamic] = on }
     suspend fun setHaptics(on: Boolean) = context.dataStore.edit { it[Keys.haptics] = on }
+    suspend fun setDeveloperEnabled(on: Boolean) = context.dataStore.edit { it[Keys.developer] = on }
+    suspend fun setDebugLog(on: Boolean) = context.dataStore.edit { it[Keys.debugLog] = on }
+    suspend fun setLogJobs(on: Boolean) = context.dataStore.edit { it[Keys.logJobs] = on }
 
     suspend fun saveCommand(command: String) = context.dataStore.edit {
         it[Keys.saved] = (it[Keys.saved] ?: emptySet()) + command
