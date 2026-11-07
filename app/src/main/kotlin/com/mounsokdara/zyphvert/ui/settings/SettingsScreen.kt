@@ -67,7 +67,7 @@ fun SettingsScreen(vm: SettingsViewModel, onBack: () -> Unit) {
             SectionLabel("Appearance")
             InfoTile(
                 Icons.Rounded.Palette, "Theme",
-                s.themeMode.label + if (s.dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) ", dynamic color" else "",
+                s.themeMode.label + (if (s.extraDark) ", extra dark" else "") + (if (s.dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) ", dynamic color" else ""),
                 onClick = { showTheme = true },
             )
             SwitchTile(Icons.Rounded.Vibration, "Haptic feedback", "Subtle vibration on taps", s.haptics, onChange = vm::setHaptics)

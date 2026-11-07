@@ -73,20 +73,14 @@ import com.mounsokdara.zyphvert.ui.openUrl
 
 private val CardShape = RoundedCornerShape(28.dp)
 
-private const val TAPS_NEEDED = 10
-
 @Composable
 fun AboutScreen(
-    settingsVm: SettingsViewModel,
     onBack: () -> Unit,
     onLicenses: () -> Unit,
     onChangelog: () -> Unit,
-    onConsole: () -> Unit,
 ) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-    val haptic = LocalHapticFeedback.current
-    val settings by settingsVm.settings.collectAsState()
 
     // The author's name and photo come from GitHub; until (or unless) they load, the initials stay.
     var profile by remember { mutableStateOf<GithubProfile?>(null) }
@@ -96,26 +90,6 @@ fun AboutScreen(
     val updates = rememberUpdateFlow()
     fun checkForUpdate() = updates.check()
     UpdateDialogs(updates)
-
-    // Ten quick taps on the version turn on developer options.
-    var taps by remember { mutableIntStateOf(0) }
-    var lastTap by remember { mutableLongStateOf(0L) }
-    fun say(text: String) = Toast.makeText(ctx, text, Toast.LENGTH_SHORT).show()
-    fun onVersionTap() {
-        val now = System.currentTimeMillis()
-        if (now - lastTap > 2_000) taps = 0
-        lastTap = now
-        taps++
-        if (settings.developerEnabled) { say("Developer options are on"); return }
-        val left = TAPS_NEEDED - taps
-        if (left in 1..3) say("$left tap${if (left == 1) "" else "s"} away from developer options")
-        if (taps >= TAPS_NEEDED) {
-            taps = 0
-            settingsVm.setDeveloperEnabled(true)
-            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-            say("Developer options enabled")
-        }
-    }
 
     SubScreenScaffold("About", onBack) { pad ->
         Column(
@@ -180,7 +154,6 @@ fun AboutScreen(
                 InfoTile(
                     Icons.Rounded.Info, "Version", "v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
                     shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 6.dp, bottomEnd = 6.dp),
-                    onClick = { onVersionTap() },
                 )
                 InfoTile(
                     Icons.Rounded.Description, "Open source licenses", "Libraries used by this app",
@@ -190,7 +163,6 @@ fun AboutScreen(
                 )
             }
 
-            if (settings.developerEnabled) DeveloperOptionsSection(settings, settingsVm, onConsole)
         }
     }
 }
@@ -215,7 +187,10 @@ private fun QuickActions(items: List<QuickAction>) {
                 shape = shape, color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 modifier = Modifier.weight(1f).fillMaxHeight().clip(shape).clickable(onClick = item.onClick),
             ) {
-                Column(Modifier.padding(vertical = 16.dp, horizontal = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(
+                    Modifier.fillMaxHeight().padding(vertical = 16.dp, horizontal = 4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
+                ) {
                     item.icon()
                     Spacer(Modifier.height(8.dp))
                     Text(item.label, style = MaterialTheme.typography.labelLarge, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)

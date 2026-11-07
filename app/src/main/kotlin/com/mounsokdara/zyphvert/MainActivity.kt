@@ -33,7 +33,7 @@ class MainActivity : ComponentActivity() {
             val dark = when (s.themeMode) {
                 ThemeMode.System -> isSystemInDarkTheme()
                 ThemeMode.Light -> false
-                ThemeMode.Dark, ThemeMode.Amoled -> true
+                ThemeMode.Dark -> true
             }
             // Keep status/navigation bar icons readable when the app theme differs from the system theme.
             DisposableEffect(dark) {
@@ -53,7 +53,7 @@ class MainActivity : ComponentActivity() {
                 else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 onDispose { window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
             }
-            ZyphvertTheme(darkTheme = dark, dynamicColor = s.dynamicColor, amoled = s.themeMode == ThemeMode.Amoled, seedColor = s.seedColor) {
+            ZyphvertTheme(darkTheme = dark, dynamicColor = s.dynamicColor, amoled = s.extraDark, seedColor = s.seedColor) {
                 CompositionLocalProvider(LocalHaptics provides s.haptics) {
                     ZyphvertShell(settingsVm = settingsVm, hapticsEnabled = s.haptics)
                 }

@@ -60,8 +60,8 @@ import com.mounsokdara.zyphvert.ui.components.SubScreenScaffold
 import com.mounsokdara.zyphvert.ui.theme.SeedChip
 import com.mounsokdara.zyphvert.ui.theme.SeedChips
 
-private val SegmentLabels = mapOf(ThemeMode.Light to "Light", ThemeMode.Dark to "Dark", ThemeMode.System to "System", ThemeMode.Amoled to "AMOLED")
-private val SegmentOrder = listOf(ThemeMode.Light, ThemeMode.Dark, ThemeMode.System, ThemeMode.Amoled)
+private val SegmentLabels = mapOf(ThemeMode.Light to "Light", ThemeMode.Dark to "Dark", ThemeMode.System to "System")
+private val SegmentOrder = listOf(ThemeMode.Light, ThemeMode.Dark, ThemeMode.System)
 
 /** The Theme page, laid out like the one in the Video Player: Appearance, Dynamic color, Material You color, Custom color. */
 @Composable
@@ -88,7 +88,16 @@ fun ThemeScreen(vm: SettingsViewModel, onBack: () -> Unit) {
                 }
             }
 
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(12.dp))
+            ListItem(
+                modifier = Modifier.clickable { vm.setExtraDark(!s.extraDark) },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                headlineContent = { Text("Extra dark") },
+                supportingContent = { Text("Pure black backgrounds in the dark theme") },
+                trailingContent = { Switch(checked = s.extraDark, onCheckedChange = vm::setExtraDark) },
+            )
+
+            Spacer(Modifier.height(8.dp))
             ListItem(
                 modifier = Modifier.clickable(enabled = supportsDynamic) { vm.setDynamicColor(!s.dynamicColor) },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),

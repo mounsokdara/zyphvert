@@ -19,7 +19,7 @@ import androidx.compose.ui.unit.dp
 import com.mounsokdara.zyphvert.ui.components.CenteredContent
 import com.mounsokdara.zyphvert.ui.components.MoreCard
 
-enum class MoreRoute { Settings, Terminal, About, Licenses, Changelog, Console }
+enum class MoreRoute { Settings, Terminal, About, Licenses, Changelog }
 
 @Composable
 fun MoreScreen(bottomPadding: Dp, onOpen: (MoreRoute) -> Unit, modifier: Modifier = Modifier) {

@@ -17,7 +17,6 @@ enum class ThemeMode(val label: String) {
     System("System default"),
     Light("Light"),
     Dark("Dark"),
-    Amoled("AMOLED black"),
 }
 
 data class AppSettings(
@@ -26,10 +25,8 @@ data class AppSettings(
     val haptics: Boolean = true,
     /** The picked "Material You color", used when dynamic color is off. */
     val seedColor: Int = 0xFF00A86B.toInt(),
-    /** Unlocked by tapping the version in About ten times. */
-    val developerEnabled: Boolean = false,
-    val debugLog: Boolean = false,
-    val logJobs: Boolean = false,
+    /** Pure black backgrounds while the dark theme is on. */
+    val extraDark: Boolean = false,
 )
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
@@ -43,21 +40,21 @@ class SettingsRepository @Inject constructor(
         val dynamic = booleanPreferencesKey("dynamic_color")
         val haptics = booleanPreferencesKey("haptics")
         val seed = androidx.datastore.preferences.core.intPreferencesKey("seed_color")
-        val developer = booleanPreferencesKey("developer_enabled")
-        val debugLog = booleanPreferencesKey("debug_log")
-        val logJobs = booleanPreferencesKey("log_jobs")
+        val extraDark = booleanPreferencesKey("extra_dark")
         val saved = stringSetPreferencesKey("saved_commands")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { p ->
         AppSettings(
-            themeMode = runCatching { ThemeMode.valueOf(p[Keys.theme] ?: "") }.getOrDefault(ThemeMode.System),
+            themeMode = when (val saved = p[Keys.theme]) {
+                "Amoled" -> ThemeMode.Dark
+                else -> runCatching { ThemeMode.valueOf(saved ?: "") }.getOrDefault(ThemeMode.System)
+            },
             dynamicColor = p[Keys.dynamic] ?: true,
             haptics = p[Keys.haptics] ?: true,
             seedColor = p[Keys.seed] ?: 0xFF00A86B.toInt(),
-            developerEnabled = p[Keys.developer] ?: false,
-            debugLog = p[Keys.debugLog] ?: false,
-            logJobs = p[Keys.logJobs] ?: false,
+            // The old "AMOLED black" theme became Dark plus this switch.
+            extraDark = p[Keys.extraDark] ?: (p[Keys.theme] == "Amoled"),
         )
     }
 
@@ -69,9 +66,7 @@ class SettingsRepository @Inject constructor(
     suspend fun setDynamicColor(on: Boolean) = context.dataStore.edit { it[Keys.dynamic] = on }
     suspend fun setHaptics(on: Boolean) = context.dataStore.edit { it[Keys.haptics] = on }
     suspend fun setSeedColor(argb: Int) = context.dataStore.edit { it[Keys.seed] = argb }
-    suspend fun setDeveloperEnabled(on: Boolean) = context.dataStore.edit { it[Keys.developer] = on }
-    suspend fun setDebugLog(on: Boolean) = context.dataStore.edit { it[Keys.debugLog] = on }
-    suspend fun setLogJobs(on: Boolean) = context.dataStore.edit { it[Keys.logJobs] = on }
+    suspend fun setExtraDark(on: Boolean) = context.dataStore.edit { it[Keys.extraDark] = on }
 
     suspend fun saveCommand(command: String) = context.dataStore.edit {
         it[Keys.saved] = (it[Keys.saved] ?: emptySet()) + command
