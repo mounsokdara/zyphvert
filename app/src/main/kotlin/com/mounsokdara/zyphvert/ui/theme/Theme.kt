@@ -9,6 +9,7 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
@@ -74,6 +75,7 @@ fun ZyphvertTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = true,
     amoled: Boolean = false,
+    seedColor: Int = BrandSeed,
     content: @Composable () -> Unit
 ) {
     val base = when {
@@ -81,6 +83,8 @@ fun ZyphvertTheme(
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
+        // A color picked on the Theme page; the brand green keeps the hand-tuned palette.
+        seedColor != BrandSeed -> remember(seedColor, darkTheme) { seedColorScheme(seedColor, darkTheme) }
         darkTheme -> DarkColors
         else -> LightColors
     }

@@ -53,7 +53,7 @@ class MainActivity : ComponentActivity() {
                 else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 onDispose { window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
             }
-            ZyphvertTheme(darkTheme = dark, dynamicColor = s.dynamicColor, amoled = s.themeMode == ThemeMode.Amoled) {
+            ZyphvertTheme(darkTheme = dark, dynamicColor = s.dynamicColor, amoled = s.themeMode == ThemeMode.Amoled, seedColor = s.seedColor) {
                 CompositionLocalProvider(LocalHaptics provides s.haptics) {
                     ZyphvertShell(settingsVm = settingsVm, hapticsEnabled = s.haptics)
                 }

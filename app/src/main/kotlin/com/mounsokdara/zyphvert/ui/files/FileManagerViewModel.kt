@@ -312,7 +312,8 @@ class FileManagerViewModel @Inject constructor(@ApplicationContext private val a
     fun pullRefresh() {
         if (refreshing) return
         refreshing = true
-        reload()
+        // A load that is already running (opening the picker, a folder change) is enough; a second one would only restart it.
+        if (loadJob?.isActive != true) reload()
         viewModelScope.launch {
             // Listing a folder takes a few ms; hold the indicator long enough to finish its animation.
             kotlinx.coroutines.delay(600)

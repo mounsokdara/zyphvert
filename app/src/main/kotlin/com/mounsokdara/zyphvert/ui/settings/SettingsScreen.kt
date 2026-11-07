@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -32,6 +33,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,7 +50,8 @@ import com.mounsokdara.zyphvert.util.StorageAccess
 fun SettingsScreen(vm: SettingsViewModel, onBack: () -> Unit) {
     val s by vm.settings.collectAsState()
     val ctx = LocalContext.current
-    var themeDialog by remember { mutableStateOf(false) }
+    var showTheme by rememberSaveable { mutableStateOf(false) }
+    BackHandler(enabled = showTheme) { showTheme = false }
     var clearDialog by remember { mutableStateOf(false) }
     val hasAllFiles = StorageAccess.hasAllFilesAccess()
 
@@ -56,19 +59,16 @@ fun SettingsScreen(vm: SettingsViewModel, onBack: () -> Unit) {
         runCatching { ctx.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
     }
 
-    SubScreenScaffold("Settings", onBack) { pad ->
+    if (showTheme) ThemeScreen(vm) { showTheme = false } else SubScreenScaffold("Settings", onBack) { pad ->
         Column(
             Modifier.padding(pad).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             SectionLabel("Appearance")
-            InfoTile(Icons.Rounded.DarkMode, "Theme", s.themeMode.label, onClick = { themeDialog = true })
-            SwitchTile(
-                Icons.Rounded.Palette, "Dynamic color",
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) "Use colors from your wallpaper" else "Requires Android 12 or newer",
-                checked = s.dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S,
-                enabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S,
-                onChange = vm::setDynamicColor,
+            InfoTile(
+                Icons.Rounded.Palette, "Theme",
+                s.themeMode.label + if (s.dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) ", dynamic color" else "",
+                onClick = { showTheme = true },
             )
             SwitchTile(Icons.Rounded.Vibration, "Haptic feedback", "Subtle vibration on taps", s.haptics, onChange = vm::setHaptics)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -100,26 +100,6 @@ fun SettingsScreen(vm: SettingsViewModel, onBack: () -> Unit) {
         }
     }
 
-    if (themeDialog) {
-        AlertDialog(
-            onDismissRequest = { themeDialog = false },
-            title = { Text("Theme") },
-            text = {
-                Column {
-                    ThemeMode.entries.forEach { mode ->
-                        Row(
-                            Modifier.fillMaxWidth().clickable { vm.setTheme(mode); themeDialog = false }.padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            RadioButton(selected = s.themeMode == mode, onClick = { vm.setTheme(mode); themeDialog = false })
-                            Text(mode.label, style = MaterialTheme.typography.bodyLarge)
-                        }
-                    }
-                }
-            },
-            confirmButton = { TextButton(onClick = { themeDialog = false }) { Text("Close") } },
-        )
-    }
     if (clearDialog) {
         AlertDialog(
             onDismissRequest = { clearDialog = false },

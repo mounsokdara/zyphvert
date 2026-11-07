@@ -24,6 +24,8 @@ data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.System,
     val dynamicColor: Boolean = true,
     val haptics: Boolean = true,
+    /** The picked "Material You color", used when dynamic color is off. */
+    val seedColor: Int = 0xFF00A86B.toInt(),
     /** Unlocked by tapping the version in About ten times. */
     val developerEnabled: Boolean = false,
     val debugLog: Boolean = false,
@@ -40,6 +42,7 @@ class SettingsRepository @Inject constructor(
         val theme = stringPreferencesKey("theme_mode")
         val dynamic = booleanPreferencesKey("dynamic_color")
         val haptics = booleanPreferencesKey("haptics")
+        val seed = androidx.datastore.preferences.core.intPreferencesKey("seed_color")
         val developer = booleanPreferencesKey("developer_enabled")
         val debugLog = booleanPreferencesKey("debug_log")
         val logJobs = booleanPreferencesKey("log_jobs")
@@ -51,6 +54,7 @@ class SettingsRepository @Inject constructor(
             themeMode = runCatching { ThemeMode.valueOf(p[Keys.theme] ?: "") }.getOrDefault(ThemeMode.System),
             dynamicColor = p[Keys.dynamic] ?: true,
             haptics = p[Keys.haptics] ?: true,
+            seedColor = p[Keys.seed] ?: 0xFF00A86B.toInt(),
             developerEnabled = p[Keys.developer] ?: false,
             debugLog = p[Keys.debugLog] ?: false,
             logJobs = p[Keys.logJobs] ?: false,
@@ -64,6 +68,7 @@ class SettingsRepository @Inject constructor(
     suspend fun setThemeMode(mode: ThemeMode) = context.dataStore.edit { it[Keys.theme] = mode.name }
     suspend fun setDynamicColor(on: Boolean) = context.dataStore.edit { it[Keys.dynamic] = on }
     suspend fun setHaptics(on: Boolean) = context.dataStore.edit { it[Keys.haptics] = on }
+    suspend fun setSeedColor(argb: Int) = context.dataStore.edit { it[Keys.seed] = argb }
     suspend fun setDeveloperEnabled(on: Boolean) = context.dataStore.edit { it[Keys.developer] = on }
     suspend fun setDebugLog(on: Boolean) = context.dataStore.edit { it[Keys.debugLog] = on }
     suspend fun setLogJobs(on: Boolean) = context.dataStore.edit { it[Keys.logJobs] = on }

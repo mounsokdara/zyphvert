@@ -8,7 +8,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -63,6 +65,7 @@ import androidx.compose.ui.unit.dp
 import com.mounsokdara.zyphvert.BuildConfig
 import com.mounsokdara.zyphvert.R
 import com.mounsokdara.zyphvert.ui.Links
+import com.mounsokdara.zyphvert.ui.components.GithubIcon
 import com.mounsokdara.zyphvert.ui.components.InfoTile
 import com.mounsokdara.zyphvert.ui.components.SectionLabel
 import com.mounsokdara.zyphvert.ui.components.SubScreenScaffold
@@ -89,13 +92,10 @@ fun AboutScreen(
     var profile by remember { mutableStateOf<GithubProfile?>(null) }
     LaunchedEffect(Unit) { profile = GithubProfile.load(AboutInfo.GITHUB_LOGIN) }
 
-    // Check for update
-    var update by remember { mutableStateOf<UpdateUi>(UpdateUi.None) }
-    fun checkForUpdate() {
-        update = UpdateUi.Checking
-        scope.launch { update = resolveUpdate(ctx) }
-    }
-    UpdateDialogs(update) { update = UpdateUi.None }
+    // Check for update: look at GitHub, download the APK here, hand it to the installer
+    val updates = rememberUpdateFlow()
+    fun checkForUpdate() = updates.check()
+    UpdateDialogs(updates)
 
     // Ten quick taps on the version turn on developer options.
     var taps by remember { mutableIntStateOf(0) }
@@ -138,12 +138,14 @@ fun AboutScreen(
             }
 
             // Link tiles
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                LinkTile(Icons.Rounded.History, "Changelog", Modifier.weight(1f), onClick = onChangelog)
-                LinkTile(Icons.Rounded.Code, "GitHub", Modifier.weight(1f)) { ctx.openUrl(Links.REPO) }
-                LinkTile(Icons.Rounded.SystemUpdateAlt, "Check for update", Modifier.weight(1f)) { checkForUpdate() }
-                LinkTile(Icons.Rounded.BugReport, "Issues", Modifier.weight(1f)) { ctx.openUrl(Links.ISSUES) }
-            }
+            QuickActions(
+                listOf(
+                    QuickAction("Changelog", { Icon(Icons.Rounded.History, null) }, onChangelog),
+                    QuickAction("GitHub", { GithubIcon() }) { ctx.openUrl(Links.REPO) },
+                    QuickAction("Check for update", { Icon(Icons.Rounded.SystemUpdateAlt, null) }) { checkForUpdate() },
+                    QuickAction("Issues", { Icon(Icons.Rounded.BugReport, null) }) { ctx.openUrl(Links.ISSUES) },
+                ),
+            )
 
             SectionLabel("Author")
             Surface(shape = CardShape, color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
@@ -169,9 +171,7 @@ fun AboutScreen(
                             Icon(Icons.Rounded.VolunteerActivism, contentDescription = null, modifier = Modifier.size(20.dp))
                             Text("Support my work", modifier = Modifier.padding(start = 8.dp))
                         }
-                        FilledTonalIconButton(onClick = { ctx.openUrl(Links.AUTHOR) }) {
-                            Icon(Icons.Rounded.Code, contentDescription = "Author on GitHub")
-                        }
+                        FilledTonalIconButton(onClick = { ctx.openUrl(Links.AUTHOR) }) { GithubIcon() }
                     }
                 }
             }
@@ -195,18 +195,32 @@ fun AboutScreen(
     }
 }
 
+private class QuickAction(val label: String, val icon: @Composable () -> Unit, val onClick: () -> Unit)
+
+/**
+ * A row of equal tiles that join into one pill: big corners on the outside, small ones between.
+ * IntrinsicSize makes every tile as tall as the tallest, so a label that wraps never makes one stick out.
+ */
 @Composable
-private fun LinkTile(icon: ImageVector, label: String, modifier: Modifier, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(12.dp)
-    Surface(
-        shape = shape,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        modifier = modifier.clip(shape).clickable(onClick = onClick),
-    ) {
-        Column(Modifier.padding(vertical = 16.dp, horizontal = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
-            Spacer(Modifier.height(8.dp))
-            Text(label, style = MaterialTheme.typography.labelLarge, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+private fun QuickActions(items: List<QuickAction>) {
+    val big = 28.dp
+    val small = 4.dp
+    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        items.forEachIndexed { i, item ->
+            val shape = RoundedCornerShape(
+                topStart = if (i == 0) big else small, bottomStart = if (i == 0) big else small,
+                topEnd = if (i == items.lastIndex) big else small, bottomEnd = if (i == items.lastIndex) big else small,
+            )
+            Surface(
+                shape = shape, color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                modifier = Modifier.weight(1f).fillMaxHeight().clip(shape).clickable(onClick = item.onClick),
+            ) {
+                Column(Modifier.padding(vertical = 16.dp, horizontal = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    item.icon()
+                    Spacer(Modifier.height(8.dp))
+                    Text(item.label, style = MaterialTheme.typography.labelLarge, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+                }
+            }
         }
     }
 }

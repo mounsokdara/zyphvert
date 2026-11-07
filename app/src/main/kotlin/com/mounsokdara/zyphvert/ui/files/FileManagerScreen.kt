@@ -324,11 +324,11 @@ fun FileManagerScreen(
                     verticalArrangement = Arrangement.spacedBy(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp),
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    if (vm.canGoUp && vm.browseMode == BrowseMode.Folders) item(key = "..up", span = { GridItemSpan(maxLineSpan) }) { UpFolderRow(Modifier.animateItem()) { vm.goUp() } }
+                    if (vm.canGoUp && vm.browseMode == BrowseMode.Folders) item(key = "..up", span = { GridItemSpan(maxLineSpan) }) { UpFolderRow(Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null)) { vm.goUp() } }
                     item(key = "..hint", span = { GridItemSpan(maxLineSpan) }) { hint() }
                     items(list, key = { it.file.absolutePath }) { e ->
                         FileTile(
-                            e.name, e.file, e.isDirectory, Modifier.animateItem(), live = e.live,
+                            e.name, e.file, e.isDirectory, Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null), live = e.live,
                             selectedOrder = orderOf(e), showSelect = pick?.multiple == true && !e.isDirectory,
                             onLongClick = { vm.selected = e },
                         ) { onTap(e) }
@@ -336,7 +336,7 @@ fun FileManagerScreen(
                 }
             } else {
                 LazyColumn(Modifier.fillMaxSize()) {
-                    if (vm.canGoUp && vm.browseMode == BrowseMode.Folders) item(key = "..up") { UpFolderRow(Modifier.animateItem()) { vm.goUp() } }
+                    if (vm.canGoUp && vm.browseMode == BrowseMode.Folders) item(key = "..up") { UpFolderRow(Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null)) { vm.goUp() } }
                     item(key = "..hint") { hint() }
                     items(list, key = { it.file.absolutePath }) { e ->
                         FileRow(
@@ -345,7 +345,7 @@ fun FileManagerScreen(
                             // In the flat media list, say which folder each file is in.
                             date = if (vm.browseMode == BrowseMode.Media) (e.file.parentFile?.name ?: "") + " · " + e.dateLabel else e.dateLabel,
                             live = e.live, selectedOrder = orderOf(e), showSelect = pick?.multiple == true && !e.isDirectory,
-                            modifier = Modifier.animateItem(), onLongClick = { vm.selected = e }, onClick = { onTap(e) },
+                            modifier = Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null), onLongClick = { vm.selected = e }, onClick = { onTap(e) },
                         )
                     }
                 }
