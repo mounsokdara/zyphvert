@@ -108,12 +108,17 @@ class ConversionManager @Inject constructor(@ApplicationContext private val ctx:
                 val cmd = job.command
                 // The first "Duration:" line in the log is the input; with the trim options it gives the output length.
                 var inputMs: Long? = null
+                var probed = false
+                // FFmpeg's log reaches us in small pieces ("Duration: " and "00:00:23.15" separately), so keep the start of it.
+                val head = StringBuilder()
                 var lastPush = 0L
                 val outFile = job.output?.let { File(it) }
                 val onProgress: (Long, Long) -> Unit = { timeMs, bytes ->
                     val now = System.currentTimeMillis()
                     if (now - lastPush >= 300) {
                         lastPush = now
+                        // Second source for the length, in case the log didn't give it.
+                        if (inputMs == null && !probed && cmd != null) { probed = true; inputMs = probeMs(cmd) }
                         val total = effectiveMs(cmd.orEmpty(), inputMs)
                         val frac = total?.let { (timeMs.toFloat() / it).coerceIn(0f, 0.99f) }
                         val written = maxOf(bytes, outFile?.takeIf { it.isFile }?.length() ?: 0L)
@@ -125,7 +130,7 @@ class ConversionManager @Inject constructor(@ApplicationContext private val ctx:
                 else engine.run(cmd, job.probe, if (job.probe) null else onProgress).collect { ev ->
                     when (ev) {
                         is EngineEvent.Log -> {
-                            if (!job.probe && inputMs == null) inputMs = durationMs(ev.text)
+                            if (!job.probe && inputMs == null && head.length < 30_000) { head.append(ev.text); inputMs = durationMs(head) }
                             if (job.probe) { if (full.length < 40_000) full.append(ev.text) }
                             ev.text.split('\n').filter { it.isNotBlank() }.forEach {
                                 tail.addLast(it); if (tail.size > 30) tail.removeFirst()
@@ -175,9 +180,23 @@ class ConversionManager @Inject constructor(@ApplicationContext private val ctx:
 
     private val durationRe = Regex("""Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)""")
 
-    private fun durationMs(log: String): Long? = durationRe.find(log)?.let {
+    private fun durationMs(log: CharSequence): Long? = durationRe.find(log)?.let {
         val (h, m, s) = it.destructured
         ((h.toLong() * 3600 + m.toLong() * 60 + s.toDouble()) * 1000).toLong()
+    }
+
+    /** Length of the first input file, read straight from the file. Null for streams, images and SAF files. */
+    private fun probeMs(cmd: String): Long? {
+        val m = Regex("""(?:^|\s)-i\s+(?:"([^"]+)"|(\S+))""").find(cmd) ?: return null
+        val path = m.groupValues[1].ifEmpty { m.groupValues[2] }
+        if (path.startsWith("saf:") || !File(path).isFile) return null
+        return runCatching {
+            val r = android.media.MediaMetadataRetriever()
+            try {
+                r.setDataSource(path)
+                r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
+            } finally { r.release() }
+        }.getOrNull()?.takeIf { it > 0 }
     }
 
     private fun seconds(v: String): Double = v.split(':').fold(0.0) { acc, p -> acc * 60 + (p.toDoubleOrNull() ?: 0.0) }

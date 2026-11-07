@@ -266,9 +266,20 @@ class FileManagerViewModel @Inject constructor(@ApplicationContext private val a
     fun delete(e: FileEntry) {
         viewModelScope.launch {
             val ok = withContext(Dispatchers.IO) {
-                runCatching { if (e.file.isDirectory) e.file.deleteRecursively() else e.file.delete() }.getOrDefault(false)
+                val removed = runCatching { if (e.file.isDirectory) e.file.deleteRecursively() else e.file.delete() }.getOrDefault(false)
+                // Trust the disk, not the return value.
+                removed && !e.file.exists()
             }
             message = if (ok) "Deleted ${e.name}" else "Couldn't delete ${e.name}"
+            if (ok) {
+                // Take it out of the lists now. Some phones keep listing a deleted name for a moment
+                // (with size 0), which looked like the file had only been emptied.
+                val path = e.file.path
+                entries = entries.filterNot { it.file.path == path || it.file.path.startsWith("$path/") }
+                mediaItems = mediaItems.filterNot { it.file.path == path || it.file.path.startsWith("$path/") }
+                // Scanning a path that no longer exists removes its row from the media database too.
+                if (!e.isDirectory) android.media.MediaScannerConnection.scanFile(appCtx, arrayOf(path), null, null)
+            }
             if (clip?.files?.contains(e.file) == true) clip = null
             selected = null
             reload()
@@ -340,7 +351,7 @@ class FileManagerViewModel @Inject constructor(@ApplicationContext private val a
             ?: return ListResult(emptyList(), if (!dir.canRead()) "Permission denied. Grant All files access in Settings." else "Cannot list this folder")
         val videoBases = files.filter { it.isFile && it.extension.lowercase() in LIVE_VIDEO_EXTS }
             .associateBy { it.nameWithoutExtension.lowercase() }
-        val mapped = files.map { f ->
+        val mapped = files.filter { it.exists() || it.lastModified() != 0L }.map { f ->
             val ext = f.extension.lowercase()
             val pair = if (f.isFile && ext in LIVE_STILL_EXTS) videoBases[f.nameWithoutExtension.lowercase()] else null
             FileEntry(
