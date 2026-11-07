@@ -66,6 +66,7 @@ import androidx.compose.ui.unit.sp
 import com.mounsokdara.zyphvert.tools.InKind
 import com.mounsokdara.zyphvert.ui.components.AppSheet
 import com.mounsokdara.zyphvert.ui.files.FilePickerDialog
+import com.mounsokdara.zyphvert.ui.files.FolderPickerDialog
 
 // Near-black background with soft, readable colours (Tokyo Night inspired).
 private val Bg = Color(0xFF0A0A10)
@@ -341,9 +342,10 @@ fun TerminalScreen(vm: TerminalViewModel, onBack: () -> Unit) {
     }
 
     if (folderPicker) {
-        FolderPicker(
-            start = s.cwd, root = android.os.Environment.getExternalStorageDirectory(),
-            onPick = { vm.cdTo(it) }, onDismiss = { folderPicker = false },
+        FolderPickerDialog(
+            title = "Choose a folder", startPath = s.cwd.path,
+            onDismiss = { folderPicker = false },
+            onPicked = { folderPicker = false; vm.cdTo(it) },
         )
     }
 
