@@ -1,9 +1,11 @@
-@file:OptIn(ExperimentalMaterial3Api::class)
+@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 
 package com.mounsokdara.zyphvert.ui.files
 
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.LocalOverscrollConfiguration
 import androidx.compose.foundation.text.selection.SelectionContainer
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.clickable
@@ -300,6 +302,9 @@ fun FileManagerScreen(
         }
 
         // Pull down to refresh; there is no refresh button.
+        // Pull-to-refresh is the only reaction to a pull at the top. The system rubber-band/stretch is switched off here,
+        // otherwise it moves the whole list along with the finger while the refresh spinner shows.
+        CompositionLocalProvider(LocalOverscrollConfiguration provides null) {
         PullToRefreshBox(isRefreshing = vm.refreshing, onRefresh = vm::pullRefresh, modifier = Modifier.weight(1f).fillMaxWidth()) {
             val hint: @Composable () -> Unit = {
                 when {
@@ -345,6 +350,7 @@ fun FileManagerScreen(
                     }
                 }
             }
+        }
         }
 
         // Picker with several files: the running selection and the Select button.

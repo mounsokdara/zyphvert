@@ -170,11 +170,6 @@ fun ZyphvertShell(settingsVm: SettingsViewModel, hapticsEnabled: Boolean) {
                         MoreRoute.Terminal -> TerminalScreen(hiltViewModel(), onBack = { sub = null })
                         MoreRoute.About -> AboutScreen(onBack = { sub = null }, onLicenses = { sub = MoreRoute.Licenses })
                         MoreRoute.Licenses -> LicensesScreen(onBack = { sub = MoreRoute.About })
-                        MoreRoute.Files -> FileManagerScreen(
-                            bottomPadding = bottom,
-                            onOpenInTool = { id, path -> sub = null; pendingFilePath = path; openToolId = id },
-                            onMediaInfo = { path -> sub = null; mediaInfoPath = path },
-                        )
                     }
                     is Screen.Tab -> when (sc.dest) {
                         Destination.Tools -> HomeScreen(
