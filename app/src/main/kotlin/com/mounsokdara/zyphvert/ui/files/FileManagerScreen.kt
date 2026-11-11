@@ -11,6 +11,12 @@ import kotlinx.coroutines.launch
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -114,6 +120,39 @@ fun FileManagerScreen(
     }
     val listState = rememberLazyListState()
     val gridState = rememberLazyGridState()
+    // TEMPORARY scroll debugging (DEBUG_SCROLL): logs every scroll event and every position change.
+    val dbgEvents = remember { mutableStateListOf<String>() }
+    val dbgStart = remember { android.os.SystemClock.elapsedRealtime() }
+    fun dbgLog(text: String) {
+        val t = (android.os.SystemClock.elapsedRealtime() - dbgStart) / 1000.0
+        dbgEvents.add(0, String.format(java.util.Locale.US, "%6.2f %s", t, text))
+        while (dbgEvents.size > 9) dbgEvents.removeAt(dbgEvents.size - 1)
+    }
+    val dbgConn = remember {
+        object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
+            override fun onPreScroll(available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
+                if (DEBUG_SCROLL && kotlin.math.abs(available.y) > 0.5f) dbgLog("pre  $source y=${available.y.toInt()}")
+                return androidx.compose.ui.geometry.Offset.Zero
+            }
+            override fun onPostScroll(consumed: androidx.compose.ui.geometry.Offset, available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
+                if (DEBUG_SCROLL && (kotlin.math.abs(consumed.y) > 0.5f || kotlin.math.abs(available.y) > 0.5f)) dbgLog("post $source used=${consumed.y.toInt()} left=${available.y.toInt()}")
+                return androidx.compose.ui.geometry.Offset.Zero
+            }
+        }
+    }
+    if (DEBUG_SCROLL) {
+        LaunchedEffect(Unit) {
+            snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+                .collect { dbgLog("list pos ${it.first}/${it.second}") }
+        }
+        LaunchedEffect(Unit) {
+            snapshotFlow { gridState.firstVisibleItemIndex to gridState.firstVisibleItemScrollOffset }
+                .collect { dbgLog("grid pos ${it.first}/${it.second}") }
+        }
+        LaunchedEffect(vm.currentPath, vm.browseMode) { dbgLog("folder/mode changed: ${vm.browseMode} ${vm.currentPath.takeLast(18)}") }
+        LaunchedEffect(vm.loading) { dbgLog("loading=${vm.loading}") }
+        LaunchedEffect(vm.refreshing) { dbgLog("refreshing=${vm.refreshing}") }
+    }
     val list = vm.filtered()
         .filter { !searching || passesSearchFilters(it.isDirectory, it.extension, showFolders, kinds) }
 
@@ -308,7 +347,7 @@ fun FileManagerScreen(
                 LazyVerticalGrid(
                     columns = GridCells.Adaptive(110.dp), contentPadding = PaddingValues(8.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.fillMaxSize(), state = gridState,
+                    modifier = Modifier.fillMaxSize().nestedScroll(dbgConn), state = gridState,
                 ) {
                     if (vm.canGoUp && vm.browseMode == BrowseMode.Folders) item(key = "..up", span = { GridItemSpan(maxLineSpan) }) { UpFolderRow((if (animate) Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null) else Modifier)) { vm.goUp() } }
                     item(key = "..hint", span = { GridItemSpan(maxLineSpan) }) { hint() }
@@ -321,7 +360,7 @@ fun FileManagerScreen(
                     }
                 }
             } else {
-                LazyColumn(Modifier.fillMaxSize(), state = listState) {
+                LazyColumn(Modifier.fillMaxSize().nestedScroll(dbgConn), state = listState) {
                     if (vm.canGoUp && vm.browseMode == BrowseMode.Folders) item(key = "..up") { UpFolderRow((if (animate) Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null) else Modifier)) { vm.goUp() } }
                     item(key = "..hint") { hint() }
                     items(list, key = { it.file.absolutePath }) { e ->
@@ -335,6 +374,15 @@ fun FileManagerScreen(
                         )
                     }
                 }
+            }
+            if (DEBUG_SCROLL) {
+                val li = listState.layoutInfo
+                val lines = listOf(
+                    "mode=${if (vm.viewMode == ViewMode.Grid) "grid" else "list"} items=${list.size} loading=${vm.loading} refreshing=${vm.refreshing}",
+                    "list idx=${listState.firstVisibleItemIndex} off=${listState.firstVisibleItemScrollOffset} back=${listState.canScrollBackward} fwd=${listState.canScrollForward} moving=${listState.isScrollInProgress}",
+                    "rows=${li.visibleItemsInfo.size}/${li.totalItemsCount} viewport=${li.viewportEndOffset - li.viewportStartOffset}px",
+                ) + dbgEvents
+                ScrollDebugOverlay(lines)
             }
         }
         }
@@ -514,5 +562,18 @@ private fun ActionRow(icon: ImageVector, label: String, onClick: () -> Unit) {
     ) {
         Icon(icon, null, tint = MaterialTheme.colorScheme.primary)
         Text(label, style = MaterialTheme.typography.bodyLarge)
+    }
+}
+
+
+/** Set to false to hide the scroll debug box. */
+private const val DEBUG_SCROLL = true
+
+@Composable
+private fun BoxScope.ScrollDebugOverlay(lines: List<String>) {
+    Column(
+        Modifier.align(Alignment.TopEnd).padding(4.dp).background(Color(0xCC000000)).padding(4.dp),
+    ) {
+        lines.forEach { Text(it, color = Color.Green, fontSize = 9.sp, lineHeight = 10.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace) }
     }
 }
