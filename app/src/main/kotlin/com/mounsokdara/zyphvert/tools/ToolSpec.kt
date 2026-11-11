@@ -13,7 +13,6 @@ enum class InKind(val mimes: Array<String>, val exts: Set<String>?) {
     Any(arrayOf("*/*"), null),
     ;
 
-    /** Video and audio-or-video slots also accept Live/Motion Photos, which are swapped for their video. */
     val acceptsLive get() = this == Video || this == Media
 }
 
@@ -25,10 +24,8 @@ data class InputSlot(
     val optional: Boolean = false,
 )
 
-/** A quick preset: picking it sets several options at once. */
 data class Preset(val key: String, val title: String, val desc: String, val values: Map<String, String>)
 
-/** One entry of a long picker list. [desc] shows as a second line. */
 data class Item(val key: String, val label: String, val desc: String? = null)
 
 sealed class Opt(
@@ -39,7 +36,6 @@ sealed class Opt(
 ) {
     abstract val default: String
 
-    /** Pick one. Up to 4 short items render as chips; longer lists open a bottom sheet. */
     class Choice(
         id: String, label: String, val options: List<Item>,
         showIf: ((Map<String, String>) -> Boolean)? = null, advanced: Boolean = false,
@@ -62,21 +58,16 @@ sealed class Opt(
         showIf: ((Map<String, String>) -> Boolean)? = null, advanced: Boolean = false,
     ) : Opt(id, label, showIf, advanced) { override val default = initial.toString() }
 
-    /** Presets row: applies [Preset.values] to the form. */
     class Presets(id: String, label: String, val presets: List<Preset>) : Opt(id, label) { override val default = "" }
 
-    /** "Save as" file name. Empty means "same as the original". */
     class Name(id: String = "name", label: String = "Save as") : Opt(id, label) { override val default = "" }
 
-    /** Start/end selection on a timeline. Stored as "start,end" in seconds; empty means everything. */
     class Range(id: String, label: String, val slot: String = "media", val modes: Boolean = false) : Opt(id, label) {
         override val default = ""
     }
 
-    /** Full tag editor (title, artist, album, ... genre). Values are stored as "tag.<key>". */
     class Tags(id: String = "tags", label: String = "Edit tags", showIf: ((Map<String, String>) -> Boolean)? = null) : Opt(id, label, showIf) { override val default = "" }
 
-    /** Metadata editor: every tag of the picked file, cover art and details. Its state lives in the view model. */
     class Metadata(id: String = "metadata", label: String = "Metadata") : Opt(id, label) { override val default = "" }
 
     class Section(label: String, advanced: Boolean = false) : Opt("section:$label", label, null, advanced) { override val default = "" }
@@ -85,16 +76,12 @@ sealed class Opt(
 data class PickedFile(
     val uri: Uri,
     val name: String,
-    /** Path of the motion half of an iPhone Live Photo (HEIC + MOV pair). */
     val companion: String? = null,
-    /** Looks like a Live Photo or Motion Photo. */
     val live: Boolean = false,
 ) {
-    /** Real path when the file came from the file manager. */
     val path: String? get() = if (uri.scheme == "file") uri.path else null
 }
 
-/** One unit of work: an FFmpeg command and/or a native routine (tried first, command is the fallback). */
 class ToolJob(
     val title: String,
     val input: String,
@@ -102,7 +89,6 @@ class ToolJob(
     val command: String? = null,
     val probe: Boolean = false,
     val native: (suspend () -> Unit)? = null,
-    /** Runs after the command succeeds, to finish the output (for example, joining two files into one). */
     val after: (suspend () -> Unit)? = null,
 )
 
@@ -119,12 +105,10 @@ class ToolRequest(
     fun files(id: String): List<PickedFile> = files[id].orEmpty()
     fun file(id: String): PickedFile? = files[id]?.firstOrNull()
 
-    /** What FFmpeg should read: a quoted path for file-manager picks, a saf: URL for document picks. */
     fun saf(f: PickedFile): String =
         f.path?.let { q(it) } ?: engine.safRead(ctx, f.uri)
             ?: throw IllegalStateException("The FFmpeg engine isn't part of this build.")
 
-    /** Output file in Zyphvert/<category>, honouring a custom "Save as" name for single files. */
     fun out(category: String, f: PickedFile, ext: String, tag: String = "", dir: File? = null): File {
         val custom = str("name").trim().replace(Regex("[^A-Za-z0-9._-]"), "_").trim('.').take(80)
         val useCustom = custom.isNotEmpty() && files("media").size <= 1

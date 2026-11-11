@@ -49,25 +49,12 @@ import androidx.compose.ui.window.DialogWindowProvider
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
-/**
- * The app's bottom sheet, with the same touch rules as a Flutter modal bottom sheet:
- *  - the handle at the top always drags the sheet;
- *  - content that scrolls owns the touch, so a list always scrolls and never moves the sheet;
- *  - content that does not scroll (it fits) lets you drag the sheet from anywhere on it.
- * Drag down far enough, or fling, to close. It also closes from the scrim, Back, or `close`.
- *
- * "Content scrolls" means the sheet is as tall as it can get, measured on every layout pass.
- *
- * [content] receives `close`: call it after picking something so the sheet animates away before
- * [onDismiss] removes it. Put long content in a LazyColumn or a verticalScroll Column with
- * `Modifier.weight(1f, fill = false)`.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppSheet(onDismiss: () -> Unit, content: @Composable ColumnScope.(close: () -> Unit) -> Unit) {
     val scope = rememberCoroutineScope()
-    var h by remember { mutableFloatStateOf(0f) }        // sheet height in px
-    var y by remember { mutableFloatStateOf(0f) }        // how far the sheet is pushed down, px
+    var h by remember { mutableFloatStateOf(0f) }
+    var y by remember { mutableFloatStateOf(0f) }
     var shown by remember { mutableStateOf(false) }
     var closing by remember { mutableStateOf(false) }
     var scrollable by remember { mutableStateOf(false) }
@@ -90,7 +77,6 @@ fun AppSheet(onDismiss: () -> Unit, content: @Composable ColumnScope.(close: () 
         if (velocity > 1500f || y > h * 0.35f) close() else animateTo(0f)
     }
 
-    // Slide in once the sheet has been measured.
     LaunchedEffect(h > 0f) {
         if (h > 0f && !shown) {
             y = h
@@ -106,7 +92,6 @@ fun AppSheet(onDismiss: () -> Unit, content: @Composable ColumnScope.(close: () 
         }
     }
 
-    // Non-scrolling content that still consumes a drag (a short list) hands the leftover to the sheet.
     val connection = remember {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
@@ -133,7 +118,6 @@ fun AppSheet(onDismiss: () -> Unit, content: @Composable ColumnScope.(close: () 
         onDismissRequest = { close() },
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
-        // The scrim below is our own and fades with the sheet, so switch the window's own dim off.
         (LocalView.current.parent as? DialogWindowProvider)?.window?.let { w ->
             SideEffect { w.setDimAmount(0f) }
         }
@@ -169,7 +153,6 @@ fun AppSheet(onDismiss: () -> Unit, content: @Composable ColumnScope.(close: () 
                         layout(p.width, p.height) { p.place(0, 0) }
                     },
                 ) {
-                    // The handle always drags, even when the content scrolls.
                     Box(
                         Modifier
                             .fillMaxWidth()

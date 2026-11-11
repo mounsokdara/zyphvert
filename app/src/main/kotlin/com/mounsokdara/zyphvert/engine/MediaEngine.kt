@@ -9,17 +9,11 @@ sealed interface EngineEvent {
     data class Done(val success: Boolean, val cancelled: Boolean, val returnCode: Int?) : EngineEvent
 }
 
-/** Thin seam over FFmpegKit so the UI compiles with or without the native AAR present. */
 interface MediaEngine {
     val isAvailable: Boolean
     fun version(): String
-    /**
-     * [onProgress] gets the output time in milliseconds and the bytes written so far, a few times a second.
-     * It is optional, so callers that only want the log can ignore it.
-     */
     fun run(command: String, probe: Boolean, onProgress: ((timeMs: Long, bytes: Long) -> Unit)? = null): Flow<EngineEvent>
     fun cancel()
-    /** `saf:` path FFmpeg can read for a picked document, or null if unsupported. */
     fun safRead(context: Context, uri: Uri): String?
     fun safWrite(context: Context, uri: Uri): String?
 }

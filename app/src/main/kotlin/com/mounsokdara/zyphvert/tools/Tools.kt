@@ -18,16 +18,12 @@ private fun isVideoStream(r: ToolRequest, f: PickedFile): Boolean {
     return streamsOf(r.ctx, f.uri)?.first ?: true
 }
 
-/** Hardware H.264 encode with AAC audio: the default for edits that must re-encode. */
 private const val H264 = "-c:v h264_mediacodec -b:v 6M -c:a aac -b:a 192k"
 
-/** Same as [H264] but sized from the source file, so edits don't make the video bigger than it was. */
 private fun smartH264(r: ToolRequest, f: PickedFile?): String {
     val info = f?.let { videoInfo(r.ctx, it.uri) } ?: return H264
     return "-c:v h264_mediacodec -b:v ${hwVideoKbps(info, 0, 0, "auto", false, 6000)}k -c:a aac -b:a ${audioKbpsFor(info)}k"
 }
-
-// ------------------------------------------------------------------ audio
 
 private fun audioJobs(r: ToolRequest, files: List<PickedFile>, cover: PickedFile?, fmtKey: String): List<ToolJob> {
     val fmt = audioFmt(fmtKey)
@@ -71,8 +67,6 @@ private fun audioJobs(r: ToolRequest, files: List<PickedFile>, cover: PickedFile
     }
 }
 
-// ------------------------------------------------------------------ video
-
 private fun videoKind(v: Map<String, String>) = videoFmt(v["vfmt"] ?: "mp4_h264").kind
 
 private fun videoJobs(r: ToolRequest, files: List<PickedFile>, fmtKey: String): List<ToolJob> {
@@ -82,7 +76,6 @@ private fun videoJobs(r: ToolRequest, files: List<PickedFile>, fmtKey: String): 
     val qual = r.str("vq").ifEmpty { "auto" }
     val aKey = r.str("vaud").ifEmpty { "keep" }
     val hwK = when (qual) { "high" -> 10000; "low" -> 2500; "tiny" -> 1000; else -> 6000 }
-    // Live and Motion Photo length: 0 means the whole video, with no limit.
     val liveSecs = r.str("llen").ifEmpty { "0" }.toIntOrNull() ?: 0
     val liveLen = if (liveSecs > 0) " -t $liveSecs" else ""
     return files.map { f ->
@@ -92,7 +85,6 @@ private fun videoJobs(r: ToolRequest, files: List<PickedFile>, fmtKey: String): 
         val len = trim?.let { it.end - it.start } ?: dur
         val inp = "$pre-i ${r.saf(f)}"
         val scale = if (h > 0) "scale=-2:$h" else null
-        // Size the output from the source: no upscaling, no frame-rate increase, bitrate that matches the picture.
         val info = videoInfo(r.ctx, f.uri)
         val vScale = if (h > 0 && (info == null || h < info.height)) "scale=-2:$h" else null
         val srcFps = info?.fps
@@ -106,7 +98,6 @@ private fun videoJobs(r: ToolRequest, files: List<PickedFile>, fmtKey: String): 
                 r.job(f, out, "$inp -map ${q("0:v?")} -map ${q("0:a?")} -c copy ${q(out.path)}")
             }
             VFmt.Kind.LivePair -> {
-                // iPhone-style pair: Zyphvert/Live Photos/<name>.mov next to <name>.jpg. Length comes from the "Live Photo length" option.
                 val out = r.out("Video", f, "mov", dir = OutputPaths.dir(r.ctx, "Live Photos"))
                 val id = java.util.UUID.randomUUID().toString().uppercase()
                 val vf = listOfNotNull(vScale, if (vFps > 0) "fps=$vFps" else null, VID_TAIL).joinToString(",")
@@ -114,7 +105,6 @@ private fun videoJobs(r: ToolRequest, files: List<PickedFile>, fmtKey: String): 
                     "-movflags use_metadata_tags -metadata com.apple.quicktime.content.identifier=$id -f mov ${q(out.path)}")
             }
             VFmt.Kind.MotionPhoto -> {
-                // One FFmpeg run makes the clip and the still; then both are joined into a single Motion Photo JPG.
                 val out = r.out("Images", f, "jpg", dir = OutputPaths.dir(r.ctx, "Live Photos"))
                 val tmpClip = File(r.ctx.cacheDir, "mp_${out.nameWithoutExtension}.mp4").also { it.delete() }
                 val tmpStill = File(r.ctx.cacheDir, "mp_${out.nameWithoutExtension}.jpg").also { it.delete() }
@@ -171,7 +161,6 @@ private fun videoJobs(r: ToolRequest, files: List<PickedFile>, fmtKey: String): 
                     VFmt.Kind.Vp8 -> "-c:v libvpx -deadline realtime -cpu-used 8 " + (if (vk != null) "-b:v ${vk}k" else "-crf ${crf / 3 + 4} -b:v 2M")
                     else -> "-c:v h264_mediacodec -b:v ${vk ?: hw}k"
                 }
-                // The source's own AAC track is copied as it is: no quality loss and no extra size.
                 val copyAudio = keepAudio && info?.audioMime == AAC_MIME
                 val a = when {
                     aKey == "mute" -> "-an"
@@ -182,7 +171,6 @@ private fun videoJobs(r: ToolRequest, files: List<PickedFile>, fmtKey: String): 
                     copyAudio -> "-c:a copy"
                     else -> "-c:a aac -b:a ${abr}k"
                 }
-                // H.264 in, H.264 out, nothing to change: re-encoding can only make it bigger or worse. Copy the video as it is.
                 val nothingToChange = fmt.kind == VFmt.Kind.Hw264 && info?.videoMime == AVC_MIME && trim == null &&
                     vScale == null && vFps == 0 && target == null && qual in setOf("auto", "high")
                 if (nothingToChange) {
@@ -197,7 +185,6 @@ private fun videoJobs(r: ToolRequest, files: List<PickedFile>, fmtKey: String): 
 
 val toolSpecs: Map<String, ToolSpec> = listOf(
 
-    // ================================================================ CONVERT
     ToolSpec(
         id = "video",
         intro = "Convert any video to any format: MP4, MKV, WebM, MOV, AVI, WMV, GIF, images, even a Live Photo pair and more. Pick a preset for WhatsApp, Discord, TikTok or YouTube, or tune every setting yourself.",
@@ -220,7 +207,6 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
             val jobs = videoJobs(r, files, key)
             if (videoFmt(key).kind != VFmt.Kind.LivePair) jobs
             else jobs.flatMapIndexed { i, j ->
-                // the matching still, saved beside the clip so the two stay a pair
                 val mov = File(j.output!!)
                 val still = File(mov.parentFile, mov.nameWithoutExtension + ".jpg")
                 listOf(j, ToolJob(r.toolTitle, files[i].name, still.path, "-i ${r.saf(files[i])} -frames:v 1 -q:v 2 ${q(still.path)}"))
@@ -304,7 +290,6 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
         },
     ),
 
-    // ================================================================ EDIT
     ToolSpec(
         id = "trim",
         intro = "Cut a video or audio file. Keep just the part you want, or remove a section from the middle. Fast mode doesn't re-encode, so there's no quality loss.",
@@ -319,7 +304,6 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
             val f = r.file("media")!!
             val dur = durationSec(r.ctx, f.uri)
             val trim0 = trimOf(r, "range", dur) ?: fail("Move the sliders to choose what to keep or remove.")
-            // Removing the very start or end is just a "keep" of the other side.
             val trim = when {
                 trim0.remove && trim0.start < 0.05 && dur != null -> Trim(trim0.end, dur, false)
                 trim0.remove && dur != null && trim0.end >= dur - 0.05 -> Trim(0.0, trim0.start, false)
@@ -368,7 +352,6 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
             val parts = buildList {
                 if (r.str("ar") != "keep") {
                     val (a, b) = r.str("ar").split(":").map { it.toInt() }
-                    // min(x,y) written as (x+y-abs(x-y))/2 so the filter has no commas to escape
                     add("crop=w=(iw+ih*$a/$b-abs(iw-ih*$a/$b))/2:h=(ih+iw*$b/$a-abs(ih-iw*$b/$a))/2")
                 }
                 when (r.str("rot")) { "cw" -> add("transpose=1"); "ccw" -> add("transpose=2"); "180" -> { add("transpose=1"); add("transpose=1") } }
@@ -444,7 +427,6 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
         },
     ),
 
-    // ================================================================ METADATA & PRIVACY
     ToolSpec(
         id = "meta",
         intro = "See everything stored in a file and change it: tags, dates, camera and location, and cover art. Pick one file or many; your changes apply to all of them.",
@@ -469,7 +451,6 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
         },
     ),
 
-    // ================================================================ CREATE
     ToolSpec(
         id = "live",
         intro = "Get the video out of a Motion Photo or Live Photo, or turn it into a GIF or a still frame.",
@@ -525,7 +506,6 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
         },
     ),
 
-    // ================================================================ POWER
     ToolSpec(
         id = "batch",
         intro = "Convert many files in one go. Pick the files, pick a target format, and every file becomes its own queued job.",
@@ -569,7 +549,6 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
             }
         },
     ),
-    // ================================================================ EXTRA EDIT TOOLS
     ToolSpec(
         id = "compress",
         intro = "Make videos, audio files and photos smaller before you share them. Pick how much to squeeze.",
@@ -595,7 +574,6 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
                     isVideoStream(r, f) -> {
                         val (br0, h, ab0) = when (lvl) { "light" -> Triple(6000, 0, 160); "strong" -> Triple(1200, 480, 96); else -> Triple(2800, 720, 128) }
                         val info = videoInfo(r.ctx, f.uri)
-                        // A "smaller" file must never end up bigger: stay under the source's own bitrate and size.
                         val br = info?.videoKbps?.let { minOf(br0, maxOf(300, (it * 0.9).toInt())) } ?: br0
                         val ab = info?.audioKbps?.let { minOf(ab0, maxOf(64, it)) } ?: ab0
                         val vf = listOfNotNull(if (h > 0 && (info == null || h < info.height)) "scale=-2:$h" else null, VID_TAIL).joinToString(",")

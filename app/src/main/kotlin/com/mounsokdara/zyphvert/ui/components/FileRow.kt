@@ -64,10 +64,8 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.Locale
 
-/** A small picture (images, videos) and a length (videos, audio) for a file. Both can be missing. */
 class MediaPreview(val thumb: Bitmap?, val durationMs: Long?)
 
-/** Loads previews off the main thread, three at a time, and remembers them. */
 object Thumbs {
     private val cache = object : LruCache<String, MediaPreview>((Runtime.getRuntime().maxMemory() / 1024 / 10).toInt()) {
         override fun sizeOf(key: String, value: MediaPreview): Int = ((value.thumb?.byteCount ?: 0) / 1024).coerceAtLeast(1)
@@ -147,10 +145,6 @@ fun formatDuration(ms: Long): String {
 
 private val FolderOrange = Color(0xFFFFA726)
 
-/**
- * One file or folder, laid out like ZArchiver: a picture on the left, the name, then the size and length
- * with the date on the right. Videos and photos show a real thumbnail.
- */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun FileRow(
@@ -239,7 +233,6 @@ fun FileRow(
     }
 }
 
-/** The ".." row: a folder with an up arrow, shown first in every folder, including empty ones. */
 @Composable
 fun UpFolderRow(modifier: Modifier = Modifier, onClick: () -> Unit) {
     Row(
@@ -253,7 +246,6 @@ fun UpFolderRow(modifier: Modifier = Modifier, onClick: () -> Unit) {
     }
 }
 
-/** Grid version of [FileRow]: a square thumbnail with the name under it. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun FileTile(

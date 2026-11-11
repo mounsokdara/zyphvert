@@ -48,7 +48,6 @@ import kotlinx.coroutines.launch
 import java.text.DateFormat
 import java.util.Date
 
-/** Every GitHub release with its notes. Works offline from the last saved copy. */
 @Composable
 fun ChangelogScreen(onBack: () -> Unit) {
     val ctx = LocalContext.current
@@ -120,7 +119,6 @@ private fun ReleaseCard(note: ReleaseNote, onClick: () -> Unit) {
     }
 }
 
-/** One line of release notes: headings, bullets and plain text. */
 @Composable
 private fun NoteLine(raw: String) {
     val line = raw.trimEnd()

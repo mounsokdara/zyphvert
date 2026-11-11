@@ -11,7 +11,6 @@ object Links {
     const val REPO = "https://github.com/mounsokdara/zyphvert"
     const val ISSUES = "$REPO/issues"
     const val AUTHOR = "https://github.com/mounsokdara"
-    /** Replace with your sponsor / donation page. */
     const val SUPPORT = AUTHOR
 }
 

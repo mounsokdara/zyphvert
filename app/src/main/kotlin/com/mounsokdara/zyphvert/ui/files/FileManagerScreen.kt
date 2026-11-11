@@ -55,22 +55,17 @@ import com.mounsokdara.zyphvert.tools.PickedFile
 import com.mounsokdara.zyphvert.util.StorageAccess
 import java.io.File
 
-/** Set when the browser is used to pick files for a tool; null means it is the Files tab. */
 class PickConfig(
     val kind: InKind,
     val multiple: Boolean,
     val title: String,
     val onDismiss: () -> Unit,
-    /** Fallback when all-files access isn't granted. */
     val onUseSystem: () -> Unit,
     val onPicked: (List<PickedFile>) -> Unit,
-    /** Folder picker: list only folders and let the user select the folder they are in. */
     val folder: Boolean = false,
-    /** Folder to open first. */
     val startPath: String? = null,
 )
 
-/** The Files tab, or (with [pick]) the file picker. Both share this one screen and one ViewModel class. */
 @Composable
 fun FileManagerScreen(
     bottomPadding: Dp = 0.dp,
@@ -85,7 +80,6 @@ fun FileManagerScreen(
     val scope = rememberCoroutineScope()
     fun finishPick(items: List<FileEntry>) {
         if (items.isEmpty()) return
-        // Files inside Android/data or Android/obb are opened (or copied out) first, so this can take a moment.
         scope.launch { pick?.onPicked(items.map { PickedFile(vm.uriFor(it.file), it.name, it.companion?.path, it.live) }) }
     }
     var menu by remember { mutableStateOf(false) }
@@ -105,8 +99,6 @@ fun FileManagerScreen(
     LaunchedEffect(vm.message) {
         vm.message?.let { Toast.makeText(ctx, it, Toast.LENGTH_SHORT).show(); vm.message = null }
     }
-    // Auto refresh: the folder is re-read when the screen comes back and every few seconds while it is showing; the
-    // list only changes if something in the folder changed. Pulling down refreshes right away.
     val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
     LaunchedEffect(lifecycleOwner, vm) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
@@ -121,7 +113,6 @@ fun FileManagerScreen(
     val list = vm.filtered()
         .filter { !searching || passesSearchFilters(it.isDirectory, it.extension, showFolders, kinds) }
 
-    // A tap: the Files tab opens a file's menu; the picker selects it. Folders always open.
     val onTap: (FileEntry) -> Unit = { e ->
         if (pick == null || e.isDirectory) vm.open(e)
         else {
@@ -180,7 +171,6 @@ fun FileManagerScreen(
                     }
                     }
 
-    // Back goes up one folder; at the top of the tree it falls through to the app.
     BackHandler(enabled = vm.canGoUp && vm.browseMode == BrowseMode.Folders) { vm.goUp() }
     BackHandler(enabled = vm.browseMode == BrowseMode.Media) { vm.setMode(BrowseMode.Folders) }
     BackHandler(enabled = searching) { closeSearch() }
@@ -236,7 +226,6 @@ fun FileManagerScreen(
             }
         }
 
-        // The two states: walk folders, or one flat list of every media file. The picker adds a type filter.
         if (pick?.folder != true) Row(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 2.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically,
@@ -256,7 +245,6 @@ fun FileManagerScreen(
             }
         }
 
-        // Path bar: every segment is tappable, starting at the real root "/".
         if (vm.browseMode == BrowseMode.Folders) LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             items(vm.breadcrumbs.size) { i ->
                 val (label, path) = vm.breadcrumbs[i]
@@ -286,17 +274,12 @@ fun FileManagerScreen(
             }
         }
 
-        // Pull down to refresh. The system rubber-band/stretch is switched off here, otherwise it moves the whole list
-        // along with the finger while the refresh spinner shows.
         CompositionLocalProvider(LocalOverscrollConfiguration provides null) {
         PullToRefreshBox(
             isRefreshing = vm.refreshing, onRefresh = { vm.pullRefresh() },
             modifier = Modifier.weight(1f).fillMaxWidth(),
         ) {
-            // No placement animation while a folder is loading.
             val animate = !vm.loading
-            // Only add the hint row when it has something to show. When it was always there it was a zero-height row at
-            // the very top of the list, and a zero-height first row makes the list think it can keep scrolling up.
             val showHint = vm.error != null || vm.locked || (list.isEmpty() && !vm.loading)
             val hint: @Composable () -> Unit = {
                 when {
@@ -340,7 +323,6 @@ fun FileManagerScreen(
                         FileRow(
                             name = e.name, file = e.file, isDir = e.isDirectory,
                             size = if (e.isDirectory) null else e.sizeLabel,
-                            // In the flat media list, say which folder each file is in.
                             date = if (vm.browseMode == BrowseMode.Media) (e.file.parentFile?.name ?: "") + " · " + e.dateLabel else e.dateLabel,
                             live = e.live, selectedOrder = orderOf(e), showSelect = pick?.multiple == true && !e.isDirectory,
                             modifier = (if (animate) Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null) else Modifier), onLongClick = { vm.selected = e }, onClick = { onTap(e) },
@@ -351,7 +333,6 @@ fun FileManagerScreen(
         }
         }
 
-        // Folder picker: browse like the file picker, then take the folder you are standing in.
         if (pick?.folder == true) Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -371,7 +352,6 @@ fun FileManagerScreen(
             }
         }
 
-        // Picker with several files: the running selection and the Select button.
         if (pick?.multiple == true) Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {

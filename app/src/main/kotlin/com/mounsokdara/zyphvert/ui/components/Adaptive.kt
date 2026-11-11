@@ -11,16 +11,13 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-/** Material 3 window width breakpoints: compact < 600dp, medium 600-839dp, expanded >= 840dp. */
 object Breakpoints {
     val Medium = 600.dp
 }
 
-/** True on tablets and other wide windows (also updates in split-screen / foldable resize). */
 @Composable
 fun isWideLayout(): Boolean = LocalConfiguration.current.screenWidthDp.dp >= Breakpoints.Medium
 
-/** Centers [content] and caps its width so lines and cards do not stretch across a tablet screen. */
 @Composable
 fun CenteredContent(
     modifier: Modifier = Modifier,

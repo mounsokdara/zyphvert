@@ -65,7 +65,6 @@ import com.mounsokdara.zyphvert.ui.theme.SeedChips
 private val SegmentLabels = mapOf(ThemeMode.Light to "Light", ThemeMode.Dark to "Dark", ThemeMode.System to "System")
 private val SegmentOrder = listOf(ThemeMode.Light, ThemeMode.Dark, ThemeMode.System)
 
-/** The Theme page, laid out like the one in the Video Player: Appearance, Dynamic color, Material You color, Custom color. */
 @Composable
 fun ThemeScreen(vm: SettingsViewModel, onBack: () -> Unit) {
     val s by vm.settings.collectAsState()
@@ -101,7 +100,6 @@ fun ThemeScreen(vm: SettingsViewModel, onBack: () -> Unit) {
             ) { vm.setDynamicColor(it) }
 
             Spacer(Modifier.height(8.dp))
-            // The color choices only matter when dynamic color is off.
             Column(Modifier.alpha(if (dynamicOn) 0.38f else 1f)) {
                 Text("Material You color", fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 16.dp))
                 Spacer(Modifier.height(4.dp))
@@ -139,7 +137,6 @@ fun ThemeScreen(vm: SettingsViewModel, onBack: () -> Unit) {
     }
 }
 
-/** A color plate: the light tints of the color behind a round swatch of the color itself. */
 @Composable
 private fun Plate(chip: SeedChip, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
     val shape = RoundedCornerShape(16.dp)
@@ -153,7 +150,6 @@ private fun Plate(chip: SeedChip, selected: Boolean, enabled: Boolean, onClick: 
     }
 }
 
-/** Pick any color: a hex field plus hue, saturation and brightness sliders. */
 @Composable
 private fun ColorPickerSheet(initial: Color, onDismiss: () -> Unit, onApply: (Color) -> Unit) {
     val hsv = remember { FloatArray(3).also { android.graphics.Color.colorToHSV(initial.toArgb(), it) } }

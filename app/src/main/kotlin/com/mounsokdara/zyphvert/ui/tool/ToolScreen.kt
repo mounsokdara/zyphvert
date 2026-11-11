@@ -177,8 +177,6 @@ private fun IntroCard(tool: Tool, spec: ToolSpec) {
     }
 }
 
-// ------------------------------------------------------------------ files
-
 @Composable
 private fun SlotCard(slot: InputSlot, files: List<PickedFile>, onChange: (List<PickedFile>) -> Unit) {
     val ctx = LocalContext.current
@@ -192,7 +190,6 @@ private fun SlotCard(slot: InputSlot, files: List<PickedFile>, onChange: (List<P
         if (uri != null) onChange(listOf(PickedFile(uri, ctx.displayName(uri))))
     }
     val launchPicker = rememberFilePicker(
-        // Fallback for when all-files access isn't granted
         onUseSystem = { if (slot.multiple) multi.launch(slot.kind.mimes) else single.launch(slot.kind.mimes) },
         onPicked = { picked -> onChange(if (slot.multiple) files + picked else picked.take(1)) },
     )
@@ -237,8 +234,6 @@ private fun fileIcon(name: String) = when {
     isAudioName(name) -> Icons.Rounded.MusicNote
     else -> Icons.Rounded.Movie
 }
-
-// ------------------------------------------------------------------ options
 
 @Composable
 private fun OptionRow(opt: Opt, vm: ToolViewModel, spec: ToolSpec) {
@@ -364,8 +359,6 @@ private fun PickerSheet(title: String, items: List<Item>, selected: String, onDi
     }
 }
 
-// ------------------------------------------------------------------ trim range
-
 private fun clock(sec: Double): String {
     val t = (sec * 10).toLong() / 10.0
     val m = (t / 60).toInt()
@@ -429,8 +422,6 @@ private fun Stepper(text: String, minus: () -> Unit, plus: () -> Unit) {
         }
     }
 }
-
-// ------------------------------------------------------------------ tags
 
 @Composable
 private fun TagsRow(opt: Opt.Tags, vm: ToolViewModel) {

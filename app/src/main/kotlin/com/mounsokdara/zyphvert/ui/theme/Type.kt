@@ -6,7 +6,6 @@ import androidx.compose.ui.unit.sp
 
 private val Base = Typography()
 
-/** Full M3 type scale, with heavier headings and tighter titles for a confident, modern feel. */
 val Typography = Typography(
     displaySmall = Base.displaySmall.copy(fontWeight = FontWeight.SemiBold, letterSpacing = (-0.5).sp),
     headlineLarge = Base.headlineLarge.copy(fontWeight = FontWeight.SemiBold),

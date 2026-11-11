@@ -18,14 +18,9 @@ class ProtectedEntry(val name: String, val isDir: Boolean, val size: Long, val m
 
 sealed interface ProtectedListing {
     data class Ok(val entries: List<ProtectedEntry>) : ProtectedListing
-    /** Neither a folder permission nor Shizuku is available yet. */
     data object Locked : ProtectedListing
 }
 
-/**
- * Android 11+ keeps apps out of Android/data and Android/obb, even with All files access. Two ways in:
- * a folder permission the user grants through the system dialog (Android 11 to 12), or the Shizuku app (any Android 11+).
- */
 @Singleton
 class ProtectedStorage @Inject constructor(
     @ApplicationContext private val ctx: Context,
@@ -34,7 +29,6 @@ class ProtectedStorage @Inject constructor(
     private val base = Environment.getExternalStorageDirectory().path
     private val docProvider = "com.android.externalstorage.documents"
 
-    /** Android 13+ no longer lets apps ask for these folders through the system dialog. */
     val folderPermissionPossible: Boolean
         get() = Build.VERSION.SDK_INT in Build.VERSION_CODES.R..Build.VERSION_CODES.S_V2
 
@@ -44,7 +38,6 @@ class ProtectedStorage @Inject constructor(
         else -> path
     }
 
-    /** Which of the two locked folders [path] is in ("data" or "obb"), or null. */
     private fun lockedRoot(path: String): String? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
         val p = normalize(path)
@@ -55,7 +48,6 @@ class ProtectedStorage @Inject constructor(
 
     private fun docId(path: String) = "primary:" + normalize(path).removePrefix("$base/")
 
-    /** The granted folder permission that covers [path], if any, as (tree, document id). */
     private suspend fun treeFor(path: String): Pair<Uri, String>? {
         val id = docId(path)
         for (t in settings.safTrees.first()) {
@@ -92,17 +84,14 @@ class ProtectedStorage @Inject constructor(
         ProtectedListing.Locked
     }
 
-    /** Something a tool can read for the locked file at [path]: a content link, or a copy in the app's cache. */
     suspend fun readableUri(path: String): Uri? = withContext(Dispatchers.IO) {
         treeFor(path)?.let { (tree, id) -> return@withContext DocumentsContract.buildDocumentUriUsingTree(tree, id) }
         ShizukuFs.copyToCache(ctx, normalize(path))?.let { Uri.fromFile(it) }
     }
 
-    /** Where the system folder dialog should start for [path]. */
     fun initialTreeUri(path: String): Uri =
         DocumentsContract.buildDocumentUri(docProvider, "primary:Android/${lockedRoot(path) ?: "data"}")
 
-    /** Keeps a folder permission the user just granted. False if it isn't Android/data or Android/obb itself. */
     suspend fun addTree(tree: Uri): Boolean {
         val id = runCatching { DocumentsContract.getTreeDocumentId(tree) }.getOrNull()
         if (id != "primary:Android/data" && id != "primary:Android/obb") return false

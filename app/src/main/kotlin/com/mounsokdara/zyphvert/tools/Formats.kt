@@ -1,8 +1,6 @@
 package com.mounsokdara.zyphvert.tools
 
 
-// ---------------------------------------------------------------- audio
-
 internal class AFmt(
     val key: String, val label: String, val ext: String, val codec: String,
     val lossy: Boolean = true, val cover: Boolean = false, val mux: String = "",
@@ -60,7 +58,6 @@ internal val channelItems = listOf(Item("auto", "Auto (keep original)"), Item("1
 internal val compressionItems = listOf(Item("auto", "Auto (default)")) +
     (0..9).map { Item("$it", if (it == 0) "0 · fastest" else if (it == 9) "9 · smallest" else "$it") }
 
-/** Codec options for the audio stream, including bitrate/quality choices. */
 internal fun audioCodecArgs(fmt: AFmt, br: String, sr: String, ch: String, comp: String): String {
     val a = mutableListOf("-c:a ${fmt.codec}")
     if (fmt.lossy) {
@@ -78,11 +75,9 @@ internal fun audioCodecArgs(fmt: AFmt, br: String, sr: String, ch: String, comp:
             }
         }
     }
-    // Telegram voice notes are mono Opus at 48 kHz, so those are the defaults for that format.
     val voice = fmt.key == "tgvoice"
     val srUse = if (sr == "auto" && voice) "48000" else sr
     val chUse = if (ch == "auto" && voice) "1" else ch
-    // Opus only supports a few sample rates; let the encoder pick when asked for another.
     if (srUse != "auto" && !(fmt.codec == "libopus" && srUse.toInt() !in setOf(8000, 12000, 16000, 24000, 48000))) a += "-ar $srUse"
     if (chUse != "auto") a += "-ac $chUse"
     if (comp != "auto" && (fmt.key == "flac" || fmt.key == "mp3")) a += "-compression_level $comp"
@@ -103,8 +98,6 @@ internal val audioPresets = listOf(
     Preset("ring", "Ringtone", "Ideal for phone ringtones", mapOf("afmt" to "m4a", "br" to "cbr:128", "sr" to "44100", "ch" to "2")),
     Preset("lossless", "Lossless archive", "Preserves the original audio quality", mapOf("afmt" to "flac", "sr" to "auto", "ch" to "auto")),
 )
-
-// ---------------------------------------------------------------- video
 
 internal class VFmt(val key: String, val label: String, val desc: String?, val ext: String, val kind: Kind) {
     enum class Kind { Hw264, HwHevc, Mpeg4, Vp9, Vp8, Wmv, Mpeg2, Gif, Webp, Apng, FramesJpg, FramesPng, Remux, LivePair, MotionPhoto }
@@ -167,8 +160,6 @@ internal val videoPresets = listOf(
     Preset("web", "Web video (WebM)", "VP9 for websites", mapOf("vfmt" to "webm_vp9", "res" to "0", "fps" to "0", "vq" to "auto", "vaud" to "128", "target" to "")),
 )
 
-// ---------------------------------------------------------------- image
-
 internal val imageTargets = listOf(
     Item("jpg", "JPG"), Item("png", "PNG"), Item("webp", "WebP"),
     Item("bmp", "BMP"), Item("tiff", "TIFF"), Item("gif", "GIF"),
@@ -178,8 +169,6 @@ internal val imageTargets = listOf(
     Item("live_webp", "Live Photo to animated WebP", "Pick a Live or Motion Photo"),
 )
 internal val maxWidthItems = listOf(Item("0", "Original size")) + listOf(3840, 2560, 1920, 1280, 1024, 800, 640).map { Item("$it", "$it px wide") }
-
-// ---------------------------------------------------------------- tags
 
 internal val tagKeys = listOf(
     "title" to "Title", "artist" to "Artist", "album_artist" to "Album artist", "album" to "Album",
@@ -194,12 +183,10 @@ internal val genres = listOf(
     "Gospel", "Soul", "Punk", "Folk", "Latin", "Electronic", "Podcast", "Audiobook", "Speech",
 )
 
-/** What the user wants for a tag: the typed value, or the file name for the title. */
 private fun wantedTag(r: ToolRequest, f: PickedFile?, k: String): String =
     if (k == "title" && r.bool("tag.useFilename") && f != null) cleanTag(f.name.substringBeforeLast('.'))
     else cleanTag(r.str("tag.$k"))
 
-/** `-metadata "key=value"` for every tag that was filled in; an empty one is left alone. */
 internal fun tagArgs(r: ToolRequest, f: PickedFile?): List<String> = buildList {
     for ((k, _) in tagKeys) {
         val v = wantedTag(r, f, k)
@@ -207,11 +194,8 @@ internal fun tagArgs(r: ToolRequest, f: PickedFile?): List<String> = buildList {
     }
 }
 
-// ---------------------------------------------------------------- range
-
 internal class Trim(val start: Double, val end: Double, val remove: Boolean)
 
-/** The chosen start/end, or null when the whole file is selected. */
 internal fun trimOf(r: ToolRequest, id: String = "range", duration: Double? = null): Trim? {
     val parts = r.str(id).split(",")
     if (parts.size != 2) return null
@@ -223,13 +207,10 @@ internal fun trimOf(r: ToolRequest, id: String = "range", duration: Double? = nu
     return Trim(s, e, r.str("$id.mode") == "remove")
 }
 
-/** Pre-input seek arguments for a "keep this part" selection. */
 internal fun keepArgs(t: Trim?): String =
     if (t != null && !t.remove) "-ss ${num(t.start)} -to ${num(t.end)} " else ""
 
-/** How long the video inside a Live or Motion Photo is. 0 = Auto: as long as the video. */
 internal val liveLengthItems = listOf(
-    // First item is the default. Auto sets no limit, so the length follows the video itself (or the start/end range).
     Item("0", "Auto", "Matches the video length, or the part you pick with the start and end sliders"),
     Item("3", "3 seconds", "Like a phone camera"),
     Item("5", "5 seconds"), Item("10", "10 seconds"), Item("15", "15 seconds"), Item("30", "30 seconds"),

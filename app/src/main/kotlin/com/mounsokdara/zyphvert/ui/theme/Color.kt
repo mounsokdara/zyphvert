@@ -2,10 +2,6 @@ package com.mounsokdara.zyphvert.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Brand palette: seeded from a deep emerald ("vert"), tonal roles generated per M3.
-// Used on Android < 12 or when dynamic color is turned off.
-
-// ---- Light ----
 val LightPrimary = Color(0xFF006C4C)
 val LightOnPrimary = Color(0xFFFFFFFF)
 val LightPrimaryContainer = Color(0xFF89F8C7)
@@ -34,7 +30,6 @@ val LightInverseSurface = Color(0xFF2C322E)
 val LightInverseOnSurface = Color(0xFFECF2EC)
 val LightInversePrimary = Color(0xFF6CDBAC)
 
-// ---- Dark ----
 val DarkPrimary = Color(0xFF6CDBAC)
 val DarkOnPrimary = Color(0xFF003826)
 val DarkPrimaryContainer = Color(0xFF005138)

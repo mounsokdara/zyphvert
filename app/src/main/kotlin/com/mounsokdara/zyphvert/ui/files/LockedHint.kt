@@ -25,10 +25,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.mounsokdara.zyphvert.util.ShizukuFs
 
-/**
- * Shown instead of the list for Android/data and Android/obb, which Android 11+ keeps closed to apps.
- * Two ways to open them: a folder permission (Android 11 to 12 only) and the Shizuku app (any Android 11+).
- */
 @Composable
 fun LockedHint(
     folderPermissionPossible: Boolean,
@@ -43,7 +39,6 @@ fun LockedHint(
         val stop = ShizukuFs.listenForPermission { granted -> if (granted) onRetry() }
         onDispose { stop() }
     }
-    // Read again after every tap, so the buttons follow what Shizuku is doing right now.
     val running = remember(check) { ShizukuFs.running() }
     val granted = remember(check) { ShizukuFs.granted() }
 

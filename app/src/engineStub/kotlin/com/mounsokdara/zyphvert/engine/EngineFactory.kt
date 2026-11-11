@@ -5,7 +5,6 @@ import android.net.Uri
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 
-/** Used when libs/ffmpeg-kit-next.aar is absent (see scripts/fetch-ffmpeg-aar.sh). */
 object EngineFactory {
     fun create(): MediaEngine = object : MediaEngine {
         override val isAvailable = false

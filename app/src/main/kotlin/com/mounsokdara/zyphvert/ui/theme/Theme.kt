@@ -55,10 +55,6 @@ private val DarkColors = darkColorScheme(
     inversePrimary = DarkInversePrimary,
 )
 
-/**
- * AMOLED variant: pure black surfaces on top of the dark scheme.
- * Toggled from Settings once the data layer exists.
- */
 fun amoledColorScheme(base: ColorScheme = DarkColors) = base.copy(
     background = Color.Black,
     surface = Color.Black,
@@ -83,7 +79,6 @@ fun ZyphvertTheme(
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
-        // A color picked on the Theme page; the brand green keeps the hand-tuned palette.
         seedColor != BrandSeed -> remember(seedColor, darkTheme) { seedColorScheme(seedColor, darkTheme) }
         darkTheme -> DarkColors
         else -> LightColors

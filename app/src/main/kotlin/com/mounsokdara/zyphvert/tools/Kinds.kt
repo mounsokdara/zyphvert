@@ -1,6 +1,5 @@
 package com.mounsokdara.zyphvert.tools
 
-/** Everything FFmpeg (or Android's own decoders) can usually read, grouped for the file picker. */
 val VIDEO_EXTS = setOf(
     "mp4", "m4v", "mkv", "webm", "mov", "avi", "3gp", "3g2", "flv", "f4v", "wmv", "asf", "mpg", "mpeg", "mpe",
     "ts", "m2ts", "mts", "vob", "ogv", "rm", "rmvb", "divx", "mxf", "dv", "y4m", "gifv",
@@ -22,7 +21,5 @@ val IMAGE_EXTS = setOf(
 )
 val SUBTITLE_EXTS = setOf("srt", "vtt", "ass", "ssa", "sub")
 
-/** Extensions an iPhone Live Photo stores its motion half in. */
 val LIVE_VIDEO_EXTS = setOf("mov", "mp4")
-/** Stills that can carry a motion half (HEIC/JPG pair on iPhone, JPG with embedded MP4 on Android). */
 val LIVE_STILL_EXTS = setOf("heic", "heif", "jpg", "jpeg")

@@ -52,7 +52,6 @@ fun MediaInfoScreen(path: String, onBack: () -> Unit) {
             lines = listOf(status)
             return@LaunchedEffect
         }
-        // Quote path for shell safety in the command string
         val quoted = "\"${path.replace("\"", "\\\"")}\""
         val cmd = "-v error -show_format -show_streams -of json $quoted"
         val out = mutableListOf<String>()

@@ -35,7 +35,6 @@ class MainActivity : ComponentActivity() {
                 ThemeMode.Light -> false
                 ThemeMode.Dark -> true
             }
-            // Keep status/navigation bar icons readable when the app theme differs from the system theme.
             DisposableEffect(dark) {
                 enableEdgeToEdge(
                     statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { dark },
@@ -45,7 +44,6 @@ class MainActivity : ComponentActivity() {
                 )
                 onDispose { }
             }
-            // While anything is queued or running, the screen stays on so it can't lock in the middle of a conversion.
             val jobs by JobHistory.jobs.collectAsState()
             val converting = jobs.any { it.status == JobStatus.Queued || it.status == JobStatus.Running }
             DisposableEffect(converting) {

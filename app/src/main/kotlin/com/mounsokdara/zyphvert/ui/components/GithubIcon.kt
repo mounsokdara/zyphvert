@@ -11,7 +11,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.mounsokdara.zyphvert.R
 
-/** The GitHub mark (the same artwork as the Video Player app), tinted like any other icon. */
 @Composable
 fun GithubIcon(modifier: Modifier = Modifier, size: Dp = 24.dp, tint: Color = LocalContentColor.current) {
     Icon(painterResource(R.drawable.ic_github), contentDescription = "GitHub", modifier = modifier.size(size), tint = tint)

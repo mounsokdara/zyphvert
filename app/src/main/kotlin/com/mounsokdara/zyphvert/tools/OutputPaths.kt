@@ -4,7 +4,6 @@ import android.content.Context
 import android.os.Environment
 import java.io.File
 
-/** Where converted files go: Zyphvert/<category> on shared storage, or the app's own folder if that isn't writable. */
 object OutputPaths {
     private fun sharedRoot(): File = File(Environment.getExternalStorageDirectory(), "Zyphvert")
 
@@ -22,7 +21,6 @@ object OutputPaths {
         return if (ok) d else dir(ctx, "Ringtones")
     }
 
-    /** `name.ext`, or `name_2.ext`, `name_3.ext`... if it exists. */
     fun unique(dir: File, base: String, ext: String): File {
         dir.mkdirs()
         var f = File(dir, "$base.$ext")

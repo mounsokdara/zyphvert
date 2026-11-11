@@ -133,7 +133,6 @@ private fun JobCard(job: ConversionJob, onCancel: () -> Unit, modifier: Modifier
             }
             if (job.status == JobStatus.Running) {
                 val p = job.progress
-                // A real bar when the length is known, otherwise the endless one.
                 if (p != null) LinearProgressIndicator(progress = { p }, modifier = Modifier.fillMaxWidth())
                 else LinearProgressIndicator(Modifier.fillMaxWidth())
                 val parts = listOfNotNull(

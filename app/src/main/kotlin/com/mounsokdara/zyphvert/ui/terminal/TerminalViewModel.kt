@@ -31,10 +31,6 @@ import javax.inject.Inject
 
 enum class LineKind { Command, Output, Error, Info, Dir }
 
-/**
- * [prompt] is set for typed commands, so the history shows exactly what the live prompt looked like.
- * [progress] marks an FFmpeg "frame= ... time= ..." status line; the next one replaces it instead of piling up.
- */
 data class TermLine(
     val text: String,
     val kind: LineKind,
@@ -42,7 +38,6 @@ data class TermLine(
     val progress: Boolean = false,
 )
 
-/** One terminal tab: its own history, folder, input and running command. */
 class Session(val id: Int, startDir: File) {
     val engine: MediaEngine = EngineFactory.create()
     var title by mutableStateOf("Terminal $id")
@@ -52,7 +47,6 @@ class Session(val id: Int, startDir: File) {
     val lines = mutableStateListOf<TermLine>()
     val history = mutableListOf<String>()
     var historyPos = -1
-    /** What was typed before the user started walking through history, so the down key can bring it back. */
     var draft = ""
     var job: Job? = null
 
@@ -66,11 +60,9 @@ private val errorHint = Regex("(?i)\\b(error|invalid|no such file|failed|unable|
 private val progressLine = Regex("^\\s*(frame|size|time)=\\s*\\S+.*")
 private val splitLogLines = Regex("[\\r\\n]+")
 
-/** `\` or a backtick at the end of a line, then the newline: shell line continuation. */
 private val continuation = Regex("[\\\\`][ \\t]*\\r?\\n")
 private val anyNewline = Regex("\\s*\\r?\\n\\s*")
 
-/** Result of [tokenize]: the words, plus the quote character that was never closed (if any). */
 data class Tokenized(val tokens: List<String>, val unclosedQuote: Char?)
 
 @HiltViewModel
@@ -90,8 +82,6 @@ class TerminalViewModel @Inject constructor(private val repo: SettingsRepository
 
     init { newTab() }
 
-    // ---------------------------------------------------------------- tabs
-
     fun newTab() {
         val s = Session(nextId++, if (sessions.isEmpty()) home else current.cwd)
         s.lines += TermLine("Zyphvert terminal. Type help for commands.", LineKind.Info)
@@ -108,16 +98,8 @@ class TerminalViewModel @Inject constructor(private val repo: SettingsRepository
         selected = selected.coerceAtMost(sessions.lastIndex)
     }
 
-    // ---------------------------------------------------------------- input
-
     fun setInput(v: TextFieldValue) { current.input = v }
 
-    /**
-     * Every change from the text field goes through here.
-     * - A single Enter submits the command.
-     * - A pasted block of several lines is joined into one command (backslash and backtick line
-     *   continuations are removed) and is NOT submitted, so you can check it before running.
-     */
     fun onInputChanged(v: TextFieldValue) {
         val t = v.text
         if ('\n' !in t && '\r' !in t) { current.input = v; return }
@@ -127,17 +109,14 @@ class TerminalViewModel @Inject constructor(private val repo: SettingsRepository
         if (!multiLine) submit()
     }
 
-    /** Moves the cursor in the command line by [delta] characters (the ← and → keys). */
     fun moveCursor(delta: Int) {
         val s = current
         val pos = (s.input.selection.end + delta).coerceIn(0, s.input.text.length)
         s.input = s.input.copy(selection = TextRange(pos))
     }
 
-    /** Text from the clipboard, made safe to put on one command line. */
     fun cleanPaste(text: String): String = joinLines(text)
 
-    /** Add [text] at the end of the current command (used by the file picker and "open in terminal"). */
     fun insert(text: String) {
         val s = current
         val t = s.input.text
@@ -160,7 +139,6 @@ class TerminalViewModel @Inject constructor(private val repo: SettingsRepository
         }
     }
 
-    /** Tab completion: command names for the first word, file and folder names for the rest. */
     fun complete() {
         val s = current
         val text = s.input.text
@@ -201,8 +179,6 @@ class TerminalViewModel @Inject constructor(private val repo: SettingsRepository
         val quoted = if (path.contains(' ')) "\"$path\"" else path
         setText(s, prefix + quoted)
     }
-
-    // ---------------------------------------------------------------- run
 
     fun submit() {
         val s = current
@@ -245,10 +221,6 @@ class TerminalViewModel @Inject constructor(private val repo: SettingsRepository
         }
     }
 
-    /**
-     * Not a command we know. If ffmpeg/ffprobe appears later in the line (a stray word or two in front
-     * of a pasted command), put the cleaned-up command in the prompt so one Enter runs it.
-     */
     private fun unknown(s: Session, tokens: List<String>) {
         add(s, TermLine("'${tokens.first()}' is not recognized. Type help to see what works here.", LineKind.Error))
         val idx = tokens.indexOfFirst { it.lowercase() == "ffmpeg" || it.lowercase() == "ffprobe" }
@@ -270,8 +242,6 @@ class TerminalViewModel @Inject constructor(private val repo: SettingsRepository
 
     fun saveCommand(cmd: String) { viewModelScope.launch { repo.saveCommand(cmd) } }
     fun deleteSaved(cmd: String) { viewModelScope.launch { repo.deleteCommand(cmd) } }
-
-    // ---------------------------------------------------------------- built-ins
 
     private fun help(s: Session) {
         listOf(
@@ -326,8 +296,6 @@ class TerminalViewModel @Inject constructor(private val repo: SettingsRepository
         else -> String.format(Locale.US, "%.2f GB", b / 1073741824.0)
     }
 
-    // ---------------------------------------------------------------- ffmpeg
-
     private fun runEngine(s: Session, probe: Boolean, args: List<String>) {
         if (!s.engine.isAvailable) {
             add(s, TermLine("The FFmpeg library is not part of this build.", LineKind.Error))
@@ -338,8 +306,6 @@ class TerminalViewModel @Inject constructor(private val repo: SettingsRepository
             return
         }
 
-        // Relative names resolve against the folder shown in the prompt. Inputs that exist are found
-        // automatically; the last argument (the output file) is resolved even though it doesn't exist yet.
         val last = args.lastIndex
         val outputIdx = if (!probe && looksLikeOutputFile(args[last]) && (last == 0 || args[last - 1] != "-i")) last else null
         val resolved = args.mapIndexed { i, raw ->
@@ -352,14 +318,11 @@ class TerminalViewModel @Inject constructor(private val repo: SettingsRepository
             }
         }
 
-        // FFmpeg would stop and ask "Overwrite? [y/N]", and nobody can answer here.
         if (outputIdx != null && "-y" !in args && "-n" !in args && File(resolved[outputIdx]).exists()) {
             add(s, TermLine("${File(resolved[outputIdx]).name} already exists. Add -y to overwrite it, or choose another name.", LineKind.Error))
             return
         }
 
-        // Single quotes must survive (filter expressions use them to protect commas), so any word with
-        // a space or a quote in it goes to the engine wrapped in double quotes.
         val cmd = resolved.joinToString(" ") { a ->
             if (a.any { c -> c == ' ' || c == '"' || c == '\'' }) "\"" + a.replace("\"", "") + "\"" else a
         }
@@ -399,8 +362,6 @@ class TerminalViewModel @Inject constructor(private val repo: SettingsRepository
         }
     }
 
-    // ---------------------------------------------------------------- helpers
-
     private fun setText(s: Session, t: String) { s.input = TextFieldValue(t, TextRange(t.length)) }
 
     private fun add(s: Session, line: TermLine) {
@@ -408,7 +369,6 @@ class TerminalViewModel @Inject constructor(private val repo: SettingsRepository
         if (s.lines.size > MAX_LINES) s.lines.removeRange(0, s.lines.size - MAX_LINES)
     }
 
-    /** Keeps one live status line instead of hundreds of "frame=" lines. */
     private fun addProgress(s: Session, text: String) {
         val line = TermLine(text, LineKind.Output, progress = true)
         if (s.lines.lastOrNull()?.progress == true) s.lines[s.lines.lastIndex] = line else add(s, line)
@@ -420,7 +380,6 @@ class TerminalViewModel @Inject constructor(private val repo: SettingsRepository
         else -> a
     }
 
-    /** "out.mp4" yes; "64k", "-", "pipe:1" and URLs no. */
     private fun looksLikeOutputFile(a: String): Boolean {
         if (a.startsWith("-") || a.startsWith("/") || "://" in a || a.startsWith("pipe:")) return false
         val ext = a.substringAfterLast('.', "")
@@ -437,18 +396,9 @@ class TerminalViewModel @Inject constructor(private val repo: SettingsRepository
     companion object {
         val knownCommands: Set<String> = KNOWN
 
-        /**
-         * Turns pasted multi-line text into one line: `\` or a backtick before a line break is a
-         * continuation (dropped), any other line break becomes a space.
-         */
         fun joinLines(text: String): String =
             text.replace(continuation, " ").replace(anyNewline, " ").trim()
 
-        /**
-         * Splits on spaces, keeping "quoted text" together. Everything inside quotes is kept exactly as
-         * typed. Outside quotes, a `\` or backtick that sits before a space, a dash or the end of the line is
-         * a leftover line continuation (from `\-vf` after copying a multi-line command) and is dropped.
-         */
         fun tokenize(raw: String): Tokenized {
             val out = mutableListOf<String>()
             val cur = StringBuilder()

@@ -158,13 +158,12 @@ fun ZyphvertShell(settingsVm: SettingsViewModel, hapticsEnabled: Boolean) {
                             }
                             TerminalScreen(tvm, onBack = { openToolId = null; pendingFilePath = null })
                         } else {
-                            // Key ViewModel per tool so form state does not leak across tools
                             val tvm = hiltViewModel<ToolViewModel>(key = tool.id)
                             ToolScreen(
                                 tool = tool,
                                 seedPath = pendingFilePath,
                                 onBack = { openToolId = null; pendingFilePath = null },
-                                onQueued = { /* the progress dialog takes over */ },
+                                onQueued = {  },
                                 vm = tvm,
                             )
                         }
@@ -199,7 +198,6 @@ fun ZyphvertShell(settingsVm: SettingsViewModel, hapticsEnabled: Boolean) {
     }
 }
 
-/** What the shell is showing. A tool is identified by its id only, so picking a file for it doesn't re-trigger the transition. */
 private sealed interface Screen {
     data class MediaInfo(val path: String) : Screen
     data class ToolS(val id: String) : Screen

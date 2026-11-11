@@ -12,7 +12,7 @@ object StorageAccess {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             Environment.isExternalStorageManager()
         } else {
-            true // pre-R uses legacy storage model
+            true
         }
     }
 
@@ -24,7 +24,6 @@ object StorageAccess {
             )
             runCatching { context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
                 .onFailure {
-                    // Fallback for devices that only support the generic page
                     val fallback = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
                     runCatching { context.startActivity(fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
                 }

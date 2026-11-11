@@ -55,7 +55,6 @@ private fun scan(ctx: Context): List<File> =
     OutputPaths.root(ctx).walkTopDown().filter { it.isFile && !it.name.startsWith('.') }
         .sortedByDescending { it.lastModified() }.toList()
 
-/** Everything Zyphvert has converted (the Zyphvert output folder), newest first, with open, share, rename and delete. */
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun ConvertedFilesScreen(onBack: () -> Unit) {
@@ -69,7 +68,6 @@ fun ConvertedFilesScreen(onBack: () -> Unit) {
     fun reload() {
         scope.launch { files = withContext(Dispatchers.IO) { scan(ctx) } }
     }
-    // Auto refresh instead of pull-down: when the screen comes back and every few seconds while it is open.
     val owner = androidx.compose.ui.platform.LocalLifecycleOwner.current
     androidx.compose.runtime.LaunchedEffect(owner) {
         owner.lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
@@ -94,7 +92,6 @@ fun ConvertedFilesScreen(onBack: () -> Unit) {
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     items(list, key = { it.absolutePath }) { f ->
-                        // Thumbnail and length like the Files tab; tap previews in another app, hold for more.
                         FileRow(
                             name = f.name, file = f, isDir = false,
                             size = Formatter.formatFileSize(ctx, f.length()),

@@ -29,7 +29,6 @@ enum class ToolCategory(val label: String) {
     Power("Power tools"),
 }
 
-/** Container / content color pair so each category reads as its own tonal family. */
 data class Accent(val container: Color, val content: Color)
 
 @Composable
@@ -50,9 +49,7 @@ data class Tool(
     val description: String,
     val icon: ImageVector,
     val category: ToolCategory,
-    /** True = tool has a real options UI and runs FFmpeg. */
     val available: Boolean = true,
-    /** Short format labels shown on converter cards. */
     val formats: List<String> = emptyList(),
 )
 

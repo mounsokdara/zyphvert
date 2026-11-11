@@ -9,7 +9,6 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
-/** The author's name and photo from GitHub. Null when offline, and the About page falls back to initials. */
 class GithubProfile(val login: String, val name: String?, val avatar: ImageBitmap?) {
     companion object {
         private var cached: GithubProfile? = null

@@ -17,15 +17,12 @@ import org.json.JSONArray
 import rikka.shizuku.Shizuku
 import java.io.File
 
-/** Reads Android/data and Android/obb through the Shizuku app (works on every Android 11+). */
 object ShizukuFs {
     private var service: IFsService? = null
     private val lock = Mutex()
 
-    /** Shizuku is installed and running. */
     fun running(): Boolean = runCatching { Shizuku.pingBinder() }.getOrDefault(false)
 
-    /** Shizuku is running and Zyphvert has been allowed to use it. */
     fun granted(): Boolean =
         running() && runCatching { Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED }.getOrDefault(false)
 
@@ -33,7 +30,6 @@ object ShizukuFs {
         runCatching { Shizuku.requestPermission(code) }
     }
 
-    /** Calls [onResult] when the user answers the Shizuku permission dialog. Returns a function that stops listening. */
     fun listenForPermission(onResult: (Boolean) -> Unit): () -> Unit {
         val listener = Shizuku.OnRequestPermissionResultListener { _, grantResult ->
             onResult(grantResult == PackageManager.PERMISSION_GRANTED)
@@ -63,7 +59,6 @@ object ShizukuFs {
         withTimeoutOrNull(8_000) { ready.await() }
     }
 
-    /** The entries of [path], or null if Shizuku isn't ready or the folder can't be read. */
     suspend fun list(ctx: Context, path: String): List<ProtectedEntry>? = withContext(Dispatchers.IO) {
         val s = connect(ctx) ?: return@withContext null
         runCatching {
@@ -77,7 +72,6 @@ object ShizukuFs {
         }.getOrNull()
     }
 
-    /** Copies [path] into the app's cache (the shell user can't write there, so the app does the copying) and returns the copy. */
     suspend fun copyToCache(ctx: Context, path: String): File? = withContext(Dispatchers.IO) {
         val s = connect(ctx) ?: return@withContext null
         runCatching {

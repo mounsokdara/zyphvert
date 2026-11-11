@@ -21,7 +21,6 @@ import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** Runs queued tool jobs one at a time in the background and records progress in [JobHistory]. */
 @Singleton
 class ConversionManager @Inject constructor(@ApplicationContext private val ctx: Context) {
     val engine: MediaEngine = EngineFactory.create()
@@ -77,7 +76,6 @@ class ConversionManager @Inject constructor(@ApplicationContext private val ctx:
     private suspend fun loop() {
         while (true) {
             val next = synchronized(lock) {
-                // history is newest-first, so the oldest queued job is the last one
                 val n = JobHistory.jobs.value.lastOrNull { it.status == JobStatus.Queued }
                 if (n == null) worker = null
                 n
@@ -109,10 +107,8 @@ class ConversionManager @Inject constructor(@ApplicationContext private val ctx:
             }
             if (!handled) {
                 val cmd = job.command
-                // The first "Duration:" line in the log is the input; with the trim options it gives the output length.
                 var inputMs: Long? = null
                 var probed = false
-                // FFmpeg's log reaches us in small pieces ("Duration: " and "00:00:23.15" separately), so keep the start of it.
                 val head = StringBuilder()
                 var lastPush = 0L
                 val outFile = job.output?.let { File(it) }
@@ -120,7 +116,6 @@ class ConversionManager @Inject constructor(@ApplicationContext private val ctx:
                     val now = System.currentTimeMillis()
                     if (now - lastPush >= 300) {
                         lastPush = now
-                        // Second source for the length, in case the log didn't give it.
                         if (inputMs == null && !probed && cmd != null) { probed = true; inputMs = probeMs(cmd) }
                         val total = effectiveMs(cmd.orEmpty(), inputMs)
                         val frac = total?.let { (timeMs.toFloat() / it).coerceIn(0f, 0.99f) }
@@ -188,7 +183,6 @@ class ConversionManager @Inject constructor(@ApplicationContext private val ctx:
         ((h.toLong() * 3600 + m.toLong() * 60 + s.toDouble()) * 1000).toLong()
     }
 
-    /** Length of the first input file, read straight from the file. Null for streams, images and SAF files. */
     private fun probeMs(cmd: String): Long? {
         val m = Regex("""(?:^|\s)-i\s+(?:"([^"]+)"|(\S+))""").find(cmd) ?: return null
         val path = m.groupValues[1].ifEmpty { m.groupValues[2] }
@@ -204,10 +198,6 @@ class ConversionManager @Inject constructor(@ApplicationContext private val ctx:
 
     private fun seconds(v: String): Double = v.split(':').fold(0.0) { acc, p -> acc * 60 + (p.toDoubleOrNull() ?: 0.0) }
 
-    /**
-     * How long the output will be, so progress can be a percentage: the input length,
-     * cut down by -ss, -to and -t. Unknown (null) when the input length is unknown or the command uses -loop.
-     */
     private fun effectiveMs(cmd: String, inputMs: Long?): Long? {
         if (inputMs == null || inputMs <= 0 || " -loop " in cmd) return null
         fun opt(name: String) = Regex("""(?:^|\s)-$name\s+"?([0-9:.]+)"?(?=\s|$)""").find(cmd)?.groupValues?.get(1)?.let(::seconds)
@@ -223,7 +213,6 @@ class ConversionManager @Inject constructor(@ApplicationContext private val ctx:
         if (!paths.isNullOrEmpty()) MediaScannerConnection.scanFile(ctx, paths, null, null)
     }
 
-    /** Plain-words version of the most common FFmpeg failures. */
     private fun explain(log: String): String {
         val l = log.lowercase()
         return when {

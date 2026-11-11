@@ -27,7 +27,6 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/** Keeps conversions alive while the app is in the background and shows progress in a notification. */
 @AndroidEntryPoint
 class ConversionForegroundService : Service() {
     @Inject lateinit var manager: ConversionManager

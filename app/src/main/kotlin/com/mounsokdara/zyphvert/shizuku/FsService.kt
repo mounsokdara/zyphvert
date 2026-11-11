@@ -6,7 +6,6 @@ import org.json.JSONObject
 import java.io.File
 import kotlin.system.exitProcess
 
-/** Started by Shizuku in its own process with shell rights. Keep this class name and package (see proguard-rules.pro). */
 class FsService : IFsService.Stub() {
     override fun destroy() {
         exitProcess(0)

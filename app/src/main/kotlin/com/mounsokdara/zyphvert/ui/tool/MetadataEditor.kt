@@ -38,7 +38,6 @@ import com.mounsokdara.zyphvert.ui.files.rememberFilePicker
 
 private val MetaShape = RoundedCornerShape(24.dp)
 
-/** The Metadata Editor form: cover art, every tag of the file (edit, remove, add) and all its details. */
 @Composable
 internal fun MetadataEditor(vm: ToolViewModel) {
     val files = vm.picked["media"].orEmpty()

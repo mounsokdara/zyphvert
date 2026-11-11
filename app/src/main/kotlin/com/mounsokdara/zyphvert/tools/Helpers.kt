@@ -30,20 +30,13 @@ internal fun Context.displayName(uri: Uri): String {
     return uri.lastPathSegment?.substringAfterLast('/') ?: "file"
 }
 
-/** Quote a whole argument for the FFmpegKit command parser. */
 internal fun q(s: String) = "\"$s\""
 
 internal fun num(d: Double) = String.format(Locale.US, "%.3f", d).trimEnd('0').trimEnd('.')
 
-/** Even dimensions + yuv420p: required by the hardware H.264/HEVC encoders. */
 internal const val VID_TAIL = "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p"
 
-/**
- * Android Motion Photo: a JPEG with an MP4 appended. Works on the file in chunks, so a Motion Photo
- * with a very long video (hundreds of MB) doesn't need to fit in memory. Returns false if no video is found.
- */
 internal fun extractMotionVideo(ctx: Context, uri: Uri, out: File): Boolean {
-    // Seekable file: the picked file itself, or a streamed copy in the cache for content:// documents.
     val src: File = if (uri.scheme == "file") File(uri.path ?: return false) else {
         val tmp = File(ctx.cacheDir, "motion_src_${System.nanoTime()}")
         ctx.contentResolver.openInputStream(uri)?.use { i -> tmp.outputStream().use { o -> i.copyTo(o) } } ?: return false
@@ -67,7 +60,6 @@ internal fun extractMotionVideo(ctx: Context, uri: Uri, out: File): Boolean {
                 }
                 return true
             }
-            // Newer files say exactly where the video starts: XMP MicroVideoOffset or the container item length, counted from the end.
             val headLen = minOf(total, 262144L).toInt()
             val headBytes = ByteArray(headLen); raf.seek(0); raf.readFully(headBytes)
             val head = String(headBytes, Charsets.ISO_8859_1)
@@ -76,7 +68,6 @@ internal fun extractMotionVideo(ctx: Context, uri: Uri, out: File): Boolean {
                     ?.let { Regex("Item:Length=\"(\\d+)\"").find(it)?.groupValues?.get(1)?.toLongOrNull() }
             if (declared != null && declared in 16 until total && isFtyp(total - declared)) return copyFrom(total - declared)
 
-            // Otherwise scan for an "ftyp" box with a plausible size, a megabyte at a time.
             val sig = byteArrayOf('f'.code.toByte(), 't'.code.toByte(), 'y'.code.toByte(), 'p'.code.toByte())
             val buf = ByteArray((1 shl 20) + 8)
             var pos = 100L
@@ -103,7 +94,6 @@ internal fun extractMotionVideo(ctx: Context, uri: Uri, out: File): Boolean {
 }
 
 @Suppress("DEPRECATION")
-/** Decode with Android's own codecs (handles HEIC/AVIF where the device supports them) and re-encode. */
 internal fun convertImageNative(ctx: Context, uri: Uri, out: File, format: String, quality: Int) {
     val bmp: Bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
         ImageDecoder.decodeBitmap(ImageDecoder.createSource(ctx.contentResolver, uri)) { dec, _, _ ->
@@ -124,7 +114,6 @@ internal fun convertImageNative(ctx: Context, uri: Uri, out: File, format: Strin
     bmp.recycle()
 }
 
-/** Duration in seconds, or null if it can't be read. */
 internal fun durationSec(ctx: Context, uri: Uri): Double? = runCatching {
     val r = MediaMetadataRetriever()
     try {
@@ -133,7 +122,6 @@ internal fun durationSec(ctx: Context, uri: Uri): Double? = runCatching {
     } finally { r.release() }
 }.getOrNull()
 
-/** (hasVideo, hasAudio) as the platform sees the file. */
 internal fun streamsOf(ctx: Context, uri: Uri): Pair<Boolean, Boolean>? = runCatching {
     val r = MediaMetadataRetriever()
     try {
@@ -143,13 +131,8 @@ internal fun streamsOf(ctx: Context, uri: Uri): Pair<Boolean, Boolean>? = runCat
     } finally { r.release() }
 }.getOrNull()
 
-/** Tag values go inside double quotes, so only quotes, backslashes and newlines are a problem. */
 internal fun cleanTag(s: String) = s.filterNot { it == '"' || it == '\'' || it == '\\' || it == '\n' || it == '\r' }.trim()
 
-/**
- * Live Photo / Motion Photo to its video: the paired MOV for an iPhone Live Photo,
- * or the MP4 hidden inside an Android Motion Photo JPEG.
- */
 internal fun resolveLive(ctx: Context, f: PickedFile): PickedFile {
     if (!isImageName(f.name)) return f
     f.companion?.let { c ->
@@ -165,10 +148,6 @@ internal fun resolveLive(ctx: Context, f: PickedFile): PickedFile {
     return PickedFile(Uri.fromFile(tmp), f.name.substringBeforeLast('.') + ".mp4")
 }
 
-/**
- * Android Motion Photo: the JPEG still, with Google's XMP (Motion Photo + the older MicroVideo tags) inserted
- * after the JPEG start marker, and the MP4 clip appended. Google Photos and most Android galleries then play it as a live photo.
- */
 internal fun buildMotionPhoto(still: File, clip: File, out: File, presentationUs: Long = 0L) {
     val jpg = still.readBytes()
     if (jpg.size < 4 || jpg[0] != 0xFF.toByte() || jpg[1] != 0xD8.toByte()) throw IllegalStateException("The still frame isn't a JPEG.")
@@ -196,9 +175,6 @@ internal fun buildMotionPhoto(still: File, clip: File, out: File, presentationUs
     }
 }
 
-// ------------------------------------------------------------------ smart bitrate
-
-/** What the platform can tell us about a video, so the output is never bigger than it needs to be. */
 internal data class VideoInfo(
     val width: Int,
     val height: Int,
@@ -212,7 +188,6 @@ internal data class VideoInfo(
 internal const val AAC_MIME = "audio/mp4a-latm"
 internal const val AVC_MIME = "video/avc"
 
-/** Size (after rotation), frame rate, bitrates and codecs of the first video and audio track, or null if unreadable. */
 internal fun videoInfo(ctx: Context, uri: Uri): VideoInfo? = runCatching {
     val ex = MediaExtractor()
     try {
@@ -241,7 +216,6 @@ internal fun videoInfo(ctx: Context, uri: Uri): VideoInfo? = runCatching {
         }
         if (vMime == null || w <= 0 || h <= 0) return@runCatching null
         if (vKbps == null) {
-            // Many files only report one overall bitrate: take the audio share off it.
             val overall = MediaMetadataRetriever().let { r ->
                 try { r.setDataSource(ctx, uri); r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE)?.toLongOrNull() }
                 finally { r.release() }
@@ -253,7 +227,6 @@ internal fun videoInfo(ctx: Context, uri: Uri): VideoInfo? = runCatching {
     } finally { ex.release() }
 }.getOrNull()
 
-/** How many bits a codec needs for the same picture, relative to H.264. */
 private fun codecNeed(mime: String?): Double = when (mime) {
     "video/hevc", "video/x-vnd.on2.vp9" -> 0.65
     "video/av01" -> 0.5
@@ -261,11 +234,6 @@ private fun codecNeed(mime: String?): Double = when (mime) {
     else -> 1.0
 }
 
-/**
- * Video bitrate (kb/s) for the hardware encoder. It follows the picture size and frame rate and never goes
- * above what the source needed, so a 1.5 Mb/s clip is not blown up to 10 Mb/s for no gain. [fallback] is used
- * when the source can't be read.
- */
 internal fun hwVideoKbps(info: VideoInfo?, outHeight: Int, outFps: Int, qual: String, hevc: Boolean, fallback: Int): Int {
     if (info == null) return fallback
     val oh = if (outHeight in 1 until info.height) outHeight else info.height
@@ -279,5 +247,4 @@ internal fun hwVideoKbps(info: VideoInfo?, outHeight: Int, outFps: Int, qual: St
     return minOf(estimate, cap ?: estimate).toInt().coerceAtLeast(250)
 }
 
-/** AAC bitrate that matches the source instead of always forcing 192 kb/s. */
 internal fun audioKbpsFor(info: VideoInfo?): Int = (info?.audioKbps ?: 128).coerceIn(64, 192)

@@ -8,7 +8,6 @@ import android.widget.Toast
 import androidx.core.content.FileProvider
 import java.io.File
 
-/** Opens [f] in whichever app the person picks (a gallery, video or music player), as a preview. */
 fun openInOtherApp(ctx: Context, f: File) {
     val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(f.extension.lowercase()) ?: "*/*"
     try {

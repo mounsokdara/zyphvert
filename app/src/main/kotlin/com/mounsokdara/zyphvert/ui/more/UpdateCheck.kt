@@ -45,24 +45,17 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 
-/** The steps of "Check for update", from looking at GitHub to handing the APK to the installer. */
 sealed interface UpdateUi {
     data object None : UpdateUi
     data object Checking : UpdateUi
     data class Failed(val message: String) : UpdateUi
     data class UpToDate(val staleNote: String?) : UpdateUi
     data class Available(val latest: ReleaseNote) : UpdateUi
-    /** [total] is 0 when the server didn't say how big the file is. */
     data class Downloading(val done: Long, val total: Long) : UpdateUi
     data class DownloadFailed(val message: String, val release: ReleaseNote) : UpdateUi
-    /** The APK is downloaded but Android hasn't been told this app may install apps. */
     data class NeedsInstallPermission(val file: File) : UpdateUi
 }
 
-/**
- * The whole update flow in one place: check GitHub, download the APK inside the app, open the system installer.
- * Android still asks you to confirm the install, and only accepts an APK signed with the same key as this app.
- */
 class UpdateFlow(private val ctx: Context, private val scope: CoroutineScope) {
     var state by mutableStateOf<UpdateUi>(UpdateUi.None)
         private set
@@ -81,7 +74,7 @@ class UpdateFlow(private val ctx: Context, private val scope: CoroutineScope) {
 
     fun download(release: ReleaseNote) {
         val url = release.apkUrl
-        if (url == null) { // never send the person to a web page: say what is wrong here instead
+        if (url == null) {
             state = UpdateUi.DownloadFailed("This release has no APK attached yet.", release)
             return
         }
@@ -99,7 +92,6 @@ class UpdateFlow(private val ctx: Context, private val scope: CoroutineScope) {
         }
     }
 
-    /** Opens the installer, or asks for the "install unknown apps" permission first. */
     fun install(file: File) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !ctx.packageManager.canRequestPackageInstalls()) {
             state = UpdateUi.NeedsInstallPermission(file)
@@ -128,7 +120,6 @@ fun rememberUpdateFlow(): UpdateFlow {
     return remember { UpdateFlow(ctx.applicationContext, scope) }
 }
 
-/** Looks at GitHub and decides which [UpdateUi] to show. Always asks GitHub, never the saved copy first. */
 suspend fun resolveUpdate(ctx: Context): UpdateUi {
     val feed = ReleaseNotes.load(ctx, refresh = true)
     val latest = feed.latest ?: return UpdateUi.Failed(
@@ -138,7 +129,6 @@ suspend fun resolveUpdate(ctx: Context): UpdateUi {
     else UpdateUi.UpToDate(if (feed.fromCache) "(${feed.error ?: "Saved copy"} - this may be out of date.)" else null)
 }
 
-/** Downloads the APK into the cache, reporting progress. Throws when the download can't finish. */
 private suspend fun downloadApk(ctx: Context, url: String, version: String, onProgress: (done: Long, total: Long) -> Unit): File =
     withContext(Dispatchers.IO) {
         val dir = File(ctx.cacheDir, "updates").apply { mkdirs() }
@@ -242,7 +232,6 @@ fun UpdateDialogs(flow: UpdateFlow) {
             confirmButton = { Button(onClick = { flow.download(state.release) }) { Text("Try again") } },
         )
         is UpdateUi.NeedsInstallPermission -> {
-            // Coming back from the "install unknown apps" screen with the permission granted: install straight away.
             val owner = androidx.compose.ui.platform.LocalLifecycleOwner.current
             androidx.compose.runtime.DisposableEffect(owner, state.file) {
                 val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->

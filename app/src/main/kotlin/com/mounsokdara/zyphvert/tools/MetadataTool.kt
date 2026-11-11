@@ -8,7 +8,6 @@ import java.io.File
 
 private fun fail(msg: String): Nothing = throw IllegalArgumentException(msg)
 
-/** One change to make to every picked file: set [key] to [value], or remove it when [value] is null. */
 private class Op(val key: String, val value: String?)
 
 private val mp4Family = setOf("mp4", "m4a", "m4v", "m4b", "m4r", "mov", "3gp", "3g2")
@@ -27,7 +26,6 @@ private fun parseOps(json: String): List<Op> {
     }
 }
 
-/** Metadata Editor: the tag changes from the form are applied to every picked file, each saved as a new copy. */
 internal fun buildMetadataJobs(r: ToolRequest): List<ToolJob> {
     val files = r.files("media")
     if (files.isEmpty()) fail("Choose a file first.")

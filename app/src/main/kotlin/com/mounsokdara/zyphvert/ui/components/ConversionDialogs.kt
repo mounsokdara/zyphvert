@@ -31,10 +31,6 @@ import com.mounsokdara.zyphvert.data.JobHistory
 import com.mounsokdara.zyphvert.data.JobStatus
 import com.mounsokdara.zyphvert.ui.screens.QueueViewModel
 
-/**
- * The dialog for the conversion that was just started: live progress while it runs (Cancel asks first,
- * Hide keeps working in the background), then the result. The screen is kept awake while jobs run (MainActivity).
- */
 @Composable
 fun ConversionDialogs(onSeeQueue: () -> Unit, vm: QueueViewModel = hiltViewModel()) {
     val ids by BatchTracker.ids.collectAsState()
@@ -50,9 +46,7 @@ fun ConversionDialogs(onSeeQueue: () -> Unit, vm: QueueViewModel = hiltViewModel
     val failed = jobs.count { it.status == JobStatus.Failed }
     val cancelled = jobs.count { it.status == JobStatus.Cancelled } + (total - jobs.size)
 
-    // Finished while hidden: bring the dialog back with the result.
     LaunchedEffect(active) { if (!active) BatchTracker.show() }
-    // Nothing succeeded or failed (everything was cancelled): no result to show.
     LaunchedEffect(active, success, failed) { if (!active && success == 0 && failed == 0) BatchTracker.clear() }
     if (!visible && active) return
 

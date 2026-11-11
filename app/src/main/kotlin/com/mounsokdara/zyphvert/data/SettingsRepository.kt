@@ -23,13 +23,10 @@ data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.System,
     val dynamicColor: Boolean = true,
     val haptics: Boolean = true,
-    /** The picked "Material You color", used when dynamic color is off. */
     val seedColor: Int = 0xFF00A86B.toInt(),
-    /** Pure black backgrounds while the dark theme is on. */
     val extraDark: Boolean = false,
 )
 
-/** How the Files tab and the picker list things; the names are [SortMode] and [ViewMode] values, null if never saved. */
 data class FileViewPrefs(val sort: String?, val view: String?, val showHidden: Boolean)
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
@@ -60,7 +57,6 @@ class SettingsRepository @Inject constructor(
             dynamicColor = p[Keys.dynamic] ?: true,
             haptics = p[Keys.haptics] ?: true,
             seedColor = p[Keys.seed] ?: 0xFF00A86B.toInt(),
-            // The old "AMOLED black" theme became Dark plus this switch.
             extraDark = p[Keys.extraDark] ?: (p[Keys.theme] == "Amoled"),
         )
     }
@@ -69,7 +65,6 @@ class SettingsRepository @Inject constructor(
         (p[Keys.saved] ?: emptySet()).sorted()
     }
 
-    /** Folder permissions the user granted for Android/data and Android/obb (Android 11 to 12). */
     val safTrees: Flow<Set<String>> = context.dataStore.data.map { it[Keys.safTrees] ?: emptySet() }
 
     suspend fun addSafTree(uri: String) = context.dataStore.edit {
@@ -102,7 +97,6 @@ class SettingsRepository @Inject constructor(
 
     suspend fun clearCommands() = context.dataStore.edit { it.remove(Keys.saved) }
 
-    /** Remembered options for a tool ("Use the same settings next time"). Empty if none. */
     suspend fun toolSettings(toolId: String): Map<String, String> {
         val raw = context.dataStore.data.first()[androidx.datastore.preferences.core.stringPreferencesKey("tool_$toolId")]
             ?: return emptyMap()

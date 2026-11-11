@@ -1,12 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Framework parent: no Material Components / AppCompat dependency needed.
-         Compose draws the real UI theme (ui/theme/Theme.kt). -->
     <style name="Theme.Zyphvert" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowAnimationStyle">@style/Zyphvert.WindowAnimation</item>
     </style>
 
-    <!-- Slide + fade between activities and when the app opens or closes (res/anim). -->
     <style name="Zyphvert.WindowAnimation" parent="@android:style/Animation.Activity">
         <item name="android:activityOpenEnterAnimation">@anim/zv_slide_in_right</item>
         <item name="android:activityOpenExitAnimation">@anim/zv_slide_out_left</item>

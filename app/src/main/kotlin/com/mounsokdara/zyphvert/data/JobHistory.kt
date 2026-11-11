@@ -17,17 +17,12 @@ data class ConversionJob(
     val startedAt: Long = System.currentTimeMillis(),
     val finishedAt: Long? = null,
     val message: String? = null,
-    /** Finished file or folder, for Open and Share. */
     val outputPath: String? = null,
-    /** Command output (tail) or the full report for info jobs. */
     val details: String? = null,
-    /** 0..1 while running, or null when the length of the job isn't known. */
     val progress: Float? = null,
-    /** Bytes written to the output file so far. */
     val outputBytes: Long = 0L,
 )
 
-/** Simple in-memory history shared across tools (survives while process is alive). */
 object JobHistory {
     private val _jobs = MutableStateFlow<List<ConversionJob>>(emptyList())
     val jobs: StateFlow<List<ConversionJob>> = _jobs.asStateFlow()

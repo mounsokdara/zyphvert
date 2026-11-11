@@ -11,7 +11,6 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 
-/** Real engine, compiled only when libs/ffmpeg-kit-next.aar exists. */
 object EngineFactory {
     fun create(): MediaEngine = FfmpegKitEngine()
 }

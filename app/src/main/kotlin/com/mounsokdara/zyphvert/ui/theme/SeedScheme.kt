@@ -10,14 +10,8 @@ import kotlin.math.hypot
 import kotlin.math.pow
 import kotlin.math.sin
 
-/** The app's own green. With this seed (and dynamic color off) the hand-tuned Zyphvert palette is used. */
 const val BrandSeed: Int = 0xFF00A86B.toInt()
 
-/**
- * Builds a full Material 3 color scheme from one color, like "Material You color" in the Video Player.
- * Tones are picked in OKLCH, which keeps lightness steps even across hues: the same tone numbers
- * (primary 40/80, containers 90/30, surfaces 98/6 ...) as the Material 3 baseline scheme.
- */
 fun seedColorScheme(seedArgb: Int, dark: Boolean): ColorScheme {
     val seed = argbToOklch(seedArgb)
     val hue = seed.h
@@ -50,7 +44,6 @@ fun seedColorScheme(seedArgb: Int, dark: Boolean): ColorScheme {
     )
 }
 
-/** One of the colors in the Material You row: the circle is the seed, the plate behind it shows its light tints. */
 class SeedChip(val label: String, val circle: Color) {
     val hue: Double = argbToOklch(circle.toArgbInt()).h
     val top: Color get() = toneColor(hue, 0.03, 94.0)
@@ -62,15 +55,12 @@ private fun Color.toArgbInt(): Int =
 
 private fun chip(label: String, hex: Long) = SeedChip(label, Color(0xFF000000 or hex))
 
-/** The same fourteen colors as the Video Player's Material You row. */
 val SeedChips: List<SeedChip> = listOf(
     chip("Red", 0x9a3b38), chip("Purple", 0x68509f), chip("Blue", 0x38618d), chip("Teal", 0x146781),
     chip("Green", 0x036a62), chip("Violet", 0x68548e), chip("Magenta", 0x7c4e7e), chip("Burgundy", 0x8c4a61),
     chip("Brown", 0x8e4d33), chip("Amber", 0x84541a), chip("Forest", 0x40693f), chip("Olive", 0x586424),
     chip("Navy", 0x3d4c7a), chip("Coral", 0xc45c4a),
 )
-
-// ---- OKLCH helpers (Björn Ottosson's OKLab) ----
 
 class Oklch(val l: Double, val c: Double, val h: Double)
 
@@ -106,9 +96,7 @@ private fun linearRgb(lightness: Double, chroma: Double, hue: Double): DoubleArr
 
 private fun inGamut(lightness: Double, chroma: Double, hue: Double) = linearRgb(lightness, chroma, hue).all { it in -0.0005..1.0005 }
 
-/** The color at a Material "tone" (0 black .. 100 white) with the given hue and chroma, pulled into the sRGB gamut. */
 fun toneColor(hue: Double, chroma: Double, tone: Double): Color {
-    // Tone is CIE L*; the OKLab lightness of the same grey is its cube root of luminance.
     val lightness = if (tone >= 8.0) (tone + 16.0) / 116.0 else Math.cbrt(tone / 903.3)
     var c = 0.0
     if (inGamut(lightness, chroma, hue)) c = chroma else {

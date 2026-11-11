@@ -14,13 +14,10 @@ import java.util.Locale
 class MetaRow(val key: String, val value: String)
 class MetaSection(val title: String, val rows: List<MetaRow>)
 
-/** Everything the Metadata Editor shows for one file. */
 class MetaInfo(
     val photo: Boolean,
     val audio: Boolean,
-    /** Editable tags, in the order the file stores them. */
     val tags: List<MetaRow>,
-    /** Read-only details, grouped (file, each stream, chapters). */
     val sections: List<MetaSection>,
     val cover: Bitmap?,
 ) {
@@ -29,7 +26,6 @@ class MetaInfo(
     }
 }
 
-/** Tags ffprobe reports for MP4/MOV files that are container facts, not something to edit. */
 private val readOnlyTags = setOf("major_brand", "minor_version", "compatible_brands")
 
 internal val mediaTagSuggestions = listOf(
@@ -38,7 +34,6 @@ internal val mediaTagSuggestions = listOf(
     "show", "network", "episode_id", "synopsis", "creation_time", "location",
 )
 
-/** Tags MP4/MOV writes in the normal way; any other name needs FFmpeg's custom-tag mode. */
 internal val standardMediaTags = mediaTagSuggestions.toSet()
 
 internal val exifSuggestions = listOf(
@@ -49,10 +44,8 @@ internal val exifSuggestions = listOf(
     "OffsetTime", "OffsetTimeOriginal", "GPS",
 )
 
-/** Tag names that hold long text, so their field can grow. */
 internal val longTextTags = setOf("comment", "description", "lyrics", "synopsis", "usercomment", "imagedescription")
 
-/** A tag name that is safe inside an FFmpeg `-metadata` argument. */
 internal fun cleanMetaKey(k: String) = k.filter { it.isLetterOrDigit() || it in "_.-: ©" }.trim()
 
 internal suspend fun loadMetaInfo(ctx: Context, engine: MediaEngine, f: PickedFile): MetaInfo =
@@ -177,7 +170,6 @@ private fun embeddedCover(ctx: Context, uri: Uri): Bitmap? = runCatching {
     } finally { r.release() }
 }.getOrNull()
 
-/** A picked image, shrunk so it is cheap to show. */
 internal fun loadImageBitmap(ctx: Context, uri: Uri, max: Int): Bitmap? = runCatching {
     ctx.contentResolver.openInputStream(uri)?.use { it.readBytes() }?.let { decodeBitmap(it, max) }
 }.getOrNull()

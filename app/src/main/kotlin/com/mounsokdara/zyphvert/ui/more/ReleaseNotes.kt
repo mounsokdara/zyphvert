@@ -15,7 +15,6 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-/** Where the app's releases live; the changelog and the update check both read from here. */
 object AboutInfo {
     const val NAME = "Zyphvert"
     const val AUTHOR = "Moun Sokdara"
@@ -24,7 +23,6 @@ object AboutInfo {
     const val REPO_SLUG = "$GITHUB_LOGIN/zyphvert"
 }
 
-/** A string field, with JSON null read as empty (Android's optString turns null into the text "null"). */
 private fun JSONObject.str(key: String): String = if (isNull(key)) "" else optString(key)
 
 class ReleaseNote(
@@ -33,7 +31,6 @@ class ReleaseNote(
     val body: String,
     val url: String,
     val apkUrl: String?,
-    /** Epoch milliseconds, or null. */
     val publishedAt: Long?,
     val prerelease: Boolean,
 ) {
@@ -46,7 +43,6 @@ class ReleaseNote(
     companion object {
         private fun iso(): SimpleDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
 
-        /** From GitHub's release JSON, or from our own saved copy of it. */
         fun fromJson(j: JSONObject): ReleaseNote {
             val tag = j.str("tag_name")
             val name = j.str("name").trim()
@@ -70,7 +66,6 @@ class ReleaseNote(
             )
         }
 
-        /** The APK built for this phone's CPU, else the universal one, else any APK. */
         private fun pickApk(assets: JSONArray): String? {
             val apks = (0 until assets.length()).map { assets.getJSONObject(it) }
                 .filter { it.optString("name").lowercase().endsWith(".apk") }
@@ -88,7 +83,6 @@ class ReleaseFeed(
     val error: String? = null,
     val savedAt: Long? = null,
 ) {
-    /** The newest version, preferring stable releases over pre-releases. */
     val latest: ReleaseNote?
         get() {
             for (stableOnly in listOf(true, false)) {
@@ -106,7 +100,6 @@ class ReleaseFeed(
 
 private fun versionParts(v: String): List<Int> = Regex("\\d+").findAll(v).mapNotNull { it.value.toIntOrNull() }.toList()
 
-/** Compares "1.0.4" with "v1.0.10" and so on, number by number. */
 fun compareVersions(a: String, b: String): Int {
     val x = versionParts(a)
     val y = versionParts(b)
@@ -118,7 +111,6 @@ fun compareVersions(a: String, b: String): Int {
     return 0
 }
 
-/** Release notes without the markdown noise: link text instead of links, no bold or code marks. */
 fun plainNotes(md: String): String =
     md.replace(Regex("\\[([^\\]]+)]\\([^)]*\\)")) { it.groupValues[1] }.replace(Regex("(\\*\\*|__|`)"), "")
 
@@ -145,7 +137,6 @@ object ReleaseNotes {
         }
     }
 
-    /** Releases from GitHub, or the saved copy when offline. A copy under an hour old is used without asking GitHub. */
     suspend fun load(ctx: Context, refresh: Boolean = false): ReleaseFeed = withContext(Dispatchers.IO) {
         val saved = readSaved(ctx)
         if (!refresh && saved?.savedAt != null && System.currentTimeMillis() - saved.savedAt < FRESH_MS) return@withContext saved
@@ -160,9 +151,7 @@ object ReleaseNotes {
             if (conn.responseCode != 200) throw java.io.IOException("GitHub answered ${conn.responseCode}")
             val arr = JSONArray(conn.inputStream.bufferedReader().use { it.readText() })
             val list = (0 until arr.length()).map { arr.getJSONObject(it) }.filter { !it.optBoolean("draft", false) }.map(ReleaseNote::fromJson)
-                // Only releases that carry an APK are app versions (the FFmpeg library release is not).
                 .filter { it.apkUrl != null }
-                // Only releases that carry an APK count as app versions (the FFmpeg library release has none).
                 .filter { it.apkUrl != null }
             save(ctx, list)
             ReleaseFeed(list, fromCache = false, savedAt = System.currentTimeMillis())

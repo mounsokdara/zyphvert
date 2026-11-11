@@ -30,18 +30,14 @@ import com.mounsokdara.zyphvert.ui.settings.SettingsViewModel
 import com.mounsokdara.zyphvert.ui.theme.ZyphvertTheme
 import dagger.hilt.android.AndroidEntryPoint
 
-/** What a tool asks the file picker for. */
 data class PickRequest(
     val kind: InKind, val multiple: Boolean, val title: String,
-    /** Pick a folder instead of files: only folders are listed and "Select" takes the folder you are in. */
     val folder: Boolean = false,
-    /** Folder to open first. */
     val startPath: String? = null,
 )
 
 sealed interface PickOutcome {
     data class Picked(val files: List<PickedFile>) : PickOutcome
-    /** All-files access isn't granted, so the caller should open the system picker instead. */
     data object UseSystem : PickOutcome
     data object Cancelled : PickOutcome
 }
@@ -80,7 +76,6 @@ class PickFilesContract : ActivityResultContract<PickRequest, PickOutcome>() {
     }
 }
 
-/** Returns a function that opens the picker as its own screen. Results arrive in [onPicked] / [onUseSystem]. */
 @Composable
 fun rememberFilePicker(onUseSystem: () -> Unit, onPicked: (List<PickedFile>) -> Unit): (PickRequest) -> Unit {
     val system by rememberUpdatedState(onUseSystem)
@@ -95,7 +90,6 @@ fun rememberFilePicker(onUseSystem: () -> Unit, onPicked: (List<PickedFile>) -> 
     return { request -> launcher.launch(request) }
 }
 
-/** The file picker: the Files screen, in pick mode, as a normal full-screen Activity (not an overlay). */
 @AndroidEntryPoint
 class PickerActivity : ComponentActivity() {
     private val settingsVm: SettingsViewModel by viewModels()

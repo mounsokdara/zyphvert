@@ -54,21 +54,15 @@ import com.mounsokdara.zyphvert.tools.AUDIO_EXTS
 import com.mounsokdara.zyphvert.tools.IMAGE_EXTS
 import com.mounsokdara.zyphvert.tools.VIDEO_EXTS
 
-/** The type chips in search mode. Folders have their own toggle; there is no APK, Archive or Document chip. */
 enum class SearchKind(val label: String, val icon: ImageVector, val color: Color, val exts: Set<String>) {
     Audio("Audio", Icons.Rounded.Headphones, Color(0xFFD500F9), AUDIO_EXTS),
     Image("Image", Icons.Rounded.Image, Color(0xFF43A047), IMAGE_EXTS),
     Video("Video", Icons.Rounded.Movie, Color(0xFF00ACC1), VIDEO_EXTS),
 }
 
-/** Search results rule shared by the Files tab and the picker: folders follow the toggle, files follow the chips. */
 fun passesSearchFilters(isDir: Boolean, ext: String, showFolders: Boolean, kinds: Set<SearchKind>): Boolean =
     if (isDir) showFolders else kinds.isEmpty() || kinds.any { ext.lowercase() in it.exts }
 
-/**
- * Search mode's top bar: back, a plain "Search" field, clear, list/grid and the overflow menu.
- * Replaces the screen's normal top bar while searching, so search is an icon until it is needed.
- */
 @Composable
 fun SearchAppBar(
     query: String,
@@ -99,7 +93,6 @@ fun SearchAppBar(
                 disabledIndicatorColor = Color.Transparent,
             ),
         )
-        // Clears the text first; a second tap on an empty field closes search.
         IconButton(onClick = { if (query.isNotEmpty()) onQueryChange("") else onClose() }) { Icon(Icons.Rounded.Close, "Clear search") }
         IconButton(onClick = onToggleGrid) {
             Icon(if (grid) Icons.Rounded.ViewList else Icons.Rounded.GridView, if (grid) "List view" else "Grid view")
@@ -111,7 +104,6 @@ fun SearchAppBar(
     }
 }
 
-/** Folder show/hide toggle, then Audio, Image and Video, as outlined chips. */
 @Composable
 fun SearchFilters(
     showFolders: Boolean,

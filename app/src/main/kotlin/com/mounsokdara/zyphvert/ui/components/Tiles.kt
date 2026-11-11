@@ -34,7 +34,6 @@ import androidx.compose.ui.unit.dp
 
 private val TileShape = RoundedCornerShape(24.dp)
 
-/** Hub row on the More screen. Same built-in list item as every other row, so nothing is hard coded to a big size. */
 @Composable
 fun MoreCard(
     icon: ImageVector,
@@ -44,10 +43,6 @@ fun MoreCard(
     onClick: () -> Unit,
 ) = InfoTile(icon = icon, title = title, subtitle = subtitle, modifier = modifier, onClick = onClick)
 
-/**
- * The one row used for Settings, About, More and toggles: a rounded card around Material 3's own [ListItem],
- * a rounded-square tonal icon badge on the left, title and supporting text, and an optional trailing widget.
- */
 @Composable
 fun InfoTile(
     icon: ImageVector,
@@ -104,7 +99,6 @@ fun SectionLabel(text: String, modifier: Modifier = Modifier) {
     )
 }
 
-/** Scaffold with a small top bar + back arrow, as on the About reference screen. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SubScreenScaffold(

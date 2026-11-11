@@ -30,12 +30,10 @@ import org.json.JSONObject
 import java.io.File
 import javax.inject.Inject
 
-/** One row of the Metadata Editor. [orig] is what the file had; null for a tag the user added. */
 class MetaTag(val key: String, value: String, val orig: String?) {
     var value by mutableStateOf(value)
 }
 
-/** Form state for one tool: picked files and option values survive rotation. */
 @HiltViewModel
 class ToolViewModel @Inject constructor(
     val manager: ConversionManager,
@@ -76,18 +74,15 @@ class ToolViewModel @Inject constructor(
 
     fun setFiles(slot: String, files: List<PickedFile>) { picked[slot] = files; error = null }
 
-    // ---- Metadata Editor
     val metaTags = mutableStateListOf<MetaTag>()
     var meta by mutableStateOf<MetaInfo?>(null)
         private set
     var metaLoading by mutableStateOf(false)
         private set
-    /** Preview of a replacement cover the user picked. */
     var coverPreview by mutableStateOf<Bitmap?>(null)
         private set
     private var metaFor: Uri? = null
 
-    /** Metadata Editor: read every tag, the cover and the details of the first picked file. */
     fun loadMeta(ctx: Context, spec: ToolSpec) {
         if (spec.id != "meta") return
         val f = picked[spec.inputs.first().id]?.firstOrNull()
@@ -129,14 +124,12 @@ class ToolViewModel @Inject constructor(
         values["meta.coverRemove"] = "true"
     }
 
-    /** Back to the cover the file already has. */
     fun resetCover() {
         picked.remove("cover")
         coverPreview = null
         values["meta.coverRemove"] = "false"
     }
 
-    /** The changes as JSON: a tag the user edited or added gets a value, one that was emptied or deleted has none. */
     private fun metaOps(): String {
         val arr = JSONArray()
         val rows = metaTags.toList()
@@ -151,7 +144,6 @@ class ToolViewModel @Inject constructor(
         return arr.toString()
     }
 
-    /** Builds the jobs and hands them to the background queue. */
     fun submit(ctx: Context, spec: ToolSpec, title: String, onQueued: () -> Unit) {
         if (busy) return
         busy = true
@@ -161,14 +153,12 @@ class ToolViewModel @Inject constructor(
                 if (spec.id == "meta") values["meta.ops"] = metaOps()
                 val app = ctx.applicationContext
                 val jobs = withContext(Dispatchers.IO) {
-                    // Video-ish slots accept Live/Motion Photos: swap them for their video first.
                     val files = picked.toMap().mapValues { (slot, list) ->
                         if (spec.inputs.firstOrNull { it.id == slot }?.kind?.acceptsLive == true) list.map { resolveLive(app, it) } else list
                     }
                     spec.build(ToolRequest(app, manager.engine, title, files, values.toMap()))
                 }
                 if (jobs.isEmpty()) throw IllegalArgumentException("Nothing to do.")
-                // Don't remember per-file or free-text fields.
                 val keep = values.filterKeys { !it.startsWith("tag.") && !it.startsWith("meta.") && it != "name" && it != "range" && !it.startsWith("range.") }
                 repo.saveToolSettings(spec.id, if (remember) keep else null)
                 val ids = manager.submit(title, jobs)

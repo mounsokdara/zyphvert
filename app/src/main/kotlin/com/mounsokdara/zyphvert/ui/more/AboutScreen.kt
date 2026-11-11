@@ -71,11 +71,9 @@ fun AboutScreen(
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    // The author's name and photo come from GitHub; until (or unless) they load, the initials stay.
     var profile by remember { mutableStateOf<GithubProfile?>(null) }
     LaunchedEffect(Unit) { profile = GithubProfile.load(AboutInfo.GITHUB_LOGIN) }
 
-    // Check for update: look at GitHub, download the APK here, hand it to the installer
     val updates = rememberUpdateFlow()
     fun checkForUpdate() = updates.check()
     UpdateDialogs(updates)
@@ -85,7 +83,6 @@ fun AboutScreen(
             Modifier.padding(pad).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // Header
             Surface(shape = CardShape, color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(24.dp)) {
                     AppIcon(Modifier.size(72.dp))
@@ -100,7 +97,6 @@ fun AboutScreen(
                 }
             }
 
-            // Link tiles
             QuickActions(
                 listOf(
                     QuickAction("Changelog", { Icon(Icons.Rounded.History, null) }, onChangelog),
@@ -158,10 +154,6 @@ fun AboutScreen(
 
 private class QuickAction(val label: String, val icon: @Composable () -> Unit, val onClick: () -> Unit)
 
-/**
- * A row of equal tiles that join into one pill: big corners on the outside, small ones between.
- * IntrinsicSize makes every tile as tall as the tallest, so a label that wraps never makes one stick out.
- */
 @Composable
 private fun QuickActions(items: List<QuickAction>) {
     val big = 28.dp
@@ -189,7 +181,6 @@ private fun QuickActions(items: List<QuickAction>) {
     }
 }
 
-/** The launcher icon, drawn in Compose (painterResource can't load adaptive-icon XML). */
 @Composable
 fun AppIcon(modifier: Modifier = Modifier) {
     Box(

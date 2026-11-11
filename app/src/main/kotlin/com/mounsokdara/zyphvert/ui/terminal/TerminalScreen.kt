@@ -66,7 +66,6 @@ import androidx.compose.ui.unit.sp
 import com.mounsokdara.zyphvert.tools.InKind
 import com.mounsokdara.zyphvert.ui.components.AppSheet
 
-// Near-black background with soft, readable colours (Tokyo Night inspired).
 private val Bg = Color(0xFF0A0A10)
 private val TabBg = Color(0xFF14141D)
 private val KeyBg = Color(0xFF1E1F2E)
@@ -79,7 +78,6 @@ private val Red = Color(0xFFF7768E)
 private val Blue = Color(0xFF7AA2F7)
 private val Magenta = Color(0xFFBB9AF7)
 
-/** JetBrains Mono: made for reading code, with clear 0/O and 1/l/I. */
 private val Mono = FontFamily(
     Font(R.font.jetbrains_mono_regular, FontWeight.Normal),
     Font(R.font.jetbrains_mono_bold, FontWeight.Bold),
@@ -89,17 +87,14 @@ private const val MAX_TEXT = 32f
 
 private fun termStyle(size: Float) = TextStyle(
     fontFamily = Mono, fontSize = size.sp, lineHeight = (size * 1.45f).sp, color = Fg,
-    // No ligatures: a terminal must show exactly the characters that were typed (-> stays -> and not an arrow).
     fontFeatureSettings = "'liga' 0, 'calt' 0",
 )
 
-/** Colours a command line as it is typed. Never changes the text itself, only how it is painted. */
 private fun highlight(text: String): AnnotatedString = buildAnnotatedString {
     var first = true
     for (m in Regex("\"[^\"]*\"?|'[^']*'?|\\s+|[^\\s\"']+").findAll(text)) {
         var t = m.value
         if (t.isBlank()) { append(t); continue }
-        // A leftover line-continuation mark (\ or `) is shown dim: it is ignored when the command runs.
         if ((t[0] == '\\' || t[0] == '`') && (t.length == 1 || t[1] == '-')) {
             withStyle(SpanStyle(color = Dim)) { append(t[0]) }
             t = t.drop(1)
@@ -117,13 +112,11 @@ private fun highlight(text: String): AnnotatedString = buildAnnotatedString {
     }
 }
 
-/** The prompt, e.g. "/storage/emulated/0/DCIM> ": the full path, then ">". */
 private fun promptText(prompt: String): AnnotatedString = buildAnnotatedString {
     withStyle(SpanStyle(color = Blue)) { append(prompt.removeSuffix("> ")) }
     withStyle(SpanStyle(color = Fg)) { append("> ") }
 }
 
-/** Draws the prompt in front of the command inside the text field itself, so a long command wraps across the full width. */
 private class PromptTransformation(private val prompt: AnnotatedString) : VisualTransformation {
     override fun filter(text: AnnotatedString): TransformedText {
         val n = prompt.length
@@ -163,9 +156,7 @@ fun TerminalScreen(vm: TerminalViewModel, onBack: () -> Unit) {
     val keyboard = LocalSoftwareKeyboardController.current
     val scope = rememberCoroutineScope()
 
-    // Everything the list shows, so "the end" is always the last item no matter which rows are present.
     val itemCount = (if (!vm.engineReady) 1 else 0) + s.lines.size + 1
-    // The keyboard opening or closing changes the visible height; re-pin the prompt to the bottom.
     val imeOpen = WindowInsets.ime.getBottom(LocalDensity.current) > 0
 
     LaunchedEffect(s.id, itemCount, s.running, imeOpen, textSize) {
@@ -173,18 +164,16 @@ fun TerminalScreen(vm: TerminalViewModel, onBack: () -> Unit) {
     }
     LaunchedEffect(s.id, s.running) {
         if (!s.running) {
-            androidx.compose.runtime.withFrameNanos { }   // let the prompt row exist before asking for focus
+            androidx.compose.runtime.withFrameNanos { }
             runCatching { focus.requestFocus() }
         }
     }
     LaunchedEffect(vm.selected, vm.sessions.size) { tabState.animateScrollToItem(vm.selected.coerceAtLeast(0)) }
 
-    /** Any tap on the screen is a tap on the input: focus the command line and bring up the keyboard. */
     fun openKeyboard() {
         if (s.running) return
         scope.launch {
             if (runCatching { focus.requestFocus() }.isFailure) {
-                // The prompt is scrolled out of view (reading old output): bring it back first.
                 listState.scrollToItem((listState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0), scrollOffset = Int.MAX_VALUE / 2)
                 androidx.compose.runtime.withFrameNanos { }
                 runCatching { focus.requestFocus() }
@@ -202,7 +191,6 @@ fun TerminalScreen(vm: TerminalViewModel, onBack: () -> Unit) {
         Modifier.fillMaxSize().background(Bg)
             .statusBarsPadding().navigationBarsPadding().imePadding(),
     ) {
-        // ---------------------------------------------------------------- tab bar
         Row(Modifier.fillMaxWidth().background(TabBg).height(44.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = Fg) }
             LazyRow(Modifier.weight(1f), state = tabState, verticalAlignment = Alignment.Bottom) {
@@ -241,10 +229,8 @@ fun TerminalScreen(vm: TerminalViewModel, onBack: () -> Unit) {
             }
         }
 
-        // ---------------------------------------------------------------- screen
         Box(
             Modifier.weight(1f).fillMaxWidth()
-                // Two fingers: pinch to zoom the text. Single-finger gestures (scroll, select, tap) are left alone.
                 .pointerInput(Unit) {
                     awaitEachGesture {
                         awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
@@ -309,8 +295,6 @@ fun TerminalScreen(vm: TerminalViewModel, onBack: () -> Unit) {
             }
         }
 
-        // ---------------------------------------------------------------- key bar
-        // Two rows of equal-width keys that always fit the screen. Arrow keys repeat while held.
         Column(
             Modifier.fillMaxWidth().background(TabBg).padding(horizontal = 6.dp, vertical = 6.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -339,7 +323,6 @@ fun TerminalScreen(vm: TerminalViewModel, onBack: () -> Unit) {
         }
     }
 
-    // "Insert folder path" browses with the same picker as files and types the path into the command line.
     val launchFolderPicker = com.mounsokdara.zyphvert.ui.files.rememberFilePicker(
         onUseSystem = {},
         onPicked = { picked -> picked.firstOrNull()?.uri?.path?.let { vm.insert(if (' ' in it) "\"$it\"" else it) } },
@@ -397,7 +380,6 @@ fun TerminalScreen(vm: TerminalViewModel, onBack: () -> Unit) {
 @Composable
 private fun Modifier.verticalScroll2(): Modifier = this.then(Modifier.verticalScroll(rememberScrollState()))
 
-/** One key of the bar. Every key takes an equal share of the row. With [repeat], holding the key repeats it. */
 @Composable
 private fun RowScope.Key(
     label: String? = null,

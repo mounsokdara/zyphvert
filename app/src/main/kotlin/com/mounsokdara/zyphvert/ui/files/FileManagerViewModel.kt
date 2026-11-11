@@ -35,7 +35,6 @@ import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
 
-/** Files waiting to be pasted. [cut] moves them, otherwise they are copied. */
 data class Clip(val files: List<File>, val cut: Boolean)
 
 data class FileStats(val bytes: Long, val files: Int, val folders: Int)
@@ -43,7 +42,6 @@ data class FileStats(val bytes: Long, val files: Int, val folders: Int)
 enum class SortMode { NameAsc, NameDesc, SizeDesc, DateDesc, Type }
 enum class ViewMode { List, Grid }
 
-/** Folders: walk the folder tree. Media: one flat list of every picture, video and song on the phone. */
 enum class BrowseMode { Folders, Media }
 
 data class FileEntry(
@@ -53,9 +51,7 @@ data class FileEntry(
     val sizeBytes: Long,
     val lastModified: Long,
     val extension: String,
-    /** Looks like a Live Photo or Motion Photo. */
     val live: Boolean = false,
-    /** The motion half of an iPhone Live Photo pair. */
     val companion: File? = null,
 ) {
     val sizeLabel: String
@@ -90,7 +86,6 @@ class FileManagerViewModel @Inject constructor(
         private set
     var error by mutableStateOf<String?>(null)
         private set
-    /** The folder is Android/data or Android/obb, which Android 11+ keeps closed until the user opens it up. */
     var locked by mutableStateOf(false)
         private set
     var query by mutableStateOf("")
@@ -103,21 +98,17 @@ class FileManagerViewModel @Inject constructor(
     var selected by mutableStateOf<FileEntry?>(null)
     var browseMode by mutableStateOf(BrowseMode.Folders)
         private set
-    /** Picker only: the kind of file the tool wants, and whether to show everything instead. */
     var typeKind by mutableStateOf<InKind?>(null)
         private set
     var showAllTypes by mutableStateOf(true)
     private var mediaItems by mutableStateOf<List<FileEntry>>(emptyList())
     private var sortBeforeMedia: SortMode? = null
-    // Picker only: going up from a whole drive stops there unless the user came in through Root.
     private var drives: Set<String> = emptySet()
     private var stopAtDrives = false
     private var fromRoot = false
-    /** Folder picker: only folders are listed. */
     private var foldersOnly = false
     var clip by mutableStateOf<Clip?>(null)
         private set
-    /** One-shot text for a Toast; the screen shows it and clears it. */
     var message by mutableStateOf<String?>(null)
 
     val breadcrumbs: List<Pair<String, String>>
@@ -136,7 +127,6 @@ class FileManagerViewModel @Inject constructor(
 
     init {
         reload()
-        // Bring back how the user likes the list (sort, list or grid, hidden files).
         viewModelScope.launch {
             val saved = settings.fileViewPrefs.first()
             saved.sort?.let { name -> SortMode.entries.firstOrNull { it.name == name }?.let { sort = it } }
@@ -145,7 +135,6 @@ class FileManagerViewModel @Inject constructor(
         }
     }
 
-    /** The sort the user picked for folders; the flat media list temporarily uses newest first instead. */
     private fun folderSort() = if (browseMode == BrowseMode.Media) sortBeforeMedia ?: sort else sort
 
     private fun saveView() {
@@ -154,7 +143,6 @@ class FileManagerViewModel @Inject constructor(
 
     fun changeSort(mode: SortMode) {
         sort = mode
-        // The flat media list is always newest first, so a pick there is not saved.
         if (browseMode == BrowseMode.Folders) saveView()
     }
 
@@ -175,7 +163,6 @@ class FileManagerViewModel @Inject constructor(
 
     val canGoUp: Boolean get() = currentPath != "/" && !(stopAtDrives && currentPath in drives && !fromRoot)
 
-    /** Called when the browser is opened as a file picker for a tool input. */
     fun configurePick(kind: InKind, driveRoots: Set<String>, foldersOnly: Boolean = false, startPath: String? = null) {
         typeKind = kind
         drives = driveRoots
@@ -201,7 +188,6 @@ class FileManagerViewModel @Inject constructor(
 
     fun initialTreeUri(): Uri = protectedStorage.initialTreeUri(currentPath)
 
-    /** The user picked a folder in the system dialog for Android/data or Android/obb. */
     fun onTreeGranted(tree: Uri?) {
         if (tree == null) return
         viewModelScope.launch {
@@ -209,7 +195,6 @@ class FileManagerViewModel @Inject constructor(
         }
     }
 
-    /** Something a tool can read for [file]; locked files (Android/data, Android/obb) are opened through the granted access. */
     suspend fun uriFor(file: File): Uri {
         if (protectedStorage.isProtected(file.path) && !file.canRead()) protectedStorage.readableUri(file.path)?.let { return it }
         return file.toUri()
@@ -225,11 +210,9 @@ class FileManagerViewModel @Inject constructor(
         else selected = entry
     }
 
-    /** True while a pull-down refresh is showing its spinner. */
     var refreshing by mutableStateOf(false)
         private set
 
-    /** Pull down: re-read the folder quietly (no list animation) and keep the spinner up for a moment. */
     fun pullRefresh() {
         if (refreshing) return
         viewModelScope.launch {
@@ -241,7 +224,6 @@ class FileManagerViewModel @Inject constructor(
         }
     }
 
-    /** Quiet refresh for the auto-refresh loop: nothing changes on screen unless the folder really changed. */
     fun autoRefresh() { if (loadJob?.isActive != true) reload(silent = true) }
 
     fun reload(silent: Boolean = false) {
@@ -250,7 +232,6 @@ class FileManagerViewModel @Inject constructor(
             if (!silent) { loading = true; error = null }
             if (browseMode == BrowseMode.Media) {
                 val fresh = withContext(Dispatchers.IO) { queryMedia() }
-                // Same content: keep the old list so the scroll position and item layout stay untouched.
                 if (fresh != mediaItems) mediaItems = fresh
                 if (locked) locked = false
             } else {
@@ -263,15 +244,12 @@ class FileManagerViewModel @Inject constructor(
         }
     }
 
-    // ------------------------------------------------------------ copy, cut, paste, rename, delete
-
     fun copy(e: FileEntry) { clip = Clip(listOf(e.file), cut = false); message = "Copied ${e.name}" }
 
     fun cut(e: FileEntry) { clip = Clip(listOf(e.file), cut = true); message = "Cut ${e.name}" }
 
     fun clearClip() { clip = null }
 
-    /** Pastes the clipboard into [into] (the open folder by default). */
     fun paste(into: File = File(currentPath)) {
         val c = clip ?: return
         viewModelScope.launch {
@@ -294,9 +272,7 @@ class FileManagerViewModel @Inject constructor(
             val ok = runCatching {
                 if (!src.exists()) return@runCatching false
                 val srcPath = src.canonicalPath
-                // A folder can't go inside itself.
                 if (src.isDirectory && (intoPath == srcPath || intoPath.startsWith("$srcPath/"))) return@runCatching false
-                // Cutting into the folder it is already in changes nothing.
                 if (c.cut && src.parentFile?.canonicalPath == intoPath) return@runCatching true
                 val target = uniqueTarget(into, src)
                 if (c.cut) {
@@ -318,7 +294,6 @@ class FileManagerViewModel @Inject constructor(
         } else src.copyTo(target, overwrite = false)
     }
 
-    /** `name.ext`, or `name_2.ext`, `name_3.ext`... when the name is taken. */
     private fun uniqueTarget(dir: File, src: File): File {
         var f = File(dir, src.name)
         if (!f.exists()) return f
@@ -348,17 +323,13 @@ class FileManagerViewModel @Inject constructor(
         viewModelScope.launch {
             val ok = withContext(Dispatchers.IO) {
                 val removed = runCatching { if (e.file.isDirectory) e.file.deleteRecursively() else e.file.delete() }.getOrDefault(false)
-                // Trust the disk, not the return value.
                 removed && !e.file.exists()
             }
             message = if (ok) "Deleted ${e.name}" else "Couldn't delete ${e.name}"
             if (ok) {
-                // Take it out of the lists now. Some phones keep listing a deleted name for a moment
-                // (with size 0), which looked like the file had only been emptied.
                 val path = e.file.path
                 entries = entries.filterNot { it.file.path == path || it.file.path.startsWith("$path/") }
                 mediaItems = mediaItems.filterNot { it.file.path == path || it.file.path.startsWith("$path/") }
-                // Scanning a path that no longer exists removes its row from the media database too.
                 if (!e.isDirectory) android.media.MediaScannerConnection.scanFile(appCtx, arrayOf(path), null, null)
             }
             if (clip?.files?.contains(e.file) == true) clip = null
@@ -378,7 +349,6 @@ class FileManagerViewModel @Inject constructor(
         FileStats(bytes, files, folders)
     }
 
-    /** Hex digest of a file: "MD5" or "SHA-256". */
     suspend fun checksum(f: File, algo: String): String = withContext(Dispatchers.IO) {
         runCatching {
             val md = java.security.MessageDigest.getInstance(algo)
@@ -415,7 +385,6 @@ class FileManagerViewModel @Inject constructor(
 
     private suspend fun listDir(path: String): ListResult {
         val dir = File(path)
-        // Android/data and Android/obb on Android 11+: use the folder permission or Shizuku when the folder can't be read directly.
         if (protectedStorage.isProtected(path) && dir.listFiles().isNullOrEmpty()) {
             return when (val r = protectedStorage.list(path)) {
                 is ProtectedListing.Ok -> ListResult(
@@ -453,7 +422,6 @@ class FileManagerViewModel @Inject constructor(
         return ListResult(mapped, null)
     }
 
-    /** Every picture, video and song the phone knows about, newest first. */
     private fun queryMedia(): List<FileEntry> {
         val out = ArrayList<FileEntry>()
         val wantPairs = typeKind?.acceptsLive == true
@@ -479,7 +447,6 @@ class FileManagerViewModel @Inject constructor(
         return out
     }
 
-    /** Fallback when the media database is empty or unreadable: scan the storage, skipping Android/ and hidden folders. */
     private fun walkMedia(wantPairs: Boolean): List<FileEntry> {
         val exts = VIDEO_EXTS + AUDIO_EXTS + IMAGE_EXTS
         val out = ArrayList<FileEntry>()
@@ -513,7 +480,6 @@ class FileManagerViewModel @Inject constructor(
     }
 }
 
-/** Quick locations for the title menu: internal storage, the usual folders, Root and any SD card. */
 internal fun roots(ctx: Context): List<Pair<String, File>> {
     val base = Environment.getExternalStorageDirectory()
     val list = mutableListOf("Internal storage" to base)
@@ -527,7 +493,6 @@ internal fun roots(ctx: Context): List<Pair<String, File>> {
     }
     File(base, "Zyphvert").takeIf { it.isDirectory }?.let { list += "Zyphvert" to it }
     list += "Root (/)" to File("/")
-    // SD cards and USB drives show up as extra app-files dirs; walk up to the volume root.
     ctx.getExternalFilesDirs(null).drop(1).filterNotNull().forEach { d ->
         val root = d.path.substringBefore("/Android/")
         if (root != d.path && File(root).isDirectory) list += "SD card" to File(root)
