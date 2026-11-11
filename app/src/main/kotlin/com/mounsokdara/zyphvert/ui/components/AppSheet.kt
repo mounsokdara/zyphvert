@@ -1,5 +1,6 @@
 package com.mounsokdara.zyphvert.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.rememberTransition
 import androidx.compose.animation.fadeIn
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -44,6 +46,7 @@ import androidx.compose.ui.window.DialogWindowProvider
  * [onDismiss] removes it. Put long content in a LazyColumn or a verticalScroll Column with
  * `Modifier.weight(1f, fill = false)`.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppSheet(onDismiss: () -> Unit, content: @Composable ColumnScope.(close: () -> Unit) -> Unit) {
     val visible = remember { MutableTransitionState(false).apply { targetState = true } }
