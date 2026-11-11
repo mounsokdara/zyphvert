@@ -27,7 +27,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -74,7 +73,7 @@ fun ConvertedFilesScreen(onBack: () -> Unit) {
     androidx.compose.runtime.LaunchedEffect(Unit) { reload() }
 
     SubScreenScaffold(title = "Converted files", onBack = onBack) { pad ->
-        PullToRefreshBox(
+        com.mounsokdara.zyphvert.ui.components.StaticPullRefresh(
             isRefreshing = refreshing,
             onRefresh = { scope.launch { refreshing = true; reload(); delay(500); refreshing = false } },
             modifier = Modifier.fillMaxSize().padding(pad),

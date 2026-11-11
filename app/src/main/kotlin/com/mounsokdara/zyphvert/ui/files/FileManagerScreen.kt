@@ -305,7 +305,7 @@ fun FileManagerScreen(
         // Pull-to-refresh is the only reaction to a pull at the top. The system rubber-band/stretch is switched off here,
         // otherwise it moves the whole list along with the finger while the refresh spinner shows.
         CompositionLocalProvider(LocalOverscrollConfiguration provides null) {
-        PullToRefreshBox(isRefreshing = vm.refreshing, onRefresh = vm::pullRefresh, modifier = Modifier.weight(1f).fillMaxWidth()) {
+        com.mounsokdara.zyphvert.ui.components.StaticPullRefresh(isRefreshing = vm.refreshing, onRefresh = vm::pullRefresh, modifier = Modifier.weight(1f).fillMaxWidth()) {
             // No placement animation while refreshing, otherwise the list slides under the pull indicator.
             val animate = !(vm.refreshing || vm.loading)
             val hint: @Composable () -> Unit = {
