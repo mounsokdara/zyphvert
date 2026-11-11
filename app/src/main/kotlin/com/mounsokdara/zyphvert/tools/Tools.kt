@@ -520,7 +520,7 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
             } else {
                 val cover = r.file("cover")
                 val audio = isAudioName(f.name)
-                if (!hasTags(r) && cover == null) fail("Fill in at least one tag or choose a cover image.")
+                if (!hasTags(r) && cover == null) fail("Change at least one tag or choose a cover image.")
                 val ext = nameExt(f.name).ifEmpty { if (audio) "m4a" else "mp4" }
                 val out = r.out("Metadata", f, ext, "_tagged")
                 val tags = tagArgs(r, f).joinToString(" ")

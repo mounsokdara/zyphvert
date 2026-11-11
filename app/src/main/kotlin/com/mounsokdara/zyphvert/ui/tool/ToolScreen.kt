@@ -59,6 +59,7 @@ fun ToolScreen(tool: Tool, seedPath: String?, onBack: () -> Unit, onQueued: () -
         return
     }
     LaunchedEffect(spec.id, seedPath) { vm.init(spec, seedPath) }
+    LaunchedEffect(vm.picked[spec.inputs.first().id]?.firstOrNull()?.uri) { vm.loadTags(ctx, spec) }
 
     val ready = spec.inputs.all { it.optional || vm.picked[it.id].orEmpty().isNotEmpty() }
     val vals: Map<String, String> = vm.values
@@ -444,7 +445,7 @@ private fun TagsRow(opt: Opt.Tags, vm: ToolViewModel) {
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Text("Edit tags", style = MaterialTheme.typography.titleLarge)
-                Text("Leave a field empty to keep what the file already has.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Fields show what the file has now. Change one to edit it, or empty it to remove that tag.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(
                     Modifier.fillMaxWidth().clickable { vm.values["tag.useFilename"] = (vm.values["tag.useFilename"] != "true").toString() },
                     verticalAlignment = Alignment.CenterVertically,

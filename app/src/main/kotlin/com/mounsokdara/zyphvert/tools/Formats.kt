@@ -194,16 +194,26 @@ internal val genres = listOf(
     "Gospel", "Soul", "Punk", "Folk", "Latin", "Electronic", "Podcast", "Audiobook", "Speech",
 )
 
-/** `-metadata "key=value"` arguments for every tag the user filled in. */
+/** What the user wants for a tag: the typed value, or the file name for the title. */
+private fun wantedTag(r: ToolRequest, f: PickedFile?, k: String): String =
+    if (k == "title" && r.bool("tag.useFilename") && f != null) cleanTag(f.name.substringBeforeLast('.'))
+    else cleanTag(r.str("tag.$k"))
+
+/**
+ * `-metadata "key=value"` for every tag that was changed. A tag the file already had and the user left alone
+ * is skipped (it is copied anyway); one the user emptied is removed with an empty value.
+ */
 internal fun tagArgs(r: ToolRequest, f: PickedFile?): List<String> = buildList {
     for ((k, _) in tagKeys) {
-        var v = cleanTag(r.str("tag.$k"))
-        if (k == "title" && r.bool("tag.useFilename") && f != null) v = cleanTag(f.name.substringBeforeLast('.'))
-        if (v.isNotEmpty()) add("-metadata ${q("$k=$v")}")
+        val v = wantedTag(r, f, k)
+        val orig = cleanTag(r.str("orig.tag.$k"))
+        if (v == orig) continue
+        add("-metadata ${q("$k=$v")}")
     }
 }
 
-internal fun hasTags(r: ToolRequest) = r.bool("tag.useFilename") || tagKeys.any { (k, _) -> r.str("tag.$k").isNotBlank() }
+internal fun hasTags(r: ToolRequest) = r.bool("tag.useFilename") ||
+    tagKeys.any { (k, _) -> cleanTag(r.str("tag.$k")) != cleanTag(r.str("orig.tag.$k")) }
 
 // ---------------------------------------------------------------- range
 

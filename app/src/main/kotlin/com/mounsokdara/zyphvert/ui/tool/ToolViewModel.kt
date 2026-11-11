@@ -14,7 +14,9 @@ import com.mounsokdara.zyphvert.tools.Opt
 import com.mounsokdara.zyphvert.tools.PickedFile
 import com.mounsokdara.zyphvert.tools.ToolRequest
 import com.mounsokdara.zyphvert.tools.ToolSpec
+import com.mounsokdara.zyphvert.tools.readTags
 import com.mounsokdara.zyphvert.tools.resolveLive
+import com.mounsokdara.zyphvert.tools.tagKeys
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -63,6 +65,23 @@ class ToolViewModel @Inject constructor(
 
     fun setFiles(slot: String, files: List<PickedFile>) { picked[slot] = files; error = null }
 
+    private var tagsFor: Uri? = null
+
+    /** Metadata Editor: fill the tag fields with what the picked file already has. */
+    fun loadTags(ctx: Context, spec: ToolSpec) {
+        if (spec.id != "meta") return
+        val f = picked[spec.inputs.first().id]?.firstOrNull() ?: return
+        if (f.uri == tagsFor) return
+        tagsFor = f.uri
+        viewModelScope.launch {
+            val found = withContext(Dispatchers.IO) { readTags(ctx.applicationContext, f.uri) }
+            tagKeys.forEach { (k, _) ->
+                values["tag.$k"] = found[k].orEmpty()
+                values["orig.tag.$k"] = found[k].orEmpty()
+            }
+        }
+    }
+
     /** Builds the jobs and hands them to the background queue. */
     fun submit(ctx: Context, spec: ToolSpec, title: String, onQueued: () -> Unit) {
         if (busy) return
@@ -80,7 +99,7 @@ class ToolViewModel @Inject constructor(
                 }
                 if (jobs.isEmpty()) throw IllegalArgumentException("Nothing to do.")
                 // Don't remember per-file or free-text fields.
-                val keep = values.filterKeys { !it.startsWith("tag.") && it != "name" && it != "range" && !it.startsWith("range.") }
+                val keep = values.filterKeys { !it.startsWith("tag.") && !it.startsWith("orig.") && it != "name" && it != "range" && !it.startsWith("range.") }
                 repo.saveToolSettings(spec.id, if (remember) keep else null)
                 val ids = manager.submit(title, jobs)
                 com.mounsokdara.zyphvert.data.BatchTracker.start(ids)
