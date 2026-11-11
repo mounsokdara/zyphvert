@@ -35,7 +35,8 @@ import com.mounsokdara.zyphvert.tools.*
 import com.mounsokdara.zyphvert.ui.components.SectionLabel
 import com.mounsokdara.zyphvert.ui.home.Tool
 import com.mounsokdara.zyphvert.ui.home.accent
-import com.mounsokdara.zyphvert.ui.files.FilePickerDialog
+import com.mounsokdara.zyphvert.ui.files.PickRequest
+import com.mounsokdara.zyphvert.ui.files.rememberFilePicker
 import com.mounsokdara.zyphvert.util.StorageAccess
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -189,21 +190,12 @@ private fun SlotCard(slot: InputSlot, files: List<PickedFile>, onChange: (List<P
     val single = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) onChange(listOf(PickedFile(uri, ctx.displayName(uri))))
     }
-    var showPicker by remember { mutableStateOf(false) }
-    fun pick() { showPicker = true }
-    if (showPicker) {
-        FilePickerDialog(
-            kind = slot.kind,
-            multiple = slot.multiple,
-            title = slot.label,
-            onDismiss = { showPicker = false },
-            // Fallback for when all-files access isn't granted
-            onUseSystem = { if (slot.multiple) multi.launch(slot.kind.mimes) else single.launch(slot.kind.mimes) },
-        ) { picked ->
-            showPicker = false
-            onChange(if (slot.multiple) files + picked else picked.take(1))
-        }
-    }
+    val launchPicker = rememberFilePicker(
+        // Fallback for when all-files access isn't granted
+        onUseSystem = { if (slot.multiple) multi.launch(slot.kind.mimes) else single.launch(slot.kind.mimes) },
+        onPicked = { picked -> onChange(if (slot.multiple) files + picked else picked.take(1)) },
+    )
+    fun pick() { launchPicker(PickRequest(slot.kind, slot.multiple, slot.label)) }
 
     Surface(shape = CardShape, color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

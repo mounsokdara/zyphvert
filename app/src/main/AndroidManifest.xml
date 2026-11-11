@@ -62,6 +62,11 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".ui.files.PickerActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Zyphvert" />
+
         <service
             android:name=".service.ConversionForegroundService"
             android:foregroundServiceType="dataSync"

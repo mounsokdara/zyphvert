@@ -19,6 +19,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.mounsokdara.zyphvert.util.FsFallback
@@ -164,6 +165,22 @@ class FileManagerViewModel @Inject constructor(@ApplicationContext private val a
     }
 
     /** Quiet refresh for the auto-refresh loop: nothing changes on screen unless the folder really changed. */
+    /** True while a pull-down refresh is showing its spinner. */
+    var refreshing by mutableStateOf(false)
+        private set
+
+    /** Pull down: re-read the folder quietly (no list animation) and keep the spinner up for a moment. */
+    fun pullRefresh() {
+        if (refreshing) return
+        viewModelScope.launch {
+            refreshing = true
+            reload(silent = true)
+            loadJob?.join()
+            delay(400)
+            refreshing = false
+        }
+    }
+
     fun autoRefresh() { if (loadJob?.isActive != true) reload(silent = true) }
 
     fun reload(silent: Boolean = false) {

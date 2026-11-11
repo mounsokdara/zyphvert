@@ -17,12 +17,15 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -64,28 +67,6 @@ class PickConfig(
     val onUseSystem: () -> Unit,
     val onPicked: (List<PickedFile>) -> Unit,
 )
-
-/** The file picker: the same screen as the Files tab, full screen, in pick mode. */
-@Composable
-fun FilePickerDialog(
-    kind: InKind,
-    multiple: Boolean,
-    title: String,
-    onDismiss: () -> Unit,
-    onUseSystem: () -> Unit,
-    onPicked: (List<PickedFile>) -> Unit,
-) {
-    PickerDialog(PickConfig(kind, multiple, title, onDismiss, onUseSystem, onPicked))
-}
-
-@Composable
-private fun PickerDialog(config: PickConfig) {
-    Dialog(onDismissRequest = config.onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
-            FileManagerScreen(pick = config)
-        }
-    }
-}
 
 /** The Files tab, or (with [pick]) the file picker. Both share this one screen and one ViewModel class. */
 @Composable
@@ -130,6 +111,14 @@ fun FileManagerScreen(
                 kotlinx.coroutines.delay(3000)
             }
         }
+    }
+    // One scroll state per screen, sent back to the top whenever the folder or mode changes. Without this the old
+    // scroll offset was carried into the new folder, so it opened already scrolled down.
+    val listState = rememberLazyListState()
+    val gridState = rememberLazyGridState()
+    LaunchedEffect(vm.currentPath, vm.browseMode, vm.viewMode) {
+        listState.scrollToItem(0)
+        gridState.scrollToItem(0)
     }
     val list = vm.filtered()
         .filter { !searching || passesSearchFilters(it.isDirectory, it.extension, showFolders, kinds) }
@@ -244,7 +233,7 @@ fun FileManagerScreen(
                 Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("Grant All files access to browse storage.", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onTertiaryContainer)
                     TextButton(onClick = { StorageAccess.openAllFilesSettings(ctx) }) { Text("Grant") }
-                    if (pick != null) TextButton(onClick = { pick.onDismiss(); pick.onUseSystem() }) { Text("System picker") }
+                    if (pick != null) TextButton(onClick = { pick.onUseSystem() }) { Text("System picker") }
                 }
             }
         }
@@ -303,7 +292,10 @@ fun FileManagerScreen(
         // Pull-to-refresh is the only reaction to a pull at the top. The system rubber-band/stretch is switched off here,
         // otherwise it moves the whole list along with the finger while the refresh spinner shows.
         CompositionLocalProvider(LocalOverscrollConfiguration provides null) {
-        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+        PullToRefreshBox(
+            isRefreshing = vm.refreshing, onRefresh = { vm.pullRefresh() },
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+        ) {
             // No placement animation while a folder is loading.
             val animate = !vm.loading
             val hint: @Composable () -> Unit = {
@@ -322,7 +314,7 @@ fun FileManagerScreen(
                 LazyVerticalGrid(
                     columns = GridCells.Adaptive(110.dp), contentPadding = PaddingValues(8.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize(), state = gridState,
                 ) {
                     if (vm.canGoUp && vm.browseMode == BrowseMode.Folders) item(key = "..up", span = { GridItemSpan(maxLineSpan) }) { UpFolderRow((if (animate) Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null) else Modifier)) { vm.goUp() } }
                     item(key = "..hint", span = { GridItemSpan(maxLineSpan) }) { hint() }
@@ -335,7 +327,7 @@ fun FileManagerScreen(
                     }
                 }
             } else {
-                LazyColumn(Modifier.fillMaxSize()) {
+                LazyColumn(Modifier.fillMaxSize(), state = listState) {
                     if (vm.canGoUp && vm.browseMode == BrowseMode.Folders) item(key = "..up") { UpFolderRow((if (animate) Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null) else Modifier)) { vm.goUp() } }
                     item(key = "..hint") { hint() }
                     items(list, key = { it.file.absolutePath }) { e ->
