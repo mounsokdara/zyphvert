@@ -5,8 +5,6 @@ import kotlin.math.max
 
 private fun fail(msg: String): Nothing = throw IllegalArgumentException(msg)
 private fun items(vararg p: Pair<String, String>) = p.map { Item(it.first, it.second) }
-private val resChoices = items("720" to "720p", "1080" to "1080p", "480" to "480p")
-private fun dims(res: String) = when (res) { "1080" -> 1920 to 1080; "480" -> 854 to 480; else -> 1280 to 720 }
 private val photoExts = setOf("jpg", "jpeg", "png", "webp")
 
 private fun atempoChain(s: Double): String = when {
@@ -31,7 +29,7 @@ private fun smartH264(r: ToolRequest, f: PickedFile?): String {
 
 // ------------------------------------------------------------------ audio
 
-private fun audioJobs(r: ToolRequest, files: List<PickedFile>, cover: PickedFile?, fmtKey: String, slot: String = "media"): List<ToolJob> {
+private fun audioJobs(r: ToolRequest, files: List<PickedFile>, cover: PickedFile?, fmtKey: String): List<ToolJob> {
     val fmt = audioFmt(fmtKey)
     val br = r.str("br").ifEmpty { "auto" }
     val sr = r.str("sr").ifEmpty { "auto" }
@@ -40,7 +38,7 @@ private fun audioJobs(r: ToolRequest, files: List<PickedFile>, cover: PickedFile
     return files.map { f ->
         val dur = durationSec(r.ctx, f.uri)
         val trim = trimOf(r, "range", dur)
-        val out = r.out("Audio", f, fmt.ext, slot = slot)
+        val out = r.out("Audio", f, fmt.ext)
         val useCover = cover != null && fmt.cover
         val af = mutableListOf<String>()
         if (r.bool("norm")) af += "loudnorm=I=-16:TP=-1.5:LRA=11"
@@ -77,7 +75,7 @@ private fun audioJobs(r: ToolRequest, files: List<PickedFile>, cover: PickedFile
 
 private fun videoKind(v: Map<String, String>) = videoFmt(v["vfmt"] ?: "mp4_h264").kind
 
-private fun videoJobs(r: ToolRequest, files: List<PickedFile>, fmtKey: String, slot: String = "media"): List<ToolJob> {
+private fun videoJobs(r: ToolRequest, files: List<PickedFile>, fmtKey: String): List<ToolJob> {
     val fmt = videoFmt(fmtKey)
     val h = r.int("res")
     val fps = r.int("fps")
@@ -104,12 +102,12 @@ private fun videoJobs(r: ToolRequest, files: List<PickedFile>, fmtKey: String, s
         val liveK = hwVideoKbps(info, h, fps, qual, false, hwK)
         when (fmt.kind) {
             VFmt.Kind.Remux -> {
-                val out = r.out("Video", f, fmt.ext, slot = slot)
+                val out = r.out("Video", f, fmt.ext)
                 r.job(f, out, "$inp -map ${q("0:v?")} -map ${q("0:a?")} -c copy ${q(out.path)}")
             }
             VFmt.Kind.LivePair -> {
                 // iPhone-style pair: Zyphvert/Live Photos/<name>.mov next to <name>.jpg. Length comes from the "Live Photo length" option.
-                val out = r.out("Video", f, "mov", slot = slot, dir = OutputPaths.dir(r.ctx, "Live Photos"))
+                val out = r.out("Video", f, "mov", dir = OutputPaths.dir(r.ctx, "Live Photos"))
                 val id = java.util.UUID.randomUUID().toString().uppercase()
                 val vf = listOfNotNull(vScale, if (vFps > 0) "fps=$vFps" else null, VID_TAIL).joinToString(",")
                 r.job(f, out, "$inp$liveLen -vf ${q(vf)} -c:v h264_mediacodec -b:v ${liveK}k -c:a aac -b:a 128k " +
@@ -117,7 +115,7 @@ private fun videoJobs(r: ToolRequest, files: List<PickedFile>, fmtKey: String, s
             }
             VFmt.Kind.MotionPhoto -> {
                 // One FFmpeg run makes the clip and the still; then both are joined into a single Motion Photo JPG.
-                val out = r.out("Images", f, "jpg", slot = slot, dir = OutputPaths.dir(r.ctx, "Live Photos"))
+                val out = r.out("Images", f, "jpg", dir = OutputPaths.dir(r.ctx, "Live Photos"))
                 val tmpClip = File(r.ctx.cacheDir, "mp_${out.nameWithoutExtension}.mp4").also { it.delete() }
                 val tmpStill = File(r.ctx.cacheDir, "mp_${out.nameWithoutExtension}.jpg").also { it.delete() }
                 val vf = listOfNotNull(vScale, if (vFps > 0) "fps=$vFps" else null, VID_TAIL).joinToString(",")
@@ -129,18 +127,18 @@ private fun videoJobs(r: ToolRequest, files: List<PickedFile>, fmtKey: String, s
                     })
             }
             VFmt.Kind.Gif -> {
-                val out = r.out("Images", f, "gif", slot = slot)
+                val out = r.out("Images", f, "gif")
                 val vf = "fps=${if (fps > 0) fps else 12},${scale?.replace("scale=-2", "scale=-1") ?: "scale=480:-1"}:flags=lanczos," +
                     "split[s0][s1];[s0]palettegen=stats_mode=diff[p];[s1][p]paletteuse=dither=bayer:bayer_scale=5"
                 r.job(f, out, "$inp -vf ${q(vf)} -loop 0 -an ${q(out.path)}")
             }
             VFmt.Kind.Webp -> {
-                val out = r.out("Images", f, "webp", slot = slot)
+                val out = r.out("Images", f, "webp")
                 val vf = "fps=${if (fps > 0) fps else 12},${scale ?: "scale=480:-2"}:flags=lanczos"
                 r.job(f, out, "$inp -vf ${q(vf)} -c:v libwebp -q:v 70 -loop 0 -an ${q(out.path)}")
             }
             VFmt.Kind.Apng -> {
-                val out = r.out("Images", f, "png", slot = slot)
+                val out = r.out("Images", f, "png")
                 val vf = "fps=${if (fps > 0) fps else 12},${scale ?: "scale=480:-2"}:flags=lanczos"
                 r.job(f, out, "$inp -vf ${q(vf)} -f apng -plays 0 -an ${q(out.path)}")
             }
@@ -154,7 +152,7 @@ private fun videoJobs(r: ToolRequest, files: List<PickedFile>, fmtKey: String, s
                     "$inp ${if (vf.isNotEmpty()) "-vf ${q(vf)} " else ""}$every$qa${q("${folder.path}/frame_%04d.$ext")}")
             }
             else -> {
-                val out = r.out("Video", f, fmt.ext, slot = slot)
+                val out = r.out("Video", f, fmt.ext)
                 val vf = listOfNotNull(vScale, if (vFps > 0) "fps=$vFps" else null, VID_TAIL).joinToString(",")
                 val target = r.str("target").toDoubleOrNull()
                 val audioKbps = if (aKey == "mute") 0 else abr
@@ -446,60 +444,6 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
         },
     ),
 
-    ToolSpec(
-        id = "wm",
-        intro = "Stamp text or a logo on a video or photo.",
-        inputs = listOf(
-            InputSlot("media", "Video or photo", InKind.Visual),
-            InputSlot("logo", "Logo image", InKind.Image, optional = true),
-        ),
-        options = listOf(
-            Opt.Text("text", "Text", "© My name"),
-            Opt.Choice("pos", "Position", items("br" to "Bottom right", "bl" to "Bottom left", "tr" to "Top right", "tl" to "Top left", "c" to "Center")),
-            Opt.Slider("lsize", "Logo width", 5, 50, 18, "%"),
-            Opt.Slider("tsize", "Text size", 2, 12, 5, "%"),
-        ),
-        actionLabel = "Add watermark",
-        build = { r ->
-            val f = r.file("media")!!
-            val logo = r.file("logo")
-            val text = clean(r.str("text"))
-            if (logo == null && text.isEmpty()) fail("Add some text or pick a logo.")
-            val image = isImageName(f.name)
-            val (mw, mh) = mediaSize(r.ctx, f.uri, image) ?: (1080 to 1080)
-            val m = 20
-            val ox: String; val oy: String; val tx: String; val ty: String
-            when (r.str("pos")) {
-                "bl" -> { ox = "$m"; oy = "main_h-overlay_h-$m"; tx = "$m"; ty = "h-th-$m" }
-                "tr" -> { ox = "main_w-overlay_w-$m"; oy = "$m"; tx = "w-tw-$m"; ty = "$m" }
-                "tl" -> { ox = "$m"; oy = "$m"; tx = "$m"; ty = "$m" }
-                "c" -> { ox = "(main_w-overlay_w)/2"; oy = "(main_h-overlay_h)/2"; tx = "(w-tw)/2"; ty = "(h-th)/2" }
-                else -> { ox = "main_w-overlay_w-$m"; oy = "main_h-overlay_h-$m"; tx = "w-tw-$m"; ty = "h-th-$m" }
-            }
-            val font = listOf("/system/fonts/Roboto-Regular.ttf", "/system/fonts/DroidSans.ttf").firstOrNull { File(it).exists() }
-            if (text.isNotEmpty() && font == null) fail("No system font was found for text watermarks.")
-            val draw = if (text.isNotEmpty())
-                "drawtext=fontfile=$font:text='$text':fontcolor=white:fontsize=${(mh * r.int("tsize") / 100).coerceAtLeast(14)}:x=$tx:y=$ty:box=1:boxcolor=black@0.4:boxborderw=8"
-            else ""
-            val tail = if (image) "" else ",$VID_TAIL"
-            val graph: String
-            val inputs: String
-            if (logo != null) {
-                inputs = "-i ${r.saf(f)} -i ${r.saf(logo)}"
-                val lw = (mw * r.int("lsize") / 100).coerceAtLeast(16)
-                graph = "[1:v]scale=$lw:-1,format=rgba[wm];[0:v][wm]overlay=x=$ox:y=$oy" +
-                    (if (draw.isNotEmpty()) ",$draw" else "") + "$tail[v]"
-            } else {
-                inputs = "-i ${r.saf(f)}"
-                graph = "[0:v]$draw$tail[v]"
-            }
-            val out = if (image) r.out("Images", f, nameExt(f.name).takeIf { it in photoExts } ?: "jpg", "_wm")
-                      else r.out("Video", f, "mp4", "_wm")
-            val enc = if (image) "-frames:v 1 -q:v 2" else "-map ${q("0:a?")} ${smartH264(r, f)}"
-            listOf(r.job(f, out, "$inputs -filter_complex ${q(graph)} -map ${q("[v]")} $enc ${q(out.path)}"))
-        },
-    ),
-
     // ================================================================ METADATA & PRIVACY
     ToolSpec(
         id = "meta",
@@ -527,56 +471,6 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
 
     // ================================================================ CREATE
     ToolSpec(
-        id = "slideshow",
-        intro = "Turn photos into a video, with transitions and optional background music.",
-        inputs = listOf(
-            InputSlot("images", "Photos (in order)", InKind.Image, multiple = true),
-            InputSlot("music", "Background music", InKind.Audio, optional = true),
-        ),
-        options = listOf(
-            Opt.Name(),
-            Opt.Slider("sec", "Seconds per photo", 1, 10, 3, " s"),
-            Opt.Choice("res", "Resolution", resChoices),
-            Opt.Choice("tr", "Transition", items("none" to "None", "fade" to "Fade", "dissolve" to "Dissolve", "wipeleft" to "Wipe", "slideleft" to "Slide", "circleopen" to "Circle")),
-            Opt.Choice("fmt", "Format", listOf(Item("mp4_h264", "MP4 · H.264"), Item("mp4_mpeg4", "MP4 · MPEG-4"), Item("mkv_h264", "MKV · H.264"), Item("webm_vp9", "WebM · VP9"))),
-        ),
-        actionLabel = "Create video",
-        build = { r ->
-            val imgs = r.files("images")
-            val sec = r.int("sec")
-            val (w, h) = dims(r.str("res"))
-            val music = r.file("music")
-            val fmt = videoFmt(r.str("fmt").ifEmpty { "mp4_h264" })
-            val inputs = imgs.joinToString(" ") { "-loop 1 -t $sec -i ${r.saf(it)}" } + (music?.let { " -i ${r.saf(it)}" } ?: "")
-            val norm = imgs.indices.joinToString(";") { i ->
-                "[$i:v]scale=$w:$h:force_original_aspect_ratio=decrease,pad=$w:$h:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30,format=yuv420p[v$i]"
-            }
-            val tr = r.str("tr")
-            val graph = if (tr == "none" || imgs.size == 1) {
-                norm + ";" + imgs.indices.joinToString("") { "[v$it]" } + "concat=n=${imgs.size}:v=1:a=0[v]"
-            } else {
-                val d = if (sec >= 2) 0.5 else 0.4
-                val chain = StringBuilder(norm)
-                var prev = "v0"
-                for (i in 1 until imgs.size) {
-                    val label = if (i == imgs.lastIndex) "v" else "x$i"
-                    chain.append(";[$prev][v$i]xfade=transition=$tr:duration=${num(d)}:offset=${num(i * (sec - d))}[$label]")
-                    prev = label
-                }
-                chain.toString()
-            }
-            val enc = when (fmt.kind) {
-                VFmt.Kind.Mpeg4 -> "-c:v mpeg4 -q:v 3 -c:a aac -b:a 192k"
-                VFmt.Kind.Vp9 -> "-c:v libvpx-vp9 -crf 34 -b:v 0 -deadline realtime -cpu-used 8 -row-mt 1 -c:a libopus -b:a 128k"
-                else -> H264
-            }
-            val out = r.out("Video", null, fmt.ext, slot = "images", defaultBase = "slideshow")
-            val audio = if (music != null) " -map ${imgs.size}:a -af apad -shortest" else ""
-            listOf(r.job(null, out, "$inputs -filter_complex ${q(graph)} -map ${q("[v]")}$audio $enc ${q(out.path)}", "slideshow (${imgs.size} photos)"))
-        },
-    ),
-
-    ToolSpec(
         id = "live",
         intro = "Get the video out of a Motion Photo or Live Photo, or turn it into a GIF or a still frame.",
         inputs = listOf(InputSlot("media", "Live Photo or Motion Photo", InKind.Visual)),
@@ -603,29 +497,6 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
                     listOf(r.job(f, out, "-i $src -c copy ${q(out.path)}"))
                 }
             }
-        },
-    ),
-
-    ToolSpec(
-        id = "sticker",
-        intro = "Make 512×512 animated WebP stickers for WhatsApp and Telegram from photos or short clips.",
-        inputs = listOf(InputSlot("media", "Photo or short video", InKind.Visual)),
-        options = listOf(
-            Opt.Name(),
-            Opt.Choice("fit", "Fit", items("pad" to "Keep whole picture", "crop" to "Fill the square")),
-            Opt.Choice("sq", "File size", items("30" to "Small", "50" to "Balanced", "70" to "Best quality")),
-            Opt.Slider("dur", "Max length", 1, 8, 6, " s"),
-        ),
-        actionLabel = "Make sticker",
-        hint = "WhatsApp wants animated stickers under 500 KB. Pick Small if one is rejected.",
-        build = { r ->
-            val f = r.file("media")!!
-            val fit = if (r.str("fit") == "crop") "scale=512:512:force_original_aspect_ratio=increase,crop=512:512"
-                      else "scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000"
-            val still = if (isImageName(f.name)) " -frames:v 1" else ""
-            val vf = (if (still.isEmpty()) "fps=15," else "") + "$fit,format=rgba"
-            val out = r.out("Stickers", f, "webp")
-            listOf(r.job(f, out, "-t ${r.int("dur")} -i ${r.saf(f)} -vf ${q(vf)} -c:v libwebp -lossless 0 -q:v ${r.str("sq")} -loop 0 -preset default$still -an ${q(out.path)}"))
         },
     ),
 
@@ -742,44 +613,6 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
     ),
 
     ToolSpec(
-        id = "merge",
-        intro = "Join videos, or audio files, into one. They play in the order listed. Use the arrows to reorder.",
-        inputs = listOf(InputSlot("media", "Files to join (2 or more)", InKind.Media, multiple = true)),
-        options = listOf(
-            Opt.Name(),
-            Opt.Choice("mfmt", "Audio format (when joining audio)", items("mp3" to "MP3", "m4a" to "M4A (AAC)", "flac" to "FLAC", "wav" to "WAV")),
-        ),
-        actionLabel = "Join files",
-        build = { r ->
-            val files = r.files("media")
-            if (files.size < 2) fail("Pick at least two files to join.")
-            val allVideo = files.all { isVideoStream(r, it) }
-            val allAudio = files.all { streamsOf(r.ctx, it.uri)?.second ?: true }
-            val inputs = files.joinToString(" ") { "-i ${r.saf(it)}" }
-            if (allVideo) {
-                val (w0, h0) = mediaSize(r.ctx, files[0].uri, false) ?: (1280 to 720)
-                val w = w0 / 2 * 2; val h = h0 / 2 * 2
-                val g = StringBuilder()
-                files.indices.forEach { i ->
-                    g.append("[$i:v]scale=$w:$h:force_original_aspect_ratio=decrease,pad=$w:$h:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30,format=yuv420p[v$i];")
-                    if (allAudio) g.append("[$i:a]aresample=44100,aformat=sample_fmts=fltp:channel_layouts=stereo[a$i];")
-                }
-                files.indices.forEach { i -> g.append("[v$i]"); if (allAudio) g.append("[a$i]") }
-                g.append("concat=n=${files.size}:v=1:a=${if (allAudio) 1 else 0}[v]")
-                if (allAudio) g.append("[a]")
-                val out = r.out("Video", null, "mp4", defaultBase = "merged")
-                val maps = "-map ${q("[v]")}" + if (allAudio) " -map ${q("[a]")}" else ""
-                listOf(r.job(null, out, "$inputs -filter_complex ${q(g.toString())} $maps $H264 ${q(out.path)}", "${files.size} videos"))
-            } else {
-                val a = audioFmt(r.str("mfmt").ifEmpty { "mp3" })
-                val g = files.indices.joinToString("") { "[$it:a]" } + "concat=n=${files.size}:v=0:a=1[a]"
-                val out = r.out("Audio", null, a.ext, defaultBase = "merged")
-                listOf(r.job(null, out, "$inputs -filter_complex ${q(g)} -map ${q("[a]")} ${audioCodecArgs(a, "auto", "auto", "auto", "auto")} ${a.mux} ${q(out.path)}", "${files.size} audio files"))
-            }
-        },
-    ),
-
-    ToolSpec(
         id = "volume",
         intro = "Make a video or audio clip louder, quieter, evened out or silent. Video quality isn't touched.",
         inputs = listOf(InputSlot("media", "Video or audio", InKind.Media, multiple = true)),
@@ -808,23 +641,6 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
                           else "-i ${r.saf(f)} -map ${q("0:v?")} -map ${q("0:a?")} -c:v copy -af ${q(v)} -c:a $codec ${q(out.path)}"
                 r.job(f, out, cmd)
             }
-        },
-    ),
-
-    ToolSpec(
-        id = "subs",
-        intro = "Pull a subtitle track out of a video, or convert a subtitle file between SRT, WebVTT and ASS.",
-        inputs = listOf(InputSlot("media", "Video or subtitle file", InKind.Any)),
-        options = listOf(
-            Opt.Choice("sfmt", "Save as", items("srt" to "SRT", "vtt" to "WebVTT", "ass" to "ASS")),
-            Opt.Slider("track", "Subtitle track", 1, 6, 1),
-        ),
-        actionLabel = "Extract",
-        build = { r ->
-            val f = r.file("media")!!
-            val fmt = r.str("sfmt").ifEmpty { "srt" }
-            val out = r.out("Subtitles", f, fmt, "_subs")
-            listOf(r.job(f, out, "-i ${r.saf(f)} -map 0:s:${r.int("track") - 1} ${q(out.path)}"))
         },
     ),
 ).associateBy { it.id }

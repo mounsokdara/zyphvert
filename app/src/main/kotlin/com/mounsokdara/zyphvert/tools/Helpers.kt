@@ -33,31 +33,10 @@ internal fun Context.displayName(uri: Uri): String {
 /** Quote a whole argument for the FFmpegKit command parser. */
 internal fun q(s: String) = "\"$s\""
 
-/** Keep user text safe inside a filter or metadata argument. */
-internal fun clean(s: String) = s.replace(Regex("[^\\p{L}\\p{N} .@_#!&()-]"), "").trim()
-
 internal fun num(d: Double) = String.format(Locale.US, "%.3f", d).trimEnd('0').trimEnd('.')
 
 /** Even dimensions + yuv420p: required by the hardware H.264/HEVC encoders. */
 internal const val VID_TAIL = "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p"
-
-/** Width/height as ffmpeg will see them (after rotation), for scaling overlays. */
-internal fun mediaSize(ctx: Context, uri: Uri, image: Boolean): Pair<Int, Int>? = runCatching {
-    if (image) {
-        val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        ctx.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, o) }
-        if (o.outWidth > 0) o.outWidth to o.outHeight else null
-    } else {
-        val r = MediaMetadataRetriever()
-        try {
-            r.setDataSource(ctx, uri)
-            val w = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toInt() ?: return@runCatching null
-            val h = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toInt() ?: return@runCatching null
-            val rot = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toInt() ?: 0
-            if (rot == 90 || rot == 270) h to w else w to h
-        } finally { r.release() }
-    }
-}.getOrNull()
 
 /**
  * Android Motion Photo: a JPEG with an MP4 appended. Works on the file in chunks, so a Motion Photo

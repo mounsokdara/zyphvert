@@ -7,7 +7,6 @@ import java.io.File
 
 enum class InKind(val mimes: Array<String>, val exts: Set<String>?) {
     Video(arrayOf("video/*"), VIDEO_EXTS),
-    Audio(arrayOf("audio/*"), AUDIO_EXTS),
     Media(arrayOf("video/*", "audio/*"), VIDEO_EXTS + AUDIO_EXTS),
     Image(arrayOf("image/*"), IMAGE_EXTS),
     Visual(arrayOf("video/*", "image/*"), VIDEO_EXTS + IMAGE_EXTS),
@@ -126,15 +125,15 @@ class ToolRequest(
             ?: throw IllegalStateException("The FFmpeg engine isn't part of this build.")
 
     /** Output file in Zyphvert/<category>, honouring a custom "Save as" name for single files. */
-    fun out(category: String, f: PickedFile?, ext: String, tag: String = "", slot: String = "media", dir: File? = null, defaultBase: String? = null): File {
+    fun out(category: String, f: PickedFile, ext: String, tag: String = "", dir: File? = null): File {
         val custom = str("name").trim().replace(Regex("[^A-Za-z0-9._-]"), "_").trim('.').take(80)
-        val useCustom = custom.isNotEmpty() && files(slot).size <= 1
-        val base = if (useCustom) custom else (defaultBase ?: baseName(f?.name ?: "output")) + tag + "_zv"
+        val useCustom = custom.isNotEmpty() && files("media").size <= 1
+        val base = if (useCustom) custom else baseName(f.name) + tag + "_zv"
         return OutputPaths.unique(dir ?: OutputPaths.dir(ctx, category), base, ext)
     }
 
-    fun job(f: PickedFile?, out: File, command: String, label: String? = null) =
-        ToolJob(title = toolTitle, input = f?.name ?: label ?: "files", output = out.path, command = command)
+    fun job(f: PickedFile, out: File, command: String) =
+        ToolJob(title = toolTitle, input = f.name, output = out.path, command = command)
 }
 
 class ToolSpec(

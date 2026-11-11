@@ -20,7 +20,6 @@ request the `INTERNET` permission, so your files never leave your phone.
 | **Crop & Rotate** | Crop to a ratio, rotate, flip |
 | **Speed & Reverse** | Slow down, speed up or reverse, with natural audio pitch |
 | **Filters** | Colour and effect filters for video and photos |
-| **Watermark** | Text or logo overlay |
 
 ### Metadata and privacy
 | Tool | What it does |
@@ -31,9 +30,7 @@ request the `INTERNET` permission, so your files never leave your phone.
 ### Create
 | Tool | What it does |
 |---|---|
-| **Slideshow maker** | Photos to video with transitions and music |
 | **Live/Motion Photos** | Extract the video, make a GIF or grab a still |
-| **Sticker Maker** | 512x512 animated WebP stickers |
 | **Ringtone Maker** | Cut a song into a ringtone saved to your Ringtones folder |
 
 ### Power tools
@@ -63,9 +60,8 @@ with progress, cancel, open and share, and plain-words error messages.
 - [x] All-files access + any-format file pickers
 - [ ] FFmpeg native build pipeline (AAR). Status in [docs/FFMPEG.md](docs/FFMPEG.md)
 - [ ] First real tool smoke test once AAR is present (ffprobe media-info)
-- [ ] Batch queue + richer watermark / multi-input tools
 
 ## Tech stack
 
-Kotlin, Jetpack Compose, Material 3, MVVM, Hilt, Coroutines/Flow, Room,
-WorkManager, Media3, FFmpegKitNext (when AAR is present).
+Kotlin, Jetpack Compose, Material 3, MVVM, Hilt, Coroutines/Flow, DataStore,
+FFmpegKitNext (when AAR is present).

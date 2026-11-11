@@ -206,7 +206,7 @@ class ConversionManager @Inject constructor(@ApplicationContext private val ctx:
 
     /**
      * How long the output will be, so progress can be a percentage: the input length,
-     * cut down by -ss, -to and -t. Unknown (null) for slideshows built from still images.
+     * cut down by -ss, -to and -t. Unknown (null) when the input length is unknown or the command uses -loop.
      */
     private fun effectiveMs(cmd: String, inputMs: Long?): Long? {
         if (inputMs == null || inputMs <= 0 || " -loop " in cmd) return null

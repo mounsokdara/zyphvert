@@ -11,7 +11,6 @@ import kotlinx.coroutines.launch
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -420,7 +419,6 @@ fun FileManagerScreen(
                         in listOf("mp4", "mkv", "webm", "mov", "avi", "m4v", "3gp", "flv", "ts", "m2ts") -> "video"
                         in listOf("mp3", "aac", "flac", "wav", "ogg", "m4a", "opus", "wma") -> "audio"
                         in listOf("jpg", "jpeg", "png", "webp", "heic", "heif", "avif", "gif", "bmp") -> "image"
-                        in listOf("srt", "vtt", "ass", "ssa") -> "subs"
                         else -> "ffmpeg"
                     }
                     onOpenInTool(id, selected.file.absolutePath); close()
@@ -527,7 +525,6 @@ private fun PropRow(label: String, value: String) {
 
 private fun kindLabel(kind: InKind) = when (kind) {
     InKind.Video -> "Video"
-    InKind.Audio -> "Audio"
     InKind.Media -> "Video & audio"
     InKind.Image -> "Images"
     InKind.Visual -> "Video & images"
