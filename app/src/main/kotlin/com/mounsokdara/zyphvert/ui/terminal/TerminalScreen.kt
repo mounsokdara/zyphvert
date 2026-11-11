@@ -66,7 +66,6 @@ import androidx.compose.ui.unit.sp
 import com.mounsokdara.zyphvert.tools.InKind
 import com.mounsokdara.zyphvert.ui.components.AppSheet
 import com.mounsokdara.zyphvert.ui.files.FilePickerDialog
-import com.mounsokdara.zyphvert.ui.files.FolderPickerDialog
 
 // Near-black background with soft, readable colours (Tokyo Night inspired).
 private val Bg = Color(0xFF0A0A10)
@@ -231,7 +230,7 @@ fun TerminalScreen(vm: TerminalViewModel, onBack: () -> Unit) {
             Box {
                 IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, "More", tint = Fg) }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                    DropdownMenuItem(text = { Text("Pick a folder") }, leadingIcon = { Icon(Icons.Rounded.FolderOpen, null) }, onClick = { menu = false; folderPicker = true })
+                    DropdownMenuItem(text = { Text("Go to folder") }, leadingIcon = { Icon(Icons.Rounded.FolderOpen, null) }, onClick = { menu = false; folderPicker = true })
                     DropdownMenuItem(text = { Text("Pick a file") }, leadingIcon = { Icon(Icons.Rounded.AttachFile, null) }, onClick = { menu = false; picker = true })
                     DropdownMenuItem(text = { Text("Saved commands") }, leadingIcon = { Icon(Icons.Rounded.Bookmarks, null) }, onClick = { menu = false; sheet = "saved" })
                     DropdownMenuItem(text = { Text("Examples") }, leadingIcon = { Icon(Icons.Rounded.Lightbulb, null) }, onClick = { menu = false; sheet = "examples" })
@@ -331,7 +330,7 @@ fun TerminalScreen(vm: TerminalViewModel, onBack: () -> Unit) {
             }
             Row(Modifier.widthIn(max = 640.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Key(icon = Icons.Rounded.AttachFile, desc = "Insert a file path") { picker = true }
-                Key(icon = Icons.Rounded.FolderOpen, desc = "Pick a folder") { folderPicker = true }
+                Key(icon = Icons.Rounded.FolderOpen, desc = "Go to folder") { folderPicker = true }
                 Key("-") { type("-") }
                 Key("/") { type("/") }
                 Key("\"") { type("\"") }
@@ -342,10 +341,34 @@ fun TerminalScreen(vm: TerminalViewModel, onBack: () -> Unit) {
     }
 
     if (folderPicker) {
-        FolderPickerDialog(
-            title = "Choose a folder", startPath = s.cwd.path,
-            onDismiss = { folderPicker = false },
-            onPicked = { folderPicker = false; vm.cdTo(it) },
+        // Type the folder path instead of browsing for it.
+        var path by remember { mutableStateOf(s.cwd.path) }
+        var bad by remember { mutableStateOf(false) }
+        fun go() {
+            val dir = vm.resolveDir(path)
+            if (dir == null) {
+                bad = true
+            } else {
+                folderPicker = false
+                vm.cdTo(dir)
+            }
+        }
+        AlertDialog(
+            onDismissRequest = { folderPicker = false },
+            title = { Text("Go to folder") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = path, onValueChange = { path = it; bad = false },
+                        label = { Text("Folder path") }, singleLine = true, isError = bad,
+                        supportingText = { Text(if (bad) "No such folder" else "Type a path, like /storage/emulated/0/Movies") },
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Go),
+                        keyboardActions = androidx.compose.foundation.text.KeyboardActions(onGo = { go() }),
+                    )
+                }
+            },
+            confirmButton = { TextButton(onClick = { go() }) { Text("Go") } },
+            dismissButton = { TextButton(onClick = { folderPicker = false }) { Text("Cancel") } },
         )
     }
 
