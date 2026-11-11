@@ -142,19 +142,6 @@ class TerminalViewModel @Inject constructor(private val repo: SettingsRepository
         cd(s, dir.path)
     }
 
-    /** The folder a typed path points to (absolute, `~`, `~/x` or relative to the current folder), or null if it isn't a folder. */
-    fun resolveDir(text: String): File? {
-        val t = text.trim().trim('"', '\'')
-        if (t.isEmpty()) return null
-        val f = when {
-            t == "~" -> home
-            t.startsWith("/") -> File(t)
-            t.startsWith("~/") -> File(home, t.drop(2))
-            else -> File(current.cwd, t)
-        }.let { runCatching { it.canonicalFile }.getOrDefault(it) }
-        return f.takeIf { it.isDirectory }
-    }
-
     /** Text from the clipboard, made safe to put on one command line. */
     fun cleanPaste(text: String): String = joinLines(text)
 

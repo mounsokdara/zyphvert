@@ -168,7 +168,6 @@ class FileManagerViewModel @Inject constructor(@ApplicationContext private val a
         else selected = entry
     }
 
-    /** Quiet refresh for the auto-refresh loop: nothing changes on screen unless the folder really changed. */
     /** True while a pull-down refresh is showing its spinner. */
     var refreshing by mutableStateOf(false)
         private set
@@ -185,6 +184,7 @@ class FileManagerViewModel @Inject constructor(@ApplicationContext private val a
         }
     }
 
+    /** Quiet refresh for the auto-refresh loop: nothing changes on screen unless the folder really changed. */
     fun autoRefresh() { if (loadJob?.isActive != true) reload(silent = true) }
 
     fun reload(silent: Boolean = false) {

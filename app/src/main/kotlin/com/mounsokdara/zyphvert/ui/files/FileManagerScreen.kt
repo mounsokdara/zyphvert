@@ -55,8 +55,6 @@ import com.mounsokdara.zyphvert.ui.components.UpFolderRow
 import com.mounsokdara.zyphvert.ui.home.allTools
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.core.net.toUri
 import com.mounsokdara.zyphvert.tools.InKind
 import com.mounsokdara.zyphvert.tools.PickedFile
@@ -111,8 +109,8 @@ fun FileManagerScreen(
     LaunchedEffect(vm.message) {
         vm.message?.let { Toast.makeText(ctx, it, Toast.LENGTH_SHORT).show(); vm.message = null }
     }
-    // Auto refresh: no pull-down. The folder is re-read when the screen comes back and every few seconds while it is
-    // showing; the list only changes if something in the folder changed.
+    // Auto refresh: the folder is re-read when the screen comes back and every few seconds while it is showing; the
+    // list only changes if something in the folder changed. Pulling down refreshes right away.
     val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
     LaunchedEffect(lifecycleOwner, vm) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
@@ -325,9 +323,8 @@ fun FileManagerScreen(
             }
         }
 
-        // Pull down to refresh; there is no refresh button.
-        // Pull-to-refresh is the only reaction to a pull at the top. The system rubber-band/stretch is switched off here,
-        // otherwise it moves the whole list along with the finger while the refresh spinner shows.
+        // Pull down to refresh. The system rubber-band/stretch is switched off here, otherwise it moves the whole list
+        // along with the finger while the refresh spinner shows.
         CompositionLocalProvider(LocalOverscrollConfiguration provides null) {
         PullToRefreshBox(
             isRefreshing = vm.refreshing, onRefresh = { vm.pullRefresh() },
