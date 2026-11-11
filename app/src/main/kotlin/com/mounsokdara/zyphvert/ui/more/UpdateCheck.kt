@@ -34,7 +34,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import com.mounsokdara.zyphvert.BuildConfig
-import com.mounsokdara.zyphvert.ui.openUrl
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -82,9 +81,8 @@ class UpdateFlow(private val ctx: Context, private val scope: CoroutineScope) {
 
     fun download(release: ReleaseNote) {
         val url = release.apkUrl
-        if (url == null) { // no APK attached to the release: show its page instead
-            dismiss()
-            ctx.openUrl(release.url)
+        if (url == null) { // never send the person to a web page: say what is wrong here instead
+            state = UpdateUi.DownloadFailed("This release has no APK attached yet.", release)
             return
         }
         job?.cancel()
@@ -219,7 +217,7 @@ fun UpdateDialogs(flow: UpdateFlow) {
                 },
                 dismissButton = { TextButton(onClick = flow::dismiss) { Text("Later") } },
                 confirmButton = {
-                    Button(onClick = { flow.download(latest) }) { Text(if (latest.apkUrl != null) "Update now" else "View release") }
+                    Button(onClick = { flow.download(latest) }) { Text("Update now") }
                 },
             )
         }

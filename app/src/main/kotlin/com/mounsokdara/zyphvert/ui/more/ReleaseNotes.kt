@@ -132,7 +132,7 @@ object ReleaseNotes {
         val j = JSONObject(f.readText())
         val arr = j.getJSONArray("releases")
         ReleaseFeed(
-            releases = (0 until arr.length()).map { ReleaseNote.fromJson(arr.getJSONObject(it)) },
+            releases = (0 until arr.length()).map { ReleaseNote.fromJson(arr.getJSONObject(it)) }.filter { it.apkUrl != null },
             fromCache = true,
             savedAt = j.optLong("fetchedAt").takeIf { it > 0 },
         )
@@ -160,6 +160,8 @@ object ReleaseNotes {
             if (conn.responseCode != 200) throw java.io.IOException("GitHub answered ${conn.responseCode}")
             val arr = JSONArray(conn.inputStream.bufferedReader().use { it.readText() })
             val list = (0 until arr.length()).map { arr.getJSONObject(it) }.filter { !it.optBoolean("draft", false) }.map(ReleaseNote::fromJson)
+                // Only releases that carry an APK count as app versions (the FFmpeg library release has none).
+                .filter { it.apkUrl != null }
             save(ctx, list)
             ReleaseFeed(list, fromCache = false, savedAt = System.currentTimeMillis())
         } catch (e: Exception) {
