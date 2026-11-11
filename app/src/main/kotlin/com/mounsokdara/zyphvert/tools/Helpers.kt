@@ -145,8 +145,6 @@ internal fun convertImageNative(ctx: Context, uri: Uri, out: File, format: Strin
     bmp.recycle()
 }
 
-internal val timeRegex = Regex("^\\d+(:\\d{1,2}){0,2}(\\.\\d+)?$")
-
 /** Duration in seconds, or null if it can't be read. */
 internal fun durationSec(ctx: Context, uri: Uri): Double? = runCatching {
     val r = MediaMetadataRetriever()

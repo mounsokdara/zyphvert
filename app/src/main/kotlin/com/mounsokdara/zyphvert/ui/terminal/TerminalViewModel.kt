@@ -83,7 +83,6 @@ class TerminalViewModel @Inject constructor(private val repo: SettingsRepository
         private set
 
     val current: Session get() = sessions[selected.coerceIn(0, sessions.lastIndex)]
-    val engineVersion: String get() = current.engine.version()
     val engineReady: Boolean get() = current.engine.isAvailable
 
     val saved: StateFlow<List<String>> =

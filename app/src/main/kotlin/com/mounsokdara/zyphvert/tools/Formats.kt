@@ -1,6 +1,5 @@
 package com.mounsokdara.zyphvert.tools
 
-import java.io.File
 
 // ---------------------------------------------------------------- audio
 
@@ -225,8 +224,6 @@ internal fun trimOf(r: ToolRequest, id: String = "range", duration: Double? = nu
 /** Pre-input seek arguments for a "keep this part" selection. */
 internal fun keepArgs(t: Trim?): String =
     if (t != null && !t.remove) "-ss ${num(t.start)} -to ${num(t.end)} " else ""
-
-internal fun fileExt(f: File) = f.extension
 
 /** How long the video inside a Live or Motion Photo is. 0 = Auto: as long as the video. */
 internal val liveLengthItems = listOf(

@@ -9,8 +9,6 @@ import androidx.compose.runtime.compositionLocalOf
 
 object Links {
     const val REPO = "https://github.com/mounsokdara/zyphvert"
-    const val RELEASES = "$REPO/releases"
-    const val LATEST = "$REPO/releases/latest"
     const val ISSUES = "$REPO/issues"
     const val AUTHOR = "https://github.com/mounsokdara"
     /** Replace with your sponsor / donation page. */

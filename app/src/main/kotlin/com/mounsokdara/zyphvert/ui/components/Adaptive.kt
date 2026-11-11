@@ -14,7 +14,6 @@ import androidx.compose.ui.unit.dp
 /** Material 3 window width breakpoints: compact < 600dp, medium 600-839dp, expanded >= 840dp. */
 object Breakpoints {
     val Medium = 600.dp
-    val Expanded = 840.dp
 }
 
 /** True on tablets and other wide windows (also updates in split-screen / foldable resize). */

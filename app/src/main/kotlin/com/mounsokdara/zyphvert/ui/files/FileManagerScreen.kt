@@ -63,10 +63,6 @@ class PickConfig(
     /** Fallback when all-files access isn't granted. */
     val onUseSystem: () -> Unit,
     val onPicked: (List<PickedFile>) -> Unit,
-    /** When set, the browser chooses a folder instead of files: only folders are listed and "Select" returns the open one. */
-    val onFolder: ((File) -> Unit)? = null,
-    /** Folder to open first. Null keeps wherever the picker was left. */
-    val startPath: String? = null,
 )
 
 /** The file picker: the same screen as the Files tab, full screen, in pick mode. */
@@ -80,12 +76,6 @@ fun FilePickerDialog(
     onPicked: (List<PickedFile>) -> Unit,
 ) {
     PickerDialog(PickConfig(kind, multiple, title, onDismiss, onUseSystem, onPicked))
-}
-
-/** The same picker, choosing a folder (the terminal uses it for `cd`). */
-@Composable
-fun FolderPickerDialog(title: String, startPath: String?, onDismiss: () -> Unit, onPicked: (File) -> Unit) {
-    PickerDialog(PickConfig(InKind.Any, false, title, onDismiss, onUseSystem = {}, onPicked = {}, onFolder = onPicked, startPath = startPath))
 }
 
 @Composable
@@ -121,10 +111,8 @@ fun FileManagerScreen(
     fun closeSearch() { searching = false; vm.query = ""; showFolders = true; kinds = emptySet() }
     val rootList = remember { roots(ctx) }
     val drives = remember { rootList.filter { it.first == "Internal storage" || it.first == "SD card" }.map { it.second.path }.toSet() }
-    val folderMode = pick?.onFolder != null
     if (pick != null) LaunchedEffect(pick.kind, pick.title) {
         vm.configurePick(pick.kind, drives)
-        pick.startPath?.let { vm.navigateTo(it) }
     }
     var renameFor by remember { mutableStateOf<FileEntry?>(null) }
     var deleteFor by remember { mutableStateOf<FileEntry?>(null) }
@@ -145,7 +133,6 @@ fun FileManagerScreen(
     }
     val list = vm.filtered()
         .filter { !searching || passesSearchFilters(it.isDirectory, it.extension, showFolders, kinds) }
-        .filter { !folderMode || it.isDirectory }
 
     // A tap: the Files tab opens a file's menu; the picker selects it. Folders always open.
     val onTap: (FileEntry) -> Unit = { e ->
@@ -263,7 +250,7 @@ fun FileManagerScreen(
         }
 
         // The two states: walk folders, or one flat list of every media file. The picker adds a type filter.
-        if (!folderMode) Row(
+        Row(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 2.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -326,7 +313,7 @@ fun FileManagerScreen(
                         TextButton(onClick = { StorageAccess.openAllFilesSettings(ctx) }) { Text("Open storage settings") }
                     }
                     list.isEmpty() && !vm.loading -> Text(
-                        if (vm.query.isNotBlank()) "No matches" else if (vm.browseMode == BrowseMode.Media) "No media files found" else if (folderMode) "No folders in here" else "Empty folder",
+                        if (vm.query.isNotBlank()) "No matches" else if (vm.browseMode == BrowseMode.Media) "No media files found" else "Empty folder",
                         Modifier.fillMaxWidth().padding(24.dp), color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -376,18 +363,6 @@ fun FileManagerScreen(
                 TextButton(onClick = { list.filter { !it.isDirectory && orderOf(it) < 0 }.forEach { picks.add(it) } }) { Text("All") }
                 TextButton(onClick = { picks.clear() }, enabled = picks.isNotEmpty()) { Text("Clear") }
                 Button(onClick = { finishPick(picks.toList()) }, enabled = picks.isNotEmpty(), shape = CircleShape) { Text("Select") }
-            }
-        }
-        // Choosing a folder: the folder that is open is the choice.
-        pick?.onFolder?.let { onFolder ->
-            Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Use this folder", style = MaterialTheme.typography.titleSmall)
-                        Text(vm.currentPath, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    }
-                    Button(onClick = { onFolder(File(vm.currentPath)) }, shape = CircleShape) { Text("Select") }
-                }
             }
         }
     }

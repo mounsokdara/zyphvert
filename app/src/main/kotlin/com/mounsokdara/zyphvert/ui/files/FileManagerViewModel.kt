@@ -79,8 +79,6 @@ class FileManagerViewModel @Inject constructor(@ApplicationContext private val a
         private set
     var error by mutableStateOf<String?>(null)
         private set
-    /** True only for a pull-down refresh, so opening a folder never shows the pull indicator. */
-        private set
     var query by mutableStateOf("")
     var sort by mutableStateOf(SortMode.NameAsc)
     var viewMode by mutableStateOf(ViewMode.List)

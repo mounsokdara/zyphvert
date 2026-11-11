@@ -1,6 +1,5 @@
 package com.mounsokdara.zyphvert.ui.components
 
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -23,8 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.layout.layout
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 
@@ -63,14 +61,18 @@ fun AppSheet(onDismiss: () -> Unit, content: @Composable ColumnScope.(close: () 
             Box(Modifier.then(if (scrollable) Modifier.blockDrag() else Modifier)) { BottomSheetDefaults.DragHandle() }
         },
     ) {
-        BoxWithConstraints {
-            val maxH = constraints.maxHeight
-            Column(
-                Modifier
-                    .onSizeChanged { scrollable = maxH != Constraints.Infinity && it.height >= maxH - 2 }
-                    .then(if (scrollable) Modifier.nestedScroll(SwallowLeftoverScroll).blockDrag() else Modifier),
-            ) { content(close) }
-        }
+        // Measured on every layout pass (not only when the size changes), so a keyboard opening or a list that
+        // finishes loading can never leave the flag stale and let the sheet steal the list's scroll.
+        Column(
+            Modifier
+                .layout { measurable, c ->
+                    val p = measurable.measure(c)
+                    val full = c.hasBoundedHeight && p.height >= c.maxHeight - 2
+                    if (full != scrollable) scrollable = full
+                    layout(p.width, p.height) { p.place(0, 0) }
+                }
+                .then(if (scrollable) Modifier.nestedScroll(SwallowLeftoverScroll).blockDrag() else Modifier),
+        ) { content(close) }
     }
 }
 
