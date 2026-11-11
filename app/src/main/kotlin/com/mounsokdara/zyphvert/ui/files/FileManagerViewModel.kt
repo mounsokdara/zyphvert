@@ -35,7 +35,6 @@ data class Clip(val files: List<File>, val cut: Boolean)
 data class FileStats(val bytes: Long, val files: Int, val folders: Int)
 
 enum class SortMode { NameAsc, NameDesc, SizeDesc, DateDesc, Type }
-enum class ViewMode { List, Grid }
 
 /** Folders: walk the folder tree. Media: one flat list of every picture, video and song on the phone. */
 enum class BrowseMode { Folders, Media }
@@ -82,7 +81,6 @@ class FileManagerViewModel @Inject constructor(@ApplicationContext private val a
         private set
     var query by mutableStateOf("")
     var sort by mutableStateOf(SortMode.NameAsc)
-    var viewMode by mutableStateOf(ViewMode.List)
     var showHidden by mutableStateOf(false)
     var selected by mutableStateOf<FileEntry?>(null)
     var browseMode by mutableStateOf(BrowseMode.Folders)

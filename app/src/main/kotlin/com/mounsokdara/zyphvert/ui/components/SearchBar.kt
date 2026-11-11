@@ -20,7 +20,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Folder
-import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Movie
@@ -74,8 +73,6 @@ fun SearchAppBar(
     query: String,
     onQueryChange: (String) -> Unit,
     onClose: () -> Unit,
-    grid: Boolean,
-    onToggleGrid: () -> Unit,
     menuContent: @Composable ColumnScope.(dismiss: () -> Unit) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -101,9 +98,6 @@ fun SearchAppBar(
         )
         // Clears the text first; a second tap on an empty field closes search.
         IconButton(onClick = { if (query.isNotEmpty()) onQueryChange("") else onClose() }) { Icon(Icons.Rounded.Close, "Clear search") }
-        IconButton(onClick = onToggleGrid) {
-            Icon(if (grid) Icons.Rounded.ViewList else Icons.Rounded.GridView, if (grid) "List view" else "Grid view")
-        }
         Box {
             IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, "More") }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) { menuContent { menu = false } }
