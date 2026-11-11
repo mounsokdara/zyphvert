@@ -12,8 +12,13 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -35,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.mounsokdara.zyphvert.ui.components.AppSheet
 import com.mounsokdara.zyphvert.ui.components.FileRow
+import com.mounsokdara.zyphvert.ui.components.FileTile
 import com.mounsokdara.zyphvert.ui.components.SearchAppBar
 import com.mounsokdara.zyphvert.ui.components.SearchFilters
 import com.mounsokdara.zyphvert.ui.components.SearchKind
@@ -109,8 +115,10 @@ fun FileManagerScreen(
     // One scroll state per screen, sent back to the top whenever the folder or mode changes. Without this the old
     // scroll offset was carried into the new folder, so it opened already scrolled down.
     val listState = rememberLazyListState()
-    LaunchedEffect(vm.currentPath, vm.browseMode) {
+    val gridState = rememberLazyGridState()
+    LaunchedEffect(vm.currentPath, vm.browseMode, vm.viewMode) {
         listState.scrollToItem(0)
+        gridState.scrollToItem(0)
     }
     val list = vm.filtered()
         .filter { !searching || passesSearchFilters(it.isDirectory, it.extension, showFolders, kinds) }
@@ -144,6 +152,15 @@ fun FileManagerScreen(
                         onClick = { vm.showHidden = !vm.showHidden; dismiss() },
                     )
                     HorizontalDivider()
+                    MenuLabel("View")
+                    ViewMode.entries.forEach { mode ->
+                        DropdownMenuItem(
+                            text = { Text(if (mode == ViewMode.List) "List" else "Grid") },
+                            leadingIcon = { Icon(if (mode == ViewMode.List) Icons.Rounded.ViewList else Icons.Rounded.GridView, null) },
+                            trailingIcon = { if (vm.viewMode == mode) Icon(Icons.Rounded.Check, null) },
+                            onClick = { vm.viewMode = mode; dismiss() },
+                        )
+                    }
                     HorizontalDivider()
                     MenuLabel("Sort by")
                     SortMode.entries.forEach { mode ->
@@ -174,6 +191,8 @@ fun FileManagerScreen(
         if (searching) {
             SearchAppBar(
                 query = vm.query, onQueryChange = { vm.query = it }, onClose = { closeSearch() },
+                grid = vm.viewMode == ViewMode.Grid,
+                onToggleGrid = { vm.viewMode = if (vm.viewMode == ViewMode.Grid) ViewMode.List else ViewMode.Grid },
                 menuContent = managerMenu,
             )
             SearchFilters(showFolders, { showFolders = it }, kinds, { kinds = it })
@@ -291,6 +310,23 @@ fun FileManagerScreen(
                     )
                 }
             }
+            if (vm.viewMode == ViewMode.Grid) {
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(110.dp), contentPadding = PaddingValues(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.fillMaxSize(), state = gridState,
+                ) {
+                    if (vm.canGoUp && vm.browseMode == BrowseMode.Folders) item(key = "..up", span = { GridItemSpan(maxLineSpan) }) { UpFolderRow((if (animate) Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null) else Modifier)) { vm.goUp() } }
+                    item(key = "..hint", span = { GridItemSpan(maxLineSpan) }) { hint() }
+                    items(list, key = { it.file.absolutePath }) { e ->
+                        FileTile(
+                            e.name, e.file, e.isDirectory, (if (animate) Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null) else Modifier), live = e.live,
+                            selectedOrder = orderOf(e), showSelect = pick?.multiple == true && !e.isDirectory,
+                            onLongClick = { vm.selected = e },
+                        ) { onTap(e) }
+                    }
+                }
+            } else {
                 LazyColumn(Modifier.fillMaxSize(), state = listState) {
                     if (vm.canGoUp && vm.browseMode == BrowseMode.Folders) item(key = "..up") { UpFolderRow((if (animate) Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null) else Modifier)) { vm.goUp() } }
                     item(key = "..hint") { hint() }
@@ -305,6 +341,7 @@ fun FileManagerScreen(
                         )
                     }
                 }
+            }
         }
         }
 
