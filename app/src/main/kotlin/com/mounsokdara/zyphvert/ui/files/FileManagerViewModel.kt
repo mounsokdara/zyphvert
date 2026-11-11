@@ -152,15 +152,15 @@ class FileManagerViewModel @Inject constructor(
         viewModelScope.launch { settings.setFileView(folderSort().name, viewMode.name, showHidden) }
     }
 
-    fun setSort(mode: SortMode) {
+    fun changeSort(mode: SortMode) {
         sort = mode
         // The flat media list is always newest first, so a pick there is not saved.
         if (browseMode == BrowseMode.Folders) saveView()
     }
 
-    fun setViewMode(mode: ViewMode) { viewMode = mode; saveView() }
+    fun changeViewMode(mode: ViewMode) { viewMode = mode; saveView() }
 
-    fun setShowHidden(show: Boolean) { showHidden = show; saveView() }
+    fun changeShowHidden(show: Boolean) { showHidden = show; saveView() }
 
     fun navigateTo(path: String) {
         fromRoot = if (path == "/") true else if (path in drives) false else fromRoot
