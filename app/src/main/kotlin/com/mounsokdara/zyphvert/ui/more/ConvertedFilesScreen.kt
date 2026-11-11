@@ -17,7 +17,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DriveFileRenameOutline
-import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.AlertDialog
@@ -43,7 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import com.mounsokdara.zyphvert.tools.OutputPaths
 import com.mounsokdara.zyphvert.ui.components.AppSheet
-import com.mounsokdara.zyphvert.ui.components.InfoTile
+import com.mounsokdara.zyphvert.ui.components.FileRow
 import com.mounsokdara.zyphvert.ui.components.SubScreenScaffold
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -87,16 +86,16 @@ fun ConvertedFilesScreen(onBack: () -> Unit) {
                 }
                 else -> LazyColumn(
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     items(list, key = { it.absolutePath }) { f ->
-                        InfoTile(
-                            icon = Icons.Rounded.Movie,
-                            title = f.name,
-                            subtitle = Formatter.formatFileSize(ctx, f.length()) + " · " +
-                                DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(f.lastModified())),
-                            onClick = { active = f },
+                        // Thumbnail and length like the Files tab; tap previews in another app, hold for more.
+                        FileRow(
+                            name = f.name, file = f, isDir = false,
+                            size = Formatter.formatFileSize(ctx, f.length()),
+                            date = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(f.lastModified())),
+                            onLongClick = { active = f },
+                            onClick = { open(ctx, f) },
                         )
                     }
                 }
@@ -107,7 +106,7 @@ fun ConvertedFilesScreen(onBack: () -> Unit) {
     active?.let { f ->
         AppSheet({ active = null }) { close ->
             Text(f.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
-            SheetAction(Icons.Rounded.OpenInNew, "Open") { close(); open(ctx, f) }
+            SheetAction(Icons.Rounded.OpenInNew, "Preview in another app") { close(); open(ctx, f) }
             SheetAction(Icons.Rounded.Share, "Share") { close(); share(ctx, f) }
             SheetAction(Icons.Rounded.DriveFileRenameOutline, "Rename") { close(); renaming = f }
             SheetAction(Icons.Rounded.Delete, "Delete") { close(); deleting = f }
