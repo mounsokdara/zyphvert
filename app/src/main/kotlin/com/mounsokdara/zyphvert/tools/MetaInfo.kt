@@ -20,6 +20,8 @@ class MetaInfo(
     val tags: List<MetaRow>,
     val sections: List<MetaSection>,
     val cover: Bitmap?,
+    val readOnly: Boolean = false,
+    val kind: String? = null,
 ) {
     fun asText(): String = sections.joinToString("\n\n") { s ->
         s.title + "\n" + s.rows.joinToString("\n") { "${it.key}: ${it.value}" }
@@ -48,8 +50,26 @@ internal val longTextTags = setOf("comment", "description", "lyrics", "synopsis"
 
 internal fun cleanMetaKey(k: String) = k.filter { it.isLetterOrDigit() || it in "_.-: ©" }.trim()
 
-internal suspend fun loadMetaInfo(ctx: Context, engine: MediaEngine, f: PickedFile): MetaInfo =
-    if (isImageName(f.name)) loadPhotoInfo(ctx, f) else loadMediaInfo(ctx, engine, f)
+internal fun isMetaEditable(ctx: Context, f: PickedFile): Boolean {
+    val ext = nameExt(f.name)
+    return isImageName(f.name) || ext in VIDEO_EXTS || ext in AUDIO_EXTS || looksLikeMedia(ctx, f)
+}
+
+internal suspend fun loadMetaInfo(ctx: Context, engine: MediaEngine, f: PickedFile): MetaInfo = when {
+    isImageName(f.name) -> loadPhotoInfo(ctx, f)
+    isMetaEditable(ctx, f) -> loadMediaInfo(ctx, engine, f)
+    else -> loadGenericInfo(ctx, f)
+}
+
+private fun loadGenericInfo(ctx: Context, f: PickedFile): MetaInfo {
+    val facts = loadFileFacts(ctx, f)
+    val extra = extractorSections(ctx, f)
+    val kind = facts.firstOrNull()?.rows?.firstOrNull { it.key == "Detected type" }?.value
+    return MetaInfo(
+        photo = false, audio = false, tags = emptyList(), sections = facts + extra, cover = null,
+        readOnly = true, kind = kind,
+    )
+}
 
 private suspend fun loadMediaInfo(ctx: Context, engine: MediaEngine, f: PickedFile): MetaInfo {
     val src = f.path?.let { q(it) } ?: engine.safRead(ctx, f.uri)
@@ -87,6 +107,8 @@ private suspend fun loadMediaInfo(ctx: Context, engine: MediaEngine, f: PickedFi
         }
         sections += MetaSection("Chapters", rows)
     }
+    if (streams == null || streams.length() == 0) sections += extractorSections(ctx, f)
+    sections += loadFileFacts(ctx, f, summaryOnly = true)
     val audio = isAudioName(f.name)
     return MetaInfo(photo = false, audio = audio, tags = tags, sections = sections, cover = if (audio) embeddedCover(ctx, f.uri) else null)
 }
@@ -114,7 +136,10 @@ private fun loadPhotoInfo(ctx: Context, f: PickedFile): MetaInfo {
             o.outMimeType?.let { details += MetaRow("Type", it) }
         }
     }
-    return MetaInfo(photo = true, audio = false, tags = tags, sections = listOf(MetaSection("Image", details)), cover = null)
+    val all = mutableListOf(MetaSection("Image", details))
+    all += extractorSections(ctx, f)
+    all += loadFileFacts(ctx, f, summaryOnly = true)
+    return MetaInfo(photo = true, audio = false, tags = tags, sections = all, cover = null)
 }
 
 private fun JSONObject.strings(): Map<String, String> {

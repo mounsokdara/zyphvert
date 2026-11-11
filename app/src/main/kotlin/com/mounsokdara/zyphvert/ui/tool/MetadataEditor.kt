@@ -65,9 +65,13 @@ internal fun MetadataEditor(vm: ToolViewModel) {
                     Text("Couldn't read this file's metadata. You can still add tags.", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onErrorContainer)
                 }
             }
-            if (info?.audio == true) CoverCard(vm, info.cover)
-            TagsCard(vm, photo = info?.photo == true)
-            if (info != null) DetailsCard(info)
+            if (info?.readOnly == true) {
+                ReadOnlyCard(info)
+            } else {
+                if (info?.audio == true) CoverCard(vm, info.cover)
+                TagsCard(vm, photo = info?.photo == true)
+            }
+            if (info != null) DetailsCard(info, startOpen = info.readOnly)
         }
     }
 }
@@ -190,9 +194,22 @@ private fun AddTagSheet(vm: ToolViewModel, photo: Boolean, onDismiss: () -> Unit
 }
 
 @Composable
-private fun DetailsCard(info: MetaInfo) {
+private fun ReadOnlyCard(info: MetaInfo) {
+    Surface(shape = MetaShape, color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(info.kind ?: "File", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSecondaryContainer)
+            Text(
+                "Every detail Zyphvert can read from this file is listed below. Tap a value to copy it, or copy everything with the button. Editing is available for photos, audio and video.",
+                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+        }
+    }
+}
+
+@Composable
+private fun DetailsCard(info: MetaInfo, startOpen: Boolean = false) {
     if (info.sections.isEmpty()) return
-    var open by remember { mutableStateOf(false) }
+    var open by remember { mutableStateOf(startOpen) }
     val clipboard = LocalClipboardManager.current
     Surface(shape = MetaShape, color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
         Column {

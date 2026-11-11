@@ -29,6 +29,9 @@ private fun parseOps(json: String): List<Op> {
 internal fun buildMetadataJobs(r: ToolRequest): List<ToolJob> {
     val files = r.files("media")
     if (files.isEmpty()) fail("Choose a file first.")
+    files.firstOrNull { !isMetaEditable(r.ctx, it) }?.let {
+        fail("${it.name} can't be edited here. Photos, audio and video can be changed; for other files you can read every detail and copy it.")
+    }
     val photo = isImageName(files.first().name)
     if (files.any { isImageName(it.name) != photo }) fail("Pick photos, or audio and video files, but not both at once.")
     val ops = parseOps(r.str("meta.ops"))
