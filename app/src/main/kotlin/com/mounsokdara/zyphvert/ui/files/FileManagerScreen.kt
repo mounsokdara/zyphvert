@@ -405,6 +405,7 @@ fun FileManagerScreen(
                 Text("${selected.sizeLabel} · ${selected.dateLabel}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(16.dp))
                 if (pick != null) ActionRow(Icons.Rounded.Check, if (pick.multiple) "Select" else "Pick this file") { onTap(selected); close() }
+                ActionRow(Icons.Rounded.PlayArrow, "Preview in another app") { com.mounsokdara.zyphvert.util.openInOtherApp(ctx, selected.file); close() }
                 EntryActions(vm, selected, close, { renameFor = selected }, { deleteFor = selected }, { propsFor = selected })
                 if (pick == null) {
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
