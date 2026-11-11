@@ -17,7 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DriveFileRenameOutline
-import androidx.compose.material.icons.rounded.OpenInNew
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -57,6 +57,7 @@ private fun scan(ctx: Context): List<File> =
         .sortedByDescending { it.lastModified() }.toList()
 
 /** Everything Zyphvert has converted (the Zyphvert output folder), newest first, with open, share, rename and delete. */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun ConvertedFilesScreen(onBack: () -> Unit) {
     val ctx = LocalContext.current
@@ -106,7 +107,7 @@ fun ConvertedFilesScreen(onBack: () -> Unit) {
     active?.let { f ->
         AppSheet({ active = null }) { close ->
             Text(f.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
-            SheetAction(Icons.Rounded.OpenInNew, "Preview in another app") { close(); open(ctx, f) }
+            SheetAction(Icons.AutoMirrored.Rounded.OpenInNew, "Preview in another app") { close(); open(ctx, f) }
             SheetAction(Icons.Rounded.Share, "Share") { close(); share(ctx, f) }
             SheetAction(Icons.Rounded.DriveFileRenameOutline, "Rename") { close(); renaming = f }
             SheetAction(Icons.Rounded.Delete, "Delete") { close(); deleting = f }

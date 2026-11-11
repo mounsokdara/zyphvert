@@ -307,7 +307,7 @@ fun FileManagerScreen(
         CompositionLocalProvider(LocalOverscrollConfiguration provides null) {
         PullToRefreshBox(isRefreshing = vm.refreshing, onRefresh = vm::pullRefresh, modifier = Modifier.weight(1f).fillMaxWidth()) {
             // No placement animation while refreshing, otherwise the list slides under the pull indicator.
-            val itemAnim = if (vm.refreshing || vm.loading) Modifier else Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null)
+            val animate = !(vm.refreshing || vm.loading)
             val hint: @Composable () -> Unit = {
                 when {
                     vm.error != null -> Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -326,11 +326,11 @@ fun FileManagerScreen(
                     verticalArrangement = Arrangement.spacedBy(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp),
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    if (vm.canGoUp && vm.browseMode == BrowseMode.Folders) item(key = "..up", span = { GridItemSpan(maxLineSpan) }) { UpFolderRow(itemAnim) { vm.goUp() } }
+                    if (vm.canGoUp && vm.browseMode == BrowseMode.Folders) item(key = "..up", span = { GridItemSpan(maxLineSpan) }) { UpFolderRow((if (animate) Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null) else Modifier)) { vm.goUp() } }
                     item(key = "..hint", span = { GridItemSpan(maxLineSpan) }) { hint() }
                     items(list, key = { it.file.absolutePath }) { e ->
                         FileTile(
-                            e.name, e.file, e.isDirectory, itemAnim, live = e.live,
+                            e.name, e.file, e.isDirectory, (if (animate) Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null) else Modifier), live = e.live,
                             selectedOrder = orderOf(e), showSelect = pick?.multiple == true && !e.isDirectory,
                             onLongClick = { vm.selected = e },
                         ) { onTap(e) }
@@ -338,7 +338,7 @@ fun FileManagerScreen(
                 }
             } else {
                 LazyColumn(Modifier.fillMaxSize()) {
-                    if (vm.canGoUp && vm.browseMode == BrowseMode.Folders) item(key = "..up") { UpFolderRow(itemAnim) { vm.goUp() } }
+                    if (vm.canGoUp && vm.browseMode == BrowseMode.Folders) item(key = "..up") { UpFolderRow((if (animate) Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null) else Modifier)) { vm.goUp() } }
                     item(key = "..hint") { hint() }
                     items(list, key = { it.file.absolutePath }) { e ->
                         FileRow(
@@ -347,7 +347,7 @@ fun FileManagerScreen(
                             // In the flat media list, say which folder each file is in.
                             date = if (vm.browseMode == BrowseMode.Media) (e.file.parentFile?.name ?: "") + " · " + e.dateLabel else e.dateLabel,
                             live = e.live, selectedOrder = orderOf(e), showSelect = pick?.multiple == true && !e.isDirectory,
-                            modifier = itemAnim, onLongClick = { vm.selected = e }, onClick = { onTap(e) },
+                            modifier = (if (animate) Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null) else Modifier), onLongClick = { vm.selected = e }, onClick = { onTap(e) },
                         )
                     }
                 }

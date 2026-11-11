@@ -78,7 +78,7 @@ fun InfoTile(
                 }
             },
             headlineContent = { Text(title, style = MaterialTheme.typography.titleMedium) },
-            supportingContent = subtitle?.let { { Text(it, style = MaterialTheme.typography.bodyMedium) } },
+            supportingContent = if (subtitle != null) ({ Text(subtitle, style = MaterialTheme.typography.bodyMedium) }) else null,
             trailingContent = trailing,
         )
     }
