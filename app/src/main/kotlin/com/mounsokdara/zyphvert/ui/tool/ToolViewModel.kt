@@ -54,6 +54,7 @@ class ToolViewModel @Inject constructor(
             spec.options.forEach { o ->
                 values[o.id] = o.default
                 if (o is Opt.Range) values["${o.id}.mode"] = "keep"
+                if (o is Opt.Size) values["${o.id}.unit"] = "MB"
             }
             viewModelScope.launch {
                 val saved = repo.toolSettings(spec.id)

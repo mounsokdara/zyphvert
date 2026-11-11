@@ -58,6 +58,11 @@ sealed class Opt(
         showIf: ((Map<String, String>) -> Boolean)? = null, advanced: Boolean = false,
     ) : Opt(id, label, showIf, advanced) { override val default = initial.toString() }
 
+    class Size(
+        id: String, label: String, val hint: String = "",
+        showIf: ((Map<String, String>) -> Boolean)? = null, advanced: Boolean = false,
+    ) : Opt(id, label, showIf, advanced) { override val default = "" }
+
     class Presets(id: String, label: String, val presets: List<Preset>) : Opt(id, label) { override val default = "" }
 
     class Name(id: String = "name", label: String = "Save as") : Opt(id, label) { override val default = "" }
@@ -104,6 +109,18 @@ class ToolRequest(
     fun bool(id: String) = values[id] == "true"
     fun files(id: String): List<PickedFile> = files[id].orEmpty()
     fun file(id: String): PickedFile? = files[id]?.firstOrNull()
+
+    fun sizeBytes(id: String): Long? {
+        val n = str(id).trim().replace(',', '.').toDoubleOrNull() ?: return null
+        if (n <= 0.0) return null
+        val mult = when (values["$id.unit"]) {
+            "B" -> 1.0
+            "KB" -> 1024.0
+            "GB" -> 1024.0 * 1024.0 * 1024.0
+            else -> 1024.0 * 1024.0
+        }
+        return (n * mult).toLong().takeIf { it > 0L }
+    }
 
     fun saf(f: PickedFile): String =
         f.path?.let { q(it) } ?: engine.safRead(ctx, f.uri)

@@ -19,7 +19,8 @@ request the `INTERNET` permission, so your files never leave your phone.
 | **Trim & Cut** | Keep or remove any part of a video or audio file, lossless or precise |
 | **Crop & Rotate** | Crop to a ratio, rotate, flip |
 | **Speed & Reverse** | Slow down, speed up or reverse, with natural audio pitch |
-| **Filters** | Colour and effect filters for video and photos |
+| **Compress** | Shrink video, audio and photos, or fit them under a size limit you type in bytes, KB, MB or GB, with format, resolution, frame rate, bitrate, sample rate and channel controls |
+| **Volume** | Make a clip louder, quieter, normalized or silent |
 
 ### Metadata and privacy
 | Tool | What it does |

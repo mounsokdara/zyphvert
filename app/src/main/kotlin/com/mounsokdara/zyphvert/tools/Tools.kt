@@ -183,6 +183,156 @@ private fun videoJobs(r: ToolRequest, files: List<PickedFile>, fmtKey: String): 
     }
 }
 
+private val compressPresets = listOf(
+    Preset("none", "No size limit", "Use only the level you picked", mapOf("csize" to "", "csize.unit" to "MB")),
+    Preset("email", "Email attachment", "Limit set to 24 MB, just under the usual 25 MB cap", mapOf("csize" to "24", "csize.unit" to "MB")),
+    Preset("whatsapp", "WhatsApp", "Limit set to 15 MB, just under the 16 MB cap", mapOf("csize" to "15", "csize.unit" to "MB")),
+    Preset("discord", "Discord", "Limit set to 9.5 MB, just under the 10 MB cap", mapOf("csize" to "9.5", "csize.unit" to "MB")),
+    Preset("mb1", "Under 1 MB", "Limit set to 0.95 MB", mapOf("csize" to "0.95", "csize.unit" to "MB")),
+    Preset("kb500", "Under 500 KB", "Limit set to 480 KB", mapOf("csize" to "480", "csize.unit" to "KB")),
+    Preset("kb100", "Under 100 KB", "Limit set to 95 KB", mapOf("csize" to "95", "csize.unit" to "KB")),
+)
+
+private val compressVideoFormats = listOf(
+    Item("mp4_h264", "MP4 · H.264", "Plays everywhere"),
+    Item("mp4_hevc", "MP4 · HEVC (H.265)", "Smaller files, needs a newer player"),
+    Item("webm_vp9", "WebM · VP9", "Open format, slower to encode"),
+)
+private val compressResItems = listOf(Item("auto", "Auto (from level or size limit)"), Item("0", "Original size")) +
+    listOf(1440, 1080, 720, 480, 360, 240).map { Item("$it", "${it}p") }
+private val compressAudioFormats = listOf(
+    Item("m4a", "M4A (AAC)"), Item("mp3", "MP3"), Item("opus", "Opus"), Item("ogg", "OGG Vorbis"),
+)
+private val compressAudioBitrates = listOf(Item("auto", "Auto (from level)")) +
+    listOf(32, 48, 64, 96, 128, 160, 192, 256, 320).map { Item("$it", "$it kb/s") }
+private val compressPhotoFormats = listOf(Item("jpg", "JPG"), Item("webp", "WebP", "Smaller than JPG at the same quality"))
+private val compressPhotoQuality = listOf(Item("auto", "Auto (from level)")) +
+    listOf(95, 90, 85, 80, 70, 60, 50, 40, 30, 20).map { Item("$it", "$it%") }
+private val compressPhotoWidths = listOf(Item("auto", "Auto (from level)"), Item("0", "Original size")) +
+    listOf(3840, 2560, 1920, 1280, 1024, 800, 640).map { Item("$it", "$it px wide") }
+
+private fun opusRateOk(sr: String) = sr.toIntOrNull() in setOf(8000, 12000, 16000, 24000, 48000)
+
+private fun compressJobs(r: ToolRequest): List<ToolJob> {
+    val lvl = r.str("level").ifEmpty { "medium" }
+    val limit = r.sizeBytes("csize")
+    val strip = if (r.bool("cstrip")) "-map_metadata -1 " else ""
+    return r.files("media").map { f ->
+        when {
+            isImageName(f.name) -> compressPhoto(r, f, lvl, limit, strip)
+            isVideoStream(r, f) -> compressVideo(r, f, lvl, limit, strip)
+            else -> compressAudio(r, f, lvl, limit, strip)
+        }
+    }
+}
+
+private fun compressPhoto(r: ToolRequest, f: PickedFile, lvl: String, limit: Long?, strip: String): ToolJob {
+    val webp = r.str("cifmt") == "webp"
+    val out = r.out("Images", f, if (webp) "webp" else "jpg", "_small")
+    val wSel = r.str("ciw").ifEmpty { "auto" }
+    val autoW = when (lvl) { "light" -> 2560; "strong" -> 1280; else -> 1920 }
+    if (limit != null) {
+        val cap = if (wSel == "auto") 0 else wSel.toIntOrNull() ?: 0
+        return ToolJob(r.toolTitle, f.name, out.path, null,
+            native = { compressImageToSize(r.ctx, f.uri, out, webp, limit, cap, f.name) })
+    }
+    val w = if (wSel == "auto") autoW else wSel.toIntOrNull() ?: 0
+    val qSel = r.str("ciq").ifEmpty { "auto" }
+    val levelPct = if (webp) {
+        when (lvl) { "light" -> 85; "strong" -> 55; else -> 72 }
+    } else {
+        when (lvl) { "light" -> 93; "strong" -> 57; else -> 80 }
+    }
+    val pct = if (qSel != "auto") (qSel.toIntOrNull() ?: levelPct) else levelPct
+    val qv = if (webp) "-q:v $pct " else "-q:v ${2 + (100 - pct.coerceIn(1, 100)) * 29 / 99} "
+    val vf = if (w > 0) "-vf ${q("scale=w=(iw+$w-abs(iw-$w))/2:h=-2")} " else ""
+    return r.job(f, out, "-i ${r.saf(f)} $vf-frames:v 1 $qv$strip${q(out.path)}")
+}
+
+private fun compressVideo(r: ToolRequest, f: PickedFile, lvl: String, limit: Long?, strip: String): ToolJob {
+    val fmt = videoFmt(r.str("cvfmt").ifEmpty { "mp4_h264" })
+    val hevc = fmt.kind == VFmt.Kind.HwHevc
+    val vp9 = fmt.kind == VFmt.Kind.Vp9
+    val info = videoInfo(r.ctx, f.uri)
+    val dur = durationSec(r.ctx, f.uri)
+    val (baseKbps, levelHeight, levelAudio) = when (lvl) {
+        "light" -> Triple(6000, 0, 160)
+        "strong" -> Triple(1200, 480, 96)
+        else -> Triple(2800, 720, 128)
+    }
+    val mute = r.bool("cmute")
+    val abrSel = r.str("cabr").ifEmpty { "auto" }
+    val ab = when {
+        mute -> 0
+        abrSel != "auto" -> abrSel.toIntOrNull() ?: levelAudio
+        else -> info?.audioKbps?.let { minOf(levelAudio, maxOf(64, it)) } ?: levelAudio
+    }
+    val fpsSel = r.int("cfps")
+    val srcFps = info?.fps
+    val fps = if (fpsSel > 0 && (srcFps == null || fpsSel < srcFps - 0.5f)) fpsSel else 0
+    val resSel = r.str("cres").ifEmpty { "auto" }
+    var h = if (resSel == "auto") levelHeight else resSel.toIntOrNull() ?: 0
+    val manual = r.str("cvbr").trim().toIntOrNull()?.takeIf { it > 0 }
+    val codecScale = when { hevc -> 0.6; vp9 -> 0.7; else -> 1.0 }
+
+    var vk: Int
+    if (limit != null) {
+        if (dur == null || dur <= 0.0) fail("Couldn't read how long ${f.name} is, so it can't be fitted to a size limit.")
+        vk = (limit * 0.93 * 8.0 / dur / 1000.0 - ab).toInt()
+        if (vk < 40) fail("${f.name} is too long to fit in that size. Raise the limit or remove the sound.")
+        info?.videoKbps?.let { vk = minOf(vk, it) }
+        if (resSel == "auto" && info != null) {
+            val rate = (if (fps > 0) fps.toFloat() else info.fps ?: 30f).coerceIn(10f, 60f)
+            val steps = listOf(0, 1080, 720, 480, 360, 240).filter { it == 0 || it < info.height }
+            h = steps.firstOrNull { step ->
+                val sh = if (step == 0) info.height else step
+                val sw = info.width.toDouble() * sh / info.height
+                vk * 1000.0 / (sw * sh * rate) >= 0.045
+            } ?: 240
+        }
+    } else {
+        val base = info?.videoKbps?.let { minOf(baseKbps, maxOf(300, (it * 0.9).toInt())) } ?: baseKbps
+        vk = manual ?: maxOf(150, (base * codecScale).toInt())
+    }
+
+    val scale = if (h > 0 && (info == null || h < info.height)) "scale=-2:$h" else null
+    val vf = listOfNotNull(scale, if (fps > 0) "fps=$fps" else null, VID_TAIL).joinToString(",")
+    val v = when {
+        hevc -> "-c:v hevc_mediacodec -b:v ${vk}k"
+        vp9 -> "-c:v libvpx-vp9 -deadline realtime -cpu-used 8 -row-mt 1 -b:v ${vk}k"
+        else -> "-c:v h264_mediacodec -b:v ${vk}k"
+    }
+    val sr = r.str("csr").ifEmpty { "auto" }
+    val ch = r.str("cch").ifEmpty { "auto" }
+    val srArg = if (sr != "auto" && !(vp9 && !opusRateOk(sr))) " -ar $sr" else ""
+    val chArg = if (ch != "auto") " -ac $ch" else ""
+    val a = when {
+        mute -> "-an"
+        vp9 -> "-c:a libopus -b:a ${ab}k$srArg$chArg"
+        else -> "-c:a aac -b:a ${ab}k$srArg$chArg"
+    }
+    val out = r.out("Video", f, fmt.ext, "_small")
+    return r.job(f, out, "-i ${r.saf(f)} -vf ${q(vf)} $v $a $strip-dn ${q(out.path)}")
+}
+
+private fun compressAudio(r: ToolRequest, f: PickedFile, lvl: String, limit: Long?, strip: String): ToolJob {
+    val fmt = audioFmt(r.str("caf").ifEmpty { "m4a" })
+    val levelKbps = when (lvl) { "light" -> 160; "strong" -> 64; else -> 96 }
+    val abrSel = r.str("cabr").ifEmpty { "auto" }
+    var kbps = if (abrSel != "auto") abrSel.toIntOrNull() ?: levelKbps else levelKbps
+    if (limit != null) {
+        val dur = durationSec(r.ctx, f.uri)
+        if (dur == null || dur <= 0.0) fail("Couldn't read how long ${f.name} is, so it can't be fitted to a size limit.")
+        val fit = (limit * 0.97 * 8.0 / dur / 1000.0).toInt()
+        if (fit < 16) fail("${f.name} is too long to fit in that size at a listenable quality. Raise the limit.")
+        kbps = minOf(fit, 320)
+    }
+    val sr = r.str("csr").ifEmpty { "auto" }
+    val ch = r.str("cch").ifEmpty { "auto" }
+    val out = r.out("Audio", f, fmt.ext, "_small")
+    return r.job(f, out, "-i ${r.saf(f)} -vn -map 0:a:0 ${audioCodecArgs(fmt, "cbr:$kbps", sr, ch, "auto")} ${fmt.mux} $strip${q(out.path)}")
+}
+
 val toolSpecs: Map<String, ToolSpec> = listOf(
 
     ToolSpec(
@@ -392,42 +542,6 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
     ),
 
     ToolSpec(
-        id = "filters",
-        intro = "Apply a colour or effect filter to videos and photos.",
-        inputs = listOf(InputSlot("media", "Videos or photos", InKind.Visual, multiple = true)),
-        options = listOf(
-            Opt.Choice("f", "Filter", listOf(
-                Item("eq=brightness=0.1:contrast=1.05", "Brighten"),
-                Item("eq=contrast=1.3", "More contrast"),
-                Item("eq=saturation=1.6:contrast=1.1", "Vivid"),
-                Item("hue=s=0", "Black & white"),
-                Item("colorchannelmixer=.393:.769:.189:0:.349:.686:.168:0:.272:.534:.131", "Sepia"),
-                Item("colorbalance=bs=0.2:rs=-0.1", "Cool"),
-                Item("colorbalance=rs=0.2:bs=-0.1", "Warm"),
-                Item("gblur=sigma=6", "Blur"),
-                Item("unsharp=5:5:1.2:5:5:0.0", "Sharpen"),
-                Item("vignette=PI/4", "Vignette"),
-                Item("hqdn3d=4:3:6:4.5", "Denoise"),
-                Item("negate", "Negative"),
-            )),
-        ),
-        actionLabel = "Apply filter",
-        build = { r ->
-            val flt = r.str("f")
-            r.files("media").map { f ->
-                if (isImageName(f.name)) {
-                    val ext = nameExt(f.name).takeIf { it in photoExts } ?: "jpg"
-                    val out = r.out("Images", f, ext, "_filter")
-                    r.job(f, out, "-i ${r.saf(f)} -vf ${q(flt)} -frames:v 1 -q:v 2 ${q(out.path)}")
-                } else {
-                    val out = r.out("Video", f, "mp4", "_filter")
-                    r.job(f, out, "-i ${r.saf(f)} -vf ${q("$flt,$VID_TAIL")} ${smartH264(r, f)} ${q(out.path)}")
-                }
-            }
-        },
-    ),
-
-    ToolSpec(
         id = "meta",
         intro = "See everything stored in a file and change it: tags, dates, camera and location, and cover art. Pick one file or many; your changes apply to all of them.",
         inputs = listOf(InputSlot("media", "Files", InKind.Any, multiple = true)),
@@ -551,43 +665,42 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
     ),
     ToolSpec(
         id = "compress",
-        intro = "Make videos, audio files and photos smaller before you share them. Pick how much to squeeze.",
+        intro = "Make videos, audio files and photos smaller, or fit each one under a size limit you choose. Tune format, resolution, frame rate and bitrate under Advanced options.",
+        hint = "A size limit is a target for every file. Hardware video encoders can land a few percent off it, and a tiny limit on a long video can't be met at a watchable quality.",
         inputs = listOf(InputSlot("media", "Videos, audio or photos", InKind.Any, multiple = true)),
         options = listOf(
+            Opt.Name(),
+            Opt.Presets("preset", "Quick size limit", compressPresets),
             Opt.Choice("level", "How much", listOf(
                 Item("light", "Light", "Keep nearly the same quality"),
                 Item("medium", "Medium", "Good balance of size and quality"),
                 Item("strong", "Strong", "Smallest files, lower quality"),
             )),
+            Opt.Size("csize", "Size limit for each file", "No limit"),
+
+            Opt.Section("Video", advanced = true),
+            Opt.Choice("cvfmt", "Video format", compressVideoFormats, advanced = true),
+            Opt.Choice("cres", "Video resolution", compressResItems, advanced = true),
+            Opt.Choice("cfps", "Video frame rate", fpsItems, advanced = true),
+            Opt.Text("cvbr", "Video bitrate (kb/s)", "Empty = automatic. Ignored when a size limit is set", advanced = true),
+            Opt.Toggle("cmute", "Remove sound from videos", false, advanced = true),
+
+            Opt.Section("Audio", advanced = true),
+            Opt.Choice("caf", "Audio file format", compressAudioFormats, advanced = true),
+            Opt.Choice("cabr", "Audio bitrate", compressAudioBitrates, advanced = true),
+            Opt.Choice("csr", "Audio sample rate", sampleRateItems, advanced = true),
+            Opt.Choice("cch", "Audio channels", channelItems, advanced = true),
+
+            Opt.Section("Photos", advanced = true),
+            Opt.Choice("cifmt", "Photo format", compressPhotoFormats, advanced = true),
+            Opt.Choice("ciq", "Photo quality", compressPhotoQuality, advanced = true),
+            Opt.Choice("ciw", "Photo maximum width", compressPhotoWidths, advanced = true),
+
+            Opt.Section("All files", advanced = true),
+            Opt.Toggle("cstrip", "Remove metadata", false, "Strip tags, camera info and GPS", advanced = true),
         ),
         actionLabel = "Compress",
-        build = { r ->
-            val lvl = r.str("level").ifEmpty { "medium" }
-            r.files("media").map { f ->
-                when {
-                    isImageName(f.name) -> {
-                        val qv = when (lvl) { "light" -> 4; "strong" -> 14; else -> 8 }
-                        val w = when (lvl) { "light" -> 2560; "strong" -> 1280; else -> 1920 }
-                        val out = r.out("Images", f, "jpg", "_small")
-                        r.job(f, out, "-i ${r.saf(f)} -vf ${q("scale=w=(iw+$w-abs(iw-$w))/2:h=-2")} -frames:v 1 -q:v $qv ${q(out.path)}")
-                    }
-                    isVideoStream(r, f) -> {
-                        val (br0, h, ab0) = when (lvl) { "light" -> Triple(6000, 0, 160); "strong" -> Triple(1200, 480, 96); else -> Triple(2800, 720, 128) }
-                        val info = videoInfo(r.ctx, f.uri)
-                        val br = info?.videoKbps?.let { minOf(br0, maxOf(300, (it * 0.9).toInt())) } ?: br0
-                        val ab = info?.audioKbps?.let { minOf(ab0, maxOf(64, it)) } ?: ab0
-                        val vf = listOfNotNull(if (h > 0 && (info == null || h < info.height)) "scale=-2:$h" else null, VID_TAIL).joinToString(",")
-                        val out = r.out("Video", f, "mp4", "_small")
-                        r.job(f, out, "-i ${r.saf(f)} -vf ${q(vf)} -c:v h264_mediacodec -b:v ${br}k -c:a aac -b:a ${ab}k -dn ${q(out.path)}")
-                    }
-                    else -> {
-                        val ab = when (lvl) { "light" -> 160; "strong" -> 64; else -> 96 }
-                        val out = r.out("Audio", f, "m4a", "_small")
-                        r.job(f, out, "-i ${r.saf(f)} -vn -map 0:a:0 -c:a aac -b:a ${ab}k ${q(out.path)}")
-                    }
-                }
-            }
-        },
+        build = { r -> compressJobs(r) },
     ),
 
     ToolSpec(

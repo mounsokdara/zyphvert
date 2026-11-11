@@ -13,7 +13,6 @@ import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.RingVolume
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Terminal
-import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material3.MaterialTheme
@@ -82,9 +81,8 @@ val allTools: List<Tool> = listOf(
     Tool("trim", "Trim & Cut", "Cut a clip down to the part you want", Icons.Rounded.ContentCut, ToolCategory.Edit),
     Tool("crop", "Crop & Rotate", "Crop the frame, rotate, or flip", Icons.Rounded.CropRotate, ToolCategory.Edit),
     Tool("speed", "Speed & Reverse", "Slow down, speed up, or reverse", Icons.Rounded.Speed, ToolCategory.Edit),
-    Tool("compress", "Compress", "Make a video, audio file, or image smaller before you share it", Icons.Rounded.Compress, ToolCategory.Edit),
+    Tool("compress", "Compress", "Make a file smaller or fit it under a size limit", Icons.Rounded.Compress, ToolCategory.Edit),
     Tool("volume", "Volume", "Make a clip louder, quieter, or silent", Icons.Rounded.VolumeUp, ToolCategory.Edit),
-    Tool("filters", "Filters", "Resize and recolor video or images", Icons.Rounded.Tune, ToolCategory.Edit),
 
     Tool("meta", "Metadata Editor", "View and edit media metadata", Icons.Rounded.Info, ToolCategory.Privacy),
     Tool("scrub", "Privacy Scrub", "Strip location and device info before sharing", Icons.Rounded.VisibilityOff, ToolCategory.Privacy),

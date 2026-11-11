@@ -24,6 +24,8 @@ import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -314,9 +316,58 @@ private fun OptionRow(opt: Opt, vm: ToolViewModel, spec: ToolSpec) {
                 Switch(checked = value == "true", onCheckedChange = { vm.values[opt.id] = it.toString() })
             }
         }
+        is Opt.Size -> SizeCard(opt, vm)
         is Opt.Range -> RangeCard(opt, vm)
         is Opt.Tags -> TagsRow(opt, vm)
         is Opt.Metadata -> MetadataEditor(vm)
+    }
+}
+
+private val sizeUnits = listOf("B" to "Bytes", "KB" to "Kilobytes", "MB" to "Megabytes", "GB" to "Gigabytes")
+
+@Composable
+private fun SizeCard(opt: Opt.Size, vm: ToolViewModel) {
+    val text = vm.values[opt.id].orEmpty()
+    val unit = vm.values["${opt.id}.unit"] ?: "MB"
+    var menu by remember { mutableStateOf(false) }
+    val bytes = remember(text, unit) {
+        val n = text.trim().replace(',', '.').toDoubleOrNull()
+        val mult = when (unit) { "B" -> 1.0; "KB" -> 1024.0; "GB" -> 1024.0 * 1024.0 * 1024.0; else -> 1024.0 * 1024.0 }
+        if (n == null || n <= 0.0) null else (n * mult).toLong()
+    }
+    Surface(shape = CardShape, color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(opt.label, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { new ->
+                        val clean = new.replace(',', '.').filter { it.isDigit() || it == '.' }
+                        if (clean.count { it == '.' } <= 1 && clean.length <= 14) vm.values[opt.id] = clean
+                    },
+                    placeholder = { Text(opt.hint.ifEmpty { "No limit" }) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.weight(1f),
+                )
+                Box {
+                    OutlinedButton(onClick = { menu = true }, shape = RoundedCornerShape(16.dp), modifier = Modifier.height(56.dp)) {
+                        Text(sizeUnits.first { it.first == unit }.second)
+                        Icon(Icons.Rounded.ArrowDropDown, null)
+                    }
+                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                        sizeUnits.forEach { (k, label) ->
+                            DropdownMenuItem(text = { Text(label) }, onClick = { vm.values["${opt.id}.unit"] = k; menu = false })
+                        }
+                    }
+                }
+            }
+            Text(
+                if (bytes != null) "= " + String.format(Locale.US, "%,d", bytes) + " bytes (1 KB = 1024 bytes)" else "Leave empty for no size limit",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 

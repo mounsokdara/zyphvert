@@ -114,6 +114,73 @@ internal fun convertImageNative(ctx: Context, uri: Uri, out: File, format: Strin
     bmp.recycle()
 }
 
+@Suppress("DEPRECATION")
+private fun decodeBitmap(ctx: Context, uri: Uri): Bitmap =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        ImageDecoder.decodeBitmap(ImageDecoder.createSource(ctx.contentResolver, uri)) { dec, _, _ ->
+            dec.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+        }
+    } else {
+        ctx.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
+            ?: throw IllegalStateException("Couldn't open the image")
+    }
+
+@Suppress("DEPRECATION")
+private fun encodeBitmap(bmp: Bitmap, webp: Boolean, quality: Int): ByteArray {
+    val fmt = if (webp) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) Bitmap.CompressFormat.WEBP_LOSSY else Bitmap.CompressFormat.WEBP
+    } else Bitmap.CompressFormat.JPEG
+    val bos = java.io.ByteArrayOutputStream()
+    bmp.compress(fmt, quality, bos)
+    return bos.toByteArray()
+}
+
+internal fun compressImageToSize(ctx: Context, uri: Uri, out: File, webp: Boolean, maxBytes: Long, maxWidth: Int, name: String) {
+    var src = decodeBitmap(ctx, uri)
+    if (!webp && src.hasAlpha()) {
+        val flat = Bitmap.createBitmap(src.width, src.height, Bitmap.Config.ARGB_8888)
+        val c = android.graphics.Canvas(flat)
+        c.drawColor(android.graphics.Color.WHITE)
+        c.drawBitmap(src, 0f, 0f, null)
+        src.recycle()
+        src = flat
+    }
+    if (maxWidth > 0 && src.width > maxWidth) {
+        val h = (src.height.toLong() * maxWidth / src.width).toInt().coerceAtLeast(1)
+        val scaled = Bitmap.createScaledBitmap(src, maxWidth, h, true)
+        if (scaled !== src) src.recycle()
+        src = scaled
+    }
+    var best: ByteArray? = null
+    val scales = listOf(1.0, 0.85, 0.7, 0.55, 0.42, 0.3, 0.2, 0.12)
+    try {
+        for ((i, sc) in scales.withIndex()) {
+            val bmp = if (sc == 1.0) src else Bitmap.createScaledBitmap(
+                src, (src.width * sc).toInt().coerceAtLeast(1), (src.height * sc).toInt().coerceAtLeast(1), true,
+            )
+            try {
+                val last = i == scales.lastIndex
+                val floor = if (last) 5 else 45
+                if (encodeBitmap(bmp, webp, floor).size.toLong() > maxBytes) continue
+                var lo = floor; var hi = 95
+                var found = encodeBitmap(bmp, webp, lo)
+                while (lo < hi) {
+                    val mid = (lo + hi + 1) / 2
+                    val data = encodeBitmap(bmp, webp, mid)
+                    if (data.size.toLong() <= maxBytes) { lo = mid; found = data } else hi = mid - 1
+                }
+                best = found
+                break
+            } finally {
+                if (bmp !== src) bmp.recycle()
+            }
+        }
+    } finally { src.recycle() }
+    val data = best ?: throw IllegalArgumentException("$name can't be made that small. Try a larger size limit.")
+    out.parentFile?.mkdirs()
+    out.writeBytes(data)
+}
+
 internal fun durationSec(ctx: Context, uri: Uri): Double? = runCatching {
     val r = MediaMetadataRetriever()
     try {
