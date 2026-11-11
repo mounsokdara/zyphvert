@@ -10,6 +10,7 @@ import com.mounsokdara.zyphvert.tools.InKind
 import com.mounsokdara.zyphvert.tools.LIVE_STILL_EXTS
 import com.mounsokdara.zyphvert.tools.LIVE_VIDEO_EXTS
 import com.mounsokdara.zyphvert.tools.VIDEO_EXTS
+import com.mounsokdara.zyphvert.data.SettingsRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -20,6 +21,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.mounsokdara.zyphvert.util.FsFallback
@@ -71,7 +73,10 @@ data class FileEntry(
 }
 
 @HiltViewModel
-class FileManagerViewModel @Inject constructor(@ApplicationContext private val appCtx: Context) : ViewModel() {
+class FileManagerViewModel @Inject constructor(
+    @ApplicationContext private val appCtx: Context,
+    private val settings: SettingsRepository,
+) : ViewModel() {
     var currentPath by mutableStateOf(defaultRoot())
         private set
     var entries by mutableStateOf<List<FileEntry>>(emptyList())
@@ -82,8 +87,11 @@ class FileManagerViewModel @Inject constructor(@ApplicationContext private val a
         private set
     var query by mutableStateOf("")
     var sort by mutableStateOf(SortMode.NameAsc)
+        private set
     var viewMode by mutableStateOf(ViewMode.List)
+        private set
     var showHidden by mutableStateOf(false)
+        private set
     var selected by mutableStateOf<FileEntry?>(null)
     var browseMode by mutableStateOf(BrowseMode.Folders)
         private set
@@ -120,7 +128,31 @@ class FileManagerViewModel @Inject constructor(@ApplicationContext private val a
 
     init {
         reload()
+        // Bring back how the user likes the list (sort, list or grid, hidden files).
+        viewModelScope.launch {
+            val saved = settings.fileViewPrefs.first()
+            saved.sort?.let { name -> SortMode.entries.firstOrNull { it.name == name }?.let { sort = it } }
+            saved.view?.let { name -> ViewMode.entries.firstOrNull { it.name == name }?.let { viewMode = it } }
+            showHidden = saved.showHidden
+        }
     }
+
+    /** The sort the user picked for folders; the flat media list temporarily uses newest first instead. */
+    private fun folderSort() = if (browseMode == BrowseMode.Media) sortBeforeMedia ?: sort else sort
+
+    private fun saveView() {
+        viewModelScope.launch { settings.setFileView(folderSort().name, viewMode.name, showHidden) }
+    }
+
+    fun setSort(mode: SortMode) {
+        sort = mode
+        // The flat media list is always newest first, so a pick there is not saved.
+        if (browseMode == BrowseMode.Folders) saveView()
+    }
+
+    fun setViewMode(mode: ViewMode) { viewMode = mode; saveView() }
+
+    fun setShowHidden(show: Boolean) { showHidden = show; saveView() }
 
     fun navigateTo(path: String) {
         fromRoot = if (path == "/") true else if (path in drives) false else fromRoot
@@ -144,7 +176,6 @@ class FileManagerViewModel @Inject constructor(@ApplicationContext private val a
         showAllTypes = kind.exts == null || foldersOnly
         query = ""
         selected = null
-        sort = if (foldersOnly) SortMode.NameAsc else SortMode.DateDesc
         val start = startPath?.takeIf { File(it).isDirectory }
         if (start != null) navigateTo(start) else reload()
     }

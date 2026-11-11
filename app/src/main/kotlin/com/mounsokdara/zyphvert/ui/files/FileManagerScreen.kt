@@ -184,7 +184,7 @@ fun FileManagerScreen(
                         text = { Text("Show hidden files") },
                         leadingIcon = { Icon(if (vm.showHidden) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff, null) },
                         trailingIcon = { if (vm.showHidden) Icon(Icons.Rounded.Check, null) },
-                        onClick = { vm.showHidden = !vm.showHidden; dismiss() },
+                        onClick = { vm.setShowHidden(!vm.showHidden); dismiss() },
                     )
                     HorizontalDivider()
                     MenuLabel("View")
@@ -193,7 +193,7 @@ fun FileManagerScreen(
                             text = { Text(if (mode == ViewMode.List) "List" else "Grid") },
                             leadingIcon = { Icon(if (mode == ViewMode.List) Icons.Rounded.ViewList else Icons.Rounded.GridView, null) },
                             trailingIcon = { if (vm.viewMode == mode) Icon(Icons.Rounded.Check, null) },
-                            onClick = { vm.viewMode = mode; dismiss() },
+                            onClick = { vm.setViewMode(mode); dismiss() },
                         )
                     }
                     HorizontalDivider()
@@ -212,7 +212,7 @@ fun FileManagerScreen(
                                 )
                             },
                             trailingIcon = { if (vm.sort == mode) Icon(Icons.Rounded.Check, null) },
-                            onClick = { vm.sort = mode; dismiss() },
+                            onClick = { vm.setSort(mode); dismiss() },
                         )
                     }
                     }
@@ -227,7 +227,7 @@ fun FileManagerScreen(
             SearchAppBar(
                 query = vm.query, onQueryChange = { vm.query = it }, onClose = { closeSearch() },
                 grid = vm.viewMode == ViewMode.Grid,
-                onToggleGrid = { vm.viewMode = if (vm.viewMode == ViewMode.Grid) ViewMode.List else ViewMode.Grid },
+                onToggleGrid = { vm.setViewMode(if (vm.viewMode == ViewMode.Grid) ViewMode.List else ViewMode.Grid) },
                 menuContent = managerMenu,
             )
             SearchFilters(showFolders, { showFolders = it }, kinds, { kinds = it })

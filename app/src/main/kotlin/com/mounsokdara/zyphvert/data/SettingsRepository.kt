@@ -29,6 +29,9 @@ data class AppSettings(
     val extraDark: Boolean = false,
 )
 
+/** How the Files tab and the picker list things; the names are [SortMode] and [ViewMode] values, null if never saved. */
+data class FileViewPrefs(val sort: String?, val view: String?, val showHidden: Boolean)
+
 private val Context.dataStore by preferencesDataStore(name = "settings")
 
 @Singleton
@@ -42,6 +45,9 @@ class SettingsRepository @Inject constructor(
         val seed = androidx.datastore.preferences.core.intPreferencesKey("seed_color")
         val extraDark = booleanPreferencesKey("extra_dark")
         val saved = stringSetPreferencesKey("saved_commands")
+        val fileSort = stringPreferencesKey("file_sort")
+        val fileView = stringPreferencesKey("file_view")
+        val fileHidden = booleanPreferencesKey("file_show_hidden")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { p ->
@@ -60,6 +66,16 @@ class SettingsRepository @Inject constructor(
 
     val savedCommands: Flow<List<String>> = context.dataStore.data.map { p ->
         (p[Keys.saved] ?: emptySet()).sorted()
+    }
+
+    val fileViewPrefs: Flow<FileViewPrefs> = context.dataStore.data.map { p ->
+        FileViewPrefs(p[Keys.fileSort], p[Keys.fileView], p[Keys.fileHidden] ?: false)
+    }
+
+    suspend fun setFileView(sort: String, view: String, showHidden: Boolean) = context.dataStore.edit {
+        it[Keys.fileSort] = sort
+        it[Keys.fileView] = view
+        it[Keys.fileHidden] = showHidden
     }
 
     suspend fun setThemeMode(mode: ThemeMode) = context.dataStore.edit { it[Keys.theme] = mode.name }
