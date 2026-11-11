@@ -165,26 +165,6 @@ internal fun streamsOf(ctx: Context, uri: Uri): Pair<Boolean, Boolean>? = runCat
 }.getOrNull()
 
 /** Tag values go inside double quotes, so only quotes, backslashes and newlines are a problem. */
-/** Tags the platform can read from a file, keyed like [tagKeys]; missing ones are left out. */
-internal fun readTags(ctx: Context, uri: Uri): Map<String, String> = runCatching {
-    val r = MediaMetadataRetriever()
-    try {
-        r.setDataSource(ctx, uri)
-        val keys = mapOf(
-            "title" to MediaMetadataRetriever.METADATA_KEY_TITLE,
-            "artist" to MediaMetadataRetriever.METADATA_KEY_ARTIST,
-            "album_artist" to MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST,
-            "album" to MediaMetadataRetriever.METADATA_KEY_ALBUM,
-            "track" to MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER,
-            "disc" to MediaMetadataRetriever.METADATA_KEY_DISC_NUMBER,
-            "date" to MediaMetadataRetriever.METADATA_KEY_YEAR,
-            "composer" to MediaMetadataRetriever.METADATA_KEY_COMPOSER,
-            "genre" to MediaMetadataRetriever.METADATA_KEY_GENRE,
-        )
-        keys.mapNotNull { (k, id) -> r.extractMetadata(id)?.let(::cleanTag)?.takeIf { it.isNotEmpty() }?.let { k to it } }.toMap()
-    } finally { r.release() }
-}.getOrDefault(emptyMap())
-
 internal fun cleanTag(s: String) = s.filterNot { it == '"' || it == '\'' || it == '\\' || it == '\n' || it == '\r' }.trim()
 
 /**

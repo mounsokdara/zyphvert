@@ -77,6 +77,9 @@ sealed class Opt(
     /** Full tag editor (title, artist, album, ... genre). Values are stored as "tag.<key>". */
     class Tags(id: String = "tags", label: String = "Edit tags", showIf: ((Map<String, String>) -> Boolean)? = null) : Opt(id, label, showIf) { override val default = "" }
 
+    /** Metadata editor: every tag of the picked file, cover art and details. Its state lives in the view model. */
+    class Metadata(id: String = "metadata", label: String = "Metadata") : Opt(id, label) { override val default = "" }
+
     class Section(label: String, advanced: Boolean = false) : Opt("section:$label", label, null, advanced) { override val default = "" }
 }
 

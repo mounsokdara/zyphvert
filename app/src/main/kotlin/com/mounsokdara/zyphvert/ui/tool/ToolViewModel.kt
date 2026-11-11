@@ -2,7 +2,9 @@ package com.mounsokdara.zyphvert.ui.tool
 
 import android.content.Context
 import android.net.Uri
+import android.graphics.Bitmap
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -14,15 +16,24 @@ import com.mounsokdara.zyphvert.tools.Opt
 import com.mounsokdara.zyphvert.tools.PickedFile
 import com.mounsokdara.zyphvert.tools.ToolRequest
 import com.mounsokdara.zyphvert.tools.ToolSpec
-import com.mounsokdara.zyphvert.tools.readTags
+import com.mounsokdara.zyphvert.tools.MetaInfo
+import com.mounsokdara.zyphvert.tools.cleanMetaKey
+import com.mounsokdara.zyphvert.tools.loadImageBitmap
+import com.mounsokdara.zyphvert.tools.loadMetaInfo
 import com.mounsokdara.zyphvert.tools.resolveLive
-import com.mounsokdara.zyphvert.tools.tagKeys
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import javax.inject.Inject
+
+/** One row of the Metadata Editor. [orig] is what the file had; null for a tag the user added. */
+class MetaTag(val key: String, value: String, val orig: String?) {
+    var value by mutableStateOf(value)
+}
 
 /** Form state for one tool: picked files and option values survive rotation. */
 @HiltViewModel
@@ -65,21 +76,79 @@ class ToolViewModel @Inject constructor(
 
     fun setFiles(slot: String, files: List<PickedFile>) { picked[slot] = files; error = null }
 
-    private var tagsFor: Uri? = null
+    // ---- Metadata Editor
+    val metaTags = mutableStateListOf<MetaTag>()
+    var meta by mutableStateOf<MetaInfo?>(null)
+        private set
+    var metaLoading by mutableStateOf(false)
+        private set
+    /** Preview of a replacement cover the user picked. */
+    var coverPreview by mutableStateOf<Bitmap?>(null)
+        private set
+    private var metaFor: Uri? = null
 
-    /** Metadata Editor: fill the tag fields with what the picked file already has. */
-    fun loadTags(ctx: Context, spec: ToolSpec) {
+    /** Metadata Editor: read every tag, the cover and the details of the first picked file. */
+    fun loadMeta(ctx: Context, spec: ToolSpec) {
         if (spec.id != "meta") return
-        val f = picked[spec.inputs.first().id]?.firstOrNull() ?: return
-        if (f.uri == tagsFor) return
-        tagsFor = f.uri
+        val f = picked[spec.inputs.first().id]?.firstOrNull()
+        if (f?.uri == metaFor) return
+        metaFor = f?.uri
+        metaTags.clear()
+        meta = null
+        resetCover()
+        values["meta.useFilename"] = "false"
+        if (f == null) { metaLoading = false; return }
+        metaLoading = true
         viewModelScope.launch {
-            val found = withContext(Dispatchers.IO) { readTags(ctx.applicationContext, f.uri) }
-            tagKeys.forEach { (k, _) ->
-                values["tag.$k"] = found[k].orEmpty()
-                values["orig.tag.$k"] = found[k].orEmpty()
+            val info = withContext(Dispatchers.IO) { runCatching { loadMetaInfo(ctx.applicationContext, manager.engine, f) }.getOrNull() }
+            if (metaFor == f.uri) {
+                meta = info
+                info?.tags?.forEach { metaTags += MetaTag(it.key, it.value, it.value) }
+                metaLoading = false
             }
         }
+    }
+
+    fun addTag(key: String) {
+        val k = cleanMetaKey(key)
+        if (k.isNotEmpty() && metaTags.none { it.key.equals(k, ignoreCase = true) }) metaTags += MetaTag(k, "", null)
+    }
+
+    fun removeTag(tag: MetaTag) { metaTags.remove(tag) }
+
+    fun setCover(ctx: Context, f: PickedFile) {
+        picked["cover"] = listOf(f)
+        values["meta.coverRemove"] = "false"
+        coverPreview = null
+        viewModelScope.launch { coverPreview = withContext(Dispatchers.IO) { loadImageBitmap(ctx.applicationContext, f.uri, 640) } }
+    }
+
+    fun removeCover() {
+        picked.remove("cover")
+        coverPreview = null
+        values["meta.coverRemove"] = "true"
+    }
+
+    /** Back to the cover the file already has. */
+    fun resetCover() {
+        picked.remove("cover")
+        coverPreview = null
+        values["meta.coverRemove"] = "false"
+    }
+
+    /** The changes as JSON: a tag the user edited or added gets a value, one that was emptied or deleted has none. */
+    private fun metaOps(): String {
+        val arr = JSONArray()
+        val rows = metaTags.toList()
+        for (t in rows) {
+            val v = t.value.trim()
+            val o = t.orig
+            val changed = if (o == null) v.isNotEmpty() else v != o.trim()
+            if (!changed) continue
+            arr.put(JSONObject().put("k", t.key).also { if (v.isNotEmpty()) it.put("v", v) })
+        }
+        meta?.tags?.forEach { had -> if (rows.none { it.key == had.key }) arr.put(JSONObject().put("k", had.key)) }
+        return arr.toString()
     }
 
     /** Builds the jobs and hands them to the background queue. */
@@ -89,6 +158,7 @@ class ToolViewModel @Inject constructor(
         error = null
         viewModelScope.launch {
             try {
+                if (spec.id == "meta") values["meta.ops"] = metaOps()
                 val app = ctx.applicationContext
                 val jobs = withContext(Dispatchers.IO) {
                     // Video-ish slots accept Live/Motion Photos: swap them for their video first.
@@ -99,7 +169,7 @@ class ToolViewModel @Inject constructor(
                 }
                 if (jobs.isEmpty()) throw IllegalArgumentException("Nothing to do.")
                 // Don't remember per-file or free-text fields.
-                val keep = values.filterKeys { !it.startsWith("tag.") && !it.startsWith("orig.") && it != "name" && it != "range" && !it.startsWith("range.") }
+                val keep = values.filterKeys { !it.startsWith("tag.") && !it.startsWith("meta.") && it != "name" && it != "range" && !it.startsWith("range.") }
                 repo.saveToolSettings(spec.id, if (remember) keep else null)
                 val ids = manager.submit(title, jobs)
                 com.mounsokdara.zyphvert.data.BatchTracker.start(ids)

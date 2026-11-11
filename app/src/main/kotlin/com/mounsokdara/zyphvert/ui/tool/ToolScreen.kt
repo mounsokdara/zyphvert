@@ -59,7 +59,7 @@ fun ToolScreen(tool: Tool, seedPath: String?, onBack: () -> Unit, onQueued: () -
         return
     }
     LaunchedEffect(spec.id, seedPath) { vm.init(spec, seedPath) }
-    LaunchedEffect(vm.picked[spec.inputs.first().id]?.firstOrNull()?.uri) { vm.loadTags(ctx, spec) }
+    LaunchedEffect(vm.picked[spec.inputs.first().id]?.firstOrNull()?.uri) { vm.loadMeta(ctx, spec) }
 
     val ready = spec.inputs.all { it.optional || vm.picked[it.id].orEmpty().isNotEmpty() }
     val vals: Map<String, String> = vm.values
@@ -321,6 +321,7 @@ private fun OptionRow(opt: Opt, vm: ToolViewModel, spec: ToolSpec) {
         }
         is Opt.Range -> RangeCard(opt, vm)
         is Opt.Tags -> TagsRow(opt, vm)
+        is Opt.Metadata -> MetadataEditor(vm)
     }
 }
 

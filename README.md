@@ -25,7 +25,7 @@ request the `INTERNET` permission, so your files never leave your phone.
 ### Metadata and privacy
 | Tool | What it does |
 |---|---|
-| **Tag editor** | Edit title, artist, album, genre and more, set cover art, or view every detail of a file |
+| **Metadata Editor** | Lists every tag a file has (audio, video and photo EXIF, including date, camera and GPS) so you can edit, remove or add any of them, see and replace the cover art, edit many files at once, and browse every detail grouped by stream |
 | **Privacy Scrub** | Strip GPS, device info and all hidden tags without re-encoding |
 
 ### Create

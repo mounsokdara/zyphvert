@@ -503,37 +503,11 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
     // ================================================================ METADATA & PRIVACY
     ToolSpec(
         id = "meta",
-        intro = "Edit tags and cover art, or view every detail of a file: codecs, bitrate, size, chapters and hidden metadata.",
-        inputs = listOf(
-            InputSlot("media", "Media file", InKind.Any),
-            InputSlot("cover", "Cover artwork (audio files)", InKind.Image, optional = true),
-        ),
-        options = listOf(
-            Opt.Choice("mode", "Action", items("edit" to "Edit tags", "view" to "View all details")),
-            Opt.Tags(showIf = { it["mode"] != "view" }),
-        ),
-        actionLabel = "Go",
-        build = { r ->
-            val f = r.file("media")!!
-            if (r.str("mode") == "view") {
-                listOf(ToolJob(r.toolTitle, f.name, null, "-hide_banner -show_format -show_streams -show_chapters -pretty ${r.saf(f)}", probe = true))
-            } else {
-                val cover = r.file("cover")
-                val audio = isAudioName(f.name)
-                if (!hasTags(r) && cover == null) fail("Change at least one tag or choose a cover image.")
-                val ext = nameExt(f.name).ifEmpty { if (audio) "m4a" else "mp4" }
-                val out = r.out("Metadata", f, ext, "_tagged")
-                val tags = tagArgs(r, f).joinToString(" ")
-                val cmd = if (cover != null && audio) {
-                    val enc = if (nameExt(cover.name) in setOf("jpg", "jpeg", "png")) "-c:v copy" else "-c:v mjpeg -pix_fmt yuvj420p -q:v 2"
-                    val id3 = if (ext == "mp3") "-id3v2_version 3 " else ""
-                    "-i ${r.saf(f)} -i ${r.saf(cover)} -map 0:a -map 1:v -c:a copy $enc -disposition:v:0 attached_pic $id3-map_metadata 0 $tags ${q(out.path)}"
-                } else {
-                    "-i ${r.saf(f)} -map 0 -c copy -map_metadata 0 $tags ${q(out.path)}"
-                }
-                listOf(r.job(f, out, cmd))
-            }
-        },
+        intro = "See everything stored in a file and change it: tags, dates, camera and location, and cover art. Pick one file or many; your changes apply to all of them.",
+        inputs = listOf(InputSlot("media", "Files", InKind.Any, multiple = true)),
+        options = listOf(Opt.Metadata()),
+        actionLabel = "Save changes",
+        build = { r -> buildMetadataJobs(r) },
     ),
 
     ToolSpec(
