@@ -112,14 +112,8 @@ fun FileManagerScreen(
             }
         }
     }
-    // One scroll state per screen, sent back to the top whenever the folder or mode changes. Without this the old
-    // scroll offset was carried into the new folder, so it opened already scrolled down.
     val listState = rememberLazyListState()
     val gridState = rememberLazyGridState()
-    LaunchedEffect(vm.currentPath, vm.browseMode, vm.viewMode) {
-        listState.scrollToItem(0)
-        gridState.scrollToItem(0)
-    }
     val list = vm.filtered()
         .filter { !searching || passesSearchFilters(it.isDirectory, it.extension, showFolders, kinds) }
 
