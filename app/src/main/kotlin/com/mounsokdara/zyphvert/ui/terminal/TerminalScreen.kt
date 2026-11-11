@@ -229,7 +229,7 @@ fun TerminalScreen(vm: TerminalViewModel, onBack: () -> Unit) {
             Box {
                 IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, "More", tint = Fg) }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                    DropdownMenuItem(text = { Text("Go to folder") }, leadingIcon = { Icon(Icons.Rounded.FolderOpen, null) }, onClick = { menu = false; folderPicker = true })
+                    DropdownMenuItem(text = { Text("Insert folder path") }, leadingIcon = { Icon(Icons.Rounded.FolderOpen, null) }, onClick = { menu = false; folderPicker = true })
                     DropdownMenuItem(text = { Text("Pick a file") }, leadingIcon = { Icon(Icons.Rounded.AttachFile, null) }, onClick = { menu = false; picker = true })
                     DropdownMenuItem(text = { Text("Saved commands") }, leadingIcon = { Icon(Icons.Rounded.Bookmarks, null) }, onClick = { menu = false; sheet = "saved" })
                     DropdownMenuItem(text = { Text("Examples") }, leadingIcon = { Icon(Icons.Rounded.Lightbulb, null) }, onClick = { menu = false; sheet = "examples" })
@@ -329,7 +329,7 @@ fun TerminalScreen(vm: TerminalViewModel, onBack: () -> Unit) {
             }
             Row(Modifier.widthIn(max = 640.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Key(icon = Icons.Rounded.AttachFile, desc = "Insert a file path") { picker = true }
-                Key(icon = Icons.Rounded.FolderOpen, desc = "Go to folder") { folderPicker = true }
+                Key(icon = Icons.Rounded.FolderOpen, desc = "Insert folder path") { folderPicker = true }
                 Key("-") { type("-") }
                 Key("/") { type("/") }
                 Key("\"") { type("\"") }
@@ -339,16 +339,16 @@ fun TerminalScreen(vm: TerminalViewModel, onBack: () -> Unit) {
         }
     }
 
-    // "Go to folder" browses with the same picker as files; no typing.
+    // "Insert folder path" browses with the same picker as files and types the path into the command line.
     val launchFolderPicker = com.mounsokdara.zyphvert.ui.files.rememberFilePicker(
         onUseSystem = {},
-        onPicked = { picked -> picked.firstOrNull()?.uri?.path?.let { vm.cdTo(java.io.File(it)) } },
+        onPicked = { picked -> picked.firstOrNull()?.uri?.path?.let { vm.insert(if (' ' in it) "\"$it\"" else it) } },
     )
     if (folderPicker) {
         LaunchedEffect(Unit) {
             folderPicker = false
             launchFolderPicker(
-                com.mounsokdara.zyphvert.ui.files.PickRequest(InKind.Any, false, "Go to folder", folder = true, startPath = s.cwd.path),
+                com.mounsokdara.zyphvert.ui.files.PickRequest(InKind.Any, false, "Insert folder path", folder = true, startPath = s.cwd.path),
             )
         }
     }

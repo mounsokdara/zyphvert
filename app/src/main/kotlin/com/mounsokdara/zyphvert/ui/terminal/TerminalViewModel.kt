@@ -134,14 +134,6 @@ class TerminalViewModel @Inject constructor(private val repo: SettingsRepository
         s.input = s.input.copy(selection = TextRange(pos))
     }
 
-    /** Folder picked with the Folder key: shown as a normal `cd` command, then the prompt follows it. */
-    fun cdTo(dir: File) {
-        val s = current
-        if (s.running) return
-        add(s, TermLine("cd ${quoteArg(dir.path)}", LineKind.Command, s.prompt))
-        cd(s, dir.path)
-    }
-
     /** Text from the clipboard, made safe to put on one command line. */
     fun cleanPaste(text: String): String = joinLines(text)
 
