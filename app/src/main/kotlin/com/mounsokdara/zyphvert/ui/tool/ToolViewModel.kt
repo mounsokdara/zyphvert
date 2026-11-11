@@ -82,7 +82,8 @@ class ToolViewModel @Inject constructor(
                 // Don't remember per-file or free-text fields.
                 val keep = values.filterKeys { !it.startsWith("tag.") && it != "name" && it != "range" && !it.startsWith("range.") }
                 repo.saveToolSettings(spec.id, if (remember) keep else null)
-                manager.submit(title, jobs)
+                val ids = manager.submit(title, jobs)
+                com.mounsokdara.zyphvert.data.BatchTracker.start(ids)
                 onQueued()
             } catch (e: Throwable) {
                 error = e.message ?: "Something went wrong"

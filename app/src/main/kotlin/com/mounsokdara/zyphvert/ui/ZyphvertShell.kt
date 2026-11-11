@@ -79,6 +79,10 @@ fun ZyphvertShell(settingsVm: SettingsViewModel, hapticsEnabled: Boolean) {
         sub = if (sub == MoreRoute.Licenses || sub == MoreRoute.Changelog) MoreRoute.About else null
     }
 
+    com.mounsokdara.zyphvert.ui.components.ConversionDialogs(onSeeQueue = {
+        openToolId = null; pendingFilePath = null; mediaInfoPath = null; sub = null; current = Destination.Queue
+    })
+
     val inSub = (current == Destination.More && sub != null) || openToolId != null || mediaInfoPath != null
     val wide = isWideLayout()
 
@@ -161,7 +165,7 @@ fun ZyphvertShell(settingsVm: SettingsViewModel, hapticsEnabled: Boolean) {
                                 tool = tool,
                                 seedPath = pendingFilePath,
                                 onBack = { openToolId = null; pendingFilePath = null },
-                                onQueued = { openToolId = null; pendingFilePath = null; current = Destination.Queue },
+                                onQueued = { /* the progress dialog takes over */ },
                                 vm = tvm,
                             )
                         }

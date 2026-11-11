@@ -33,7 +33,8 @@ class ConversionManager @Inject constructor(@ApplicationContext private val ctx:
     private var worker: kotlinx.coroutines.Job? = null
     @Volatile private var runningId: String? = null
 
-    fun submit(toolTitle: String, jobs: List<ToolJob>) {
+    fun submit(toolTitle: String, jobs: List<ToolJob>): List<String> {
+        val ids = mutableListOf<String>()
         jobs.forEach { j ->
             val rec = ConversionJob(
                 toolTitle = toolTitle,
@@ -43,6 +44,7 @@ class ConversionManager @Inject constructor(@ApplicationContext private val ctx:
                 status = JobStatus.Queued,
                 outputPath = j.output,
             )
+            ids += rec.id
             payloads[rec.id] = j
             JobHistory.add(rec)
         }
@@ -52,6 +54,7 @@ class ConversionManager @Inject constructor(@ApplicationContext private val ctx:
                 worker = scope.launch { loop() }
             }
         }
+        return ids
     }
 
     fun cancel(id: String) {
