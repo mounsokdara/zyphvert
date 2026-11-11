@@ -88,9 +88,11 @@ fun FileManagerScreen(
     val ctx = LocalContext.current
     val picks = remember { mutableStateListOf<FileEntry>() }
     fun orderOf(e: FileEntry) = picks.indexOfFirst { it.file.path == e.file.path }
+    val scope = rememberCoroutineScope()
     fun finishPick(items: List<FileEntry>) {
         if (items.isEmpty()) return
-        pick?.onPicked(items.map { PickedFile(it.file.toUri(), it.name, it.companion?.path, it.live) })
+        // Files inside Android/data or Android/obb are opened (or copied out) first, so this can take a moment.
+        scope.launch { pick?.onPicked(items.map { PickedFile(vm.uriFor(it.file), it.name, it.companion?.path, it.live) }) }
     }
     var menu by remember { mutableStateOf(false) }
     var places by remember { mutableStateOf(false) }
@@ -334,8 +336,15 @@ fun FileManagerScreen(
             val animate = !vm.loading
             // Only add the hint row when it has something to show. When it was always there it was a zero-height row at
             // the very top of the list, and a zero-height first row makes the list think it can keep scrolling up.
+            val showHint = vm.error != null || vm.locked || (list.isEmpty() && !vm.loading)
             val hint: @Composable () -> Unit = {
                 when {
+                    vm.locked -> LockedHint(
+                        folderPermissionPossible = vm.folderPermissionPossible,
+                        initialTreeUri = vm.initialTreeUri(),
+                        onTreeGranted = vm::onTreeGranted,
+                        onRetry = { vm.reload() },
+                    )
                     vm.error != null -> Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(vm.error ?: "", color = MaterialTheme.colorScheme.error)
                         TextButton(onClick = { StorageAccess.openAllFilesSettings(ctx) }) { Text("Open storage settings") }
@@ -353,7 +362,7 @@ fun FileManagerScreen(
                     modifier = Modifier.fillMaxSize().nestedScroll(dbgConn), state = gridState,
                 ) {
                     if (vm.canGoUp && vm.browseMode == BrowseMode.Folders) item(key = "..up", span = { GridItemSpan(maxLineSpan) }) { UpFolderRow((if (animate) Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null) else Modifier)) { vm.goUp() } }
-                    if (vm.error != null || (list.isEmpty() && !vm.loading)) item(key = "..hint", span = { GridItemSpan(maxLineSpan) }) { hint() }
+                    if (showHint) item(key = "..hint", span = { GridItemSpan(maxLineSpan) }) { hint() }
                     items(list, key = { it.file.absolutePath }) { e ->
                         FileTile(
                             e.name, e.file, e.isDirectory, (if (animate) Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null) else Modifier), live = e.live,
@@ -365,7 +374,7 @@ fun FileManagerScreen(
             } else {
                 LazyColumn(Modifier.fillMaxSize().nestedScroll(dbgConn), state = listState) {
                     if (vm.canGoUp && vm.browseMode == BrowseMode.Folders) item(key = "..up") { UpFolderRow((if (animate) Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null) else Modifier)) { vm.goUp() } }
-                    if (vm.error != null || (list.isEmpty() && !vm.loading)) item(key = "..hint") { hint() }
+                    if (showHint) item(key = "..hint") { hint() }
                     items(list, key = { it.file.absolutePath }) { e ->
                         FileRow(
                             name = e.name, file = e.file, isDir = e.isDirectory,

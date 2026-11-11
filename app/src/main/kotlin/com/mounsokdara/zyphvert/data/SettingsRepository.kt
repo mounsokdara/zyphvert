@@ -45,6 +45,7 @@ class SettingsRepository @Inject constructor(
         val seed = androidx.datastore.preferences.core.intPreferencesKey("seed_color")
         val extraDark = booleanPreferencesKey("extra_dark")
         val saved = stringSetPreferencesKey("saved_commands")
+        val safTrees = stringSetPreferencesKey("saf_trees")
         val fileSort = stringPreferencesKey("file_sort")
         val fileView = stringPreferencesKey("file_view")
         val fileHidden = booleanPreferencesKey("file_show_hidden")
@@ -66,6 +67,13 @@ class SettingsRepository @Inject constructor(
 
     val savedCommands: Flow<List<String>> = context.dataStore.data.map { p ->
         (p[Keys.saved] ?: emptySet()).sorted()
+    }
+
+    /** Folder permissions the user granted for Android/data and Android/obb (Android 11 to 12). */
+    val safTrees: Flow<Set<String>> = context.dataStore.data.map { it[Keys.safTrees] ?: emptySet() }
+
+    suspend fun addSafTree(uri: String) = context.dataStore.edit {
+        it[Keys.safTrees] = (it[Keys.safTrees] ?: emptySet()) + uri
     }
 
     val fileViewPrefs: Flow<FileViewPrefs> = context.dataStore.data.map { p ->

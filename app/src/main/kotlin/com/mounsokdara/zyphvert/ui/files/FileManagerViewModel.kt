@@ -1,6 +1,8 @@
 package com.mounsokdara.zyphvert.ui.files
 
 import android.content.Context
+import android.net.Uri
+import androidx.core.net.toUri
 import android.os.Environment
 import android.provider.MediaStore
 import android.provider.MediaStore.Files.FileColumns
@@ -25,6 +27,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.mounsokdara.zyphvert.util.FsFallback
+import com.mounsokdara.zyphvert.util.ProtectedListing
+import com.mounsokdara.zyphvert.util.ProtectedStorage
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -76,6 +80,7 @@ data class FileEntry(
 class FileManagerViewModel @Inject constructor(
     @ApplicationContext private val appCtx: Context,
     private val settings: SettingsRepository,
+    private val protectedStorage: ProtectedStorage,
 ) : ViewModel() {
     var currentPath by mutableStateOf(defaultRoot())
         private set
@@ -84,6 +89,9 @@ class FileManagerViewModel @Inject constructor(
     var loading by mutableStateOf(false)
         private set
     var error by mutableStateOf<String?>(null)
+        private set
+    /** The folder is Android/data or Android/obb, which Android 11+ keeps closed until the user opens it up. */
+    var locked by mutableStateOf(false)
         private set
     var query by mutableStateOf("")
     var sort by mutableStateOf(SortMode.NameAsc)
@@ -189,6 +197,24 @@ class FileManagerViewModel @Inject constructor(
         reload()
     }
 
+    val folderPermissionPossible: Boolean get() = protectedStorage.folderPermissionPossible
+
+    fun initialTreeUri(): Uri = protectedStorage.initialTreeUri(currentPath)
+
+    /** The user picked a folder in the system dialog for Android/data or Android/obb. */
+    fun onTreeGranted(tree: Uri?) {
+        if (tree == null) return
+        viewModelScope.launch {
+            if (protectedStorage.addTree(tree)) reload() else message = "Pick the Android/data or Android/obb folder itself"
+        }
+    }
+
+    /** Something a tool can read for [file]; locked files (Android/data, Android/obb) are opened through the granted access. */
+    suspend fun uriFor(file: File): Uri {
+        if (protectedStorage.isProtected(file.path) && !file.canRead()) protectedStorage.readableUri(file.path)?.let { return it }
+        return file.toUri()
+    }
+
     fun goUp() {
         val parent = File(currentPath).parentFile ?: return
         navigateTo(parent.absolutePath)
@@ -226,10 +252,12 @@ class FileManagerViewModel @Inject constructor(
                 val fresh = withContext(Dispatchers.IO) { queryMedia() }
                 // Same content: keep the old list so the scroll position and item layout stay untouched.
                 if (fresh != mediaItems) mediaItems = fresh
+                if (locked) locked = false
             } else {
                 val result = withContext(Dispatchers.IO) { listDir(currentPath) }
                 if (result.entries != entries) entries = result.entries
                 if (result.error != error) error = result.error
+                if (result.locked != locked) locked = result.locked
             }
             if (!silent) loading = false
         }
@@ -383,10 +411,25 @@ class FileManagerViewModel @Inject constructor(
         return list
     }
 
-    private data class ListResult(val entries: List<FileEntry>, val error: String?)
+    private data class ListResult(val entries: List<FileEntry>, val error: String?, val locked: Boolean = false)
 
-    private fun listDir(path: String): ListResult {
+    private suspend fun listDir(path: String): ListResult {
         val dir = File(path)
+        // Android/data and Android/obb on Android 11+: use the folder permission or Shizuku when the folder can't be read directly.
+        if (protectedStorage.isProtected(path) && dir.listFiles().isNullOrEmpty()) {
+            return when (val r = protectedStorage.list(path)) {
+                is ProtectedListing.Ok -> ListResult(
+                    r.entries.map { e ->
+                        FileEntry(
+                            file = File(dir, e.name), name = e.name, isDirectory = e.isDir,
+                            sizeBytes = e.size, lastModified = e.modified, extension = File(e.name).extension.lowercase(),
+                        )
+                    },
+                    null,
+                )
+                ProtectedListing.Locked -> ListResult(emptyList(), null, locked = true)
+            }
+        }
         if (!dir.exists()) return ListResult(emptyList(), "Path does not exist")
         if (!dir.isDirectory) return ListResult(emptyList(), "Not a directory")
         val files = FsFallback.children(dir)
