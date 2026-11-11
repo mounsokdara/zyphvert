@@ -331,6 +331,8 @@ fun FileManagerScreen(
         ) {
             // No placement animation while a folder is loading.
             val animate = !vm.loading
+            // Only add the hint row when it has something to show. When it was always there it was a zero-height row at
+            // the very top of the list, and a zero-height first row makes the list think it can keep scrolling up.
             val hint: @Composable () -> Unit = {
                 when {
                     vm.error != null -> Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -350,7 +352,7 @@ fun FileManagerScreen(
                     modifier = Modifier.fillMaxSize().nestedScroll(dbgConn), state = gridState,
                 ) {
                     if (vm.canGoUp && vm.browseMode == BrowseMode.Folders) item(key = "..up", span = { GridItemSpan(maxLineSpan) }) { UpFolderRow((if (animate) Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null) else Modifier)) { vm.goUp() } }
-                    item(key = "..hint", span = { GridItemSpan(maxLineSpan) }) { hint() }
+                    if (vm.error != null || (list.isEmpty() && !vm.loading)) item(key = "..hint", span = { GridItemSpan(maxLineSpan) }) { hint() }
                     items(list, key = { it.file.absolutePath }) { e ->
                         FileTile(
                             e.name, e.file, e.isDirectory, (if (animate) Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null) else Modifier), live = e.live,
@@ -362,7 +364,7 @@ fun FileManagerScreen(
             } else {
                 LazyColumn(Modifier.fillMaxSize().nestedScroll(dbgConn), state = listState) {
                     if (vm.canGoUp && vm.browseMode == BrowseMode.Folders) item(key = "..up") { UpFolderRow((if (animate) Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null) else Modifier)) { vm.goUp() } }
-                    item(key = "..hint") { hint() }
+                    if (vm.error != null || (list.isEmpty() && !vm.loading)) item(key = "..hint") { hint() }
                     items(list, key = { it.file.absolutePath }) { e ->
                         FileRow(
                             name = e.name, file = e.file, isDir = e.isDirectory,
