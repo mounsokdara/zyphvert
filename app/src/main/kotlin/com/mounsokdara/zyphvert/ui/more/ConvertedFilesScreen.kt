@@ -43,6 +43,7 @@ import com.mounsokdara.zyphvert.tools.OutputPaths
 import com.mounsokdara.zyphvert.ui.components.AppSheet
 import com.mounsokdara.zyphvert.ui.components.FileRow
 import com.mounsokdara.zyphvert.ui.components.SubScreenScaffold
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -62,7 +63,6 @@ fun ConvertedFilesScreen(onBack: () -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var files by remember { mutableStateOf<List<File>?>(null) }
-    var refreshing by remember { mutableStateOf(false) }
     var active by remember { mutableStateOf<File?>(null) }
     var renaming by remember { mutableStateOf<File?>(null) }
     var deleting by remember { mutableStateOf<File?>(null) }
@@ -70,14 +70,20 @@ fun ConvertedFilesScreen(onBack: () -> Unit) {
     fun reload() {
         scope.launch { files = withContext(Dispatchers.IO) { scan(ctx) } }
     }
-    androidx.compose.runtime.LaunchedEffect(Unit) { reload() }
+    // Auto refresh instead of pull-down: when the screen comes back and every few seconds while it is open.
+    val owner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    androidx.compose.runtime.LaunchedEffect(owner) {
+        owner.lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
+            while (true) {
+                val fresh = withContext(Dispatchers.IO) { scan(ctx) }
+                if (fresh != files) files = fresh
+                delay(3000)
+            }
+        }
+    }
 
     SubScreenScaffold(title = "Converted files", onBack = onBack) { pad ->
-        com.mounsokdara.zyphvert.ui.components.StaticPullRefresh(
-            isRefreshing = refreshing,
-            onRefresh = { scope.launch { refreshing = true; reload(); delay(500); refreshing = false } },
-            modifier = Modifier.fillMaxSize().padding(pad),
-        ) {
+        Box(Modifier.fillMaxSize().padding(pad)) {
             val list = files
             when {
                 list == null -> Box(Modifier.fillMaxSize())

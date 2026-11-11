@@ -80,7 +80,6 @@ class FileManagerViewModel @Inject constructor(@ApplicationContext private val a
     var error by mutableStateOf<String?>(null)
         private set
     /** True only for a pull-down refresh, so opening a folder never shows the pull indicator. */
-    var refreshing by mutableStateOf(false)
         private set
     var query by mutableStateOf("")
     var sort by mutableStateOf(SortMode.NameAsc)
@@ -166,11 +165,13 @@ class FileManagerViewModel @Inject constructor(@ApplicationContext private val a
         else selected = entry
     }
 
-    fun reload() {
+    /** Quiet refresh for the auto-refresh loop: nothing changes on screen unless the folder really changed. */
+    fun autoRefresh() { if (loadJob?.isActive != true) reload(silent = true) }
+
+    fun reload(silent: Boolean = false) {
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
-            loading = true
-            error = null
+            if (!silent) { loading = true; error = null }
             if (browseMode == BrowseMode.Media) {
                 val fresh = withContext(Dispatchers.IO) { queryMedia() }
                 // Same content: keep the old list so the scroll position and item layout stay untouched.
@@ -180,7 +181,7 @@ class FileManagerViewModel @Inject constructor(@ApplicationContext private val a
                 if (result.entries != entries) entries = result.entries
                 if (result.error != error) error = result.error
             }
-            loading = false
+            if (!silent) loading = false
         }
     }
 
@@ -309,19 +310,6 @@ class FileManagerViewModel @Inject constructor(@ApplicationContext private val a
             }
             md.digest().joinToString("") { "%02x".format(it) }
         }.getOrDefault("Couldn't read this file")
-    }
-
-    fun pullRefresh() {
-        if (refreshing) return
-        refreshing = true
-        // A load that is already running (opening the picker, a folder change) is enough; a second one would only restart it.
-        if (loadJob?.isActive != true) reload()
-        viewModelScope.launch {
-            // Listing a folder takes a few ms; hold the indicator long enough to finish its animation.
-            kotlinx.coroutines.delay(600)
-            loadJob?.join()
-            refreshing = false
-        }
     }
 
     fun filtered(): List<FileEntry> {

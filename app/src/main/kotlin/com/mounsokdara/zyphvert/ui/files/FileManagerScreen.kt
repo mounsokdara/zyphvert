@@ -23,8 +23,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -131,6 +131,17 @@ fun FileManagerScreen(
     var propsFor by remember { mutableStateOf<FileEntry?>(null) }
     LaunchedEffect(vm.message) {
         vm.message?.let { Toast.makeText(ctx, it, Toast.LENGTH_SHORT).show(); vm.message = null }
+    }
+    // Auto refresh: no pull-down. The folder is re-read when the screen comes back and every few seconds while it is
+    // showing; the list only changes if something in the folder changed.
+    val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    LaunchedEffect(lifecycleOwner, vm) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
+            while (true) {
+                vm.autoRefresh()
+                kotlinx.coroutines.delay(3000)
+            }
+        }
     }
     val list = vm.filtered()
         .filter { !searching || passesSearchFilters(it.isDirectory, it.extension, showFolders, kinds) }
@@ -305,9 +316,9 @@ fun FileManagerScreen(
         // Pull-to-refresh is the only reaction to a pull at the top. The system rubber-band/stretch is switched off here,
         // otherwise it moves the whole list along with the finger while the refresh spinner shows.
         CompositionLocalProvider(LocalOverscrollConfiguration provides null) {
-        com.mounsokdara.zyphvert.ui.components.StaticPullRefresh(isRefreshing = vm.refreshing, onRefresh = vm::pullRefresh, modifier = Modifier.weight(1f).fillMaxWidth()) {
-            // No placement animation while refreshing, otherwise the list slides under the pull indicator.
-            val animate = !(vm.refreshing || vm.loading)
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            // No placement animation while a folder is loading.
+            val animate = !vm.loading
             val hint: @Composable () -> Unit = {
                 when {
                     vm.error != null -> Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
