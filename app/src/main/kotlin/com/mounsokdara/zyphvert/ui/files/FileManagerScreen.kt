@@ -72,6 +72,10 @@ class PickConfig(
     /** Fallback when all-files access isn't granted. */
     val onUseSystem: () -> Unit,
     val onPicked: (List<PickedFile>) -> Unit,
+    /** Folder picker: list only folders and let the user select the folder they are in. */
+    val folder: Boolean = false,
+    /** Folder to open first. */
+    val startPath: String? = null,
 )
 
 /** The Files tab, or (with [pick]) the file picker. Both share this one screen and one ViewModel class. */
@@ -99,7 +103,7 @@ fun FileManagerScreen(
     val rootList = remember { roots(ctx) }
     val drives = remember { rootList.filter { it.first == "Internal storage" || it.first == "SD card" }.map { it.second.path }.toSet() }
     if (pick != null) LaunchedEffect(pick.kind, pick.title) {
-        vm.configurePick(pick.kind, drives)
+        vm.configurePick(pick.kind, drives, pick.folder, pick.startPath)
     }
     var renameFor by remember { mutableStateOf<FileEntry?>(null) }
     var deleteFor by remember { mutableStateOf<FileEntry?>(null) }
@@ -272,7 +276,7 @@ fun FileManagerScreen(
         }
 
         // The two states: walk folders, or one flat list of every media file. The picker adds a type filter.
-        Row(
+        if (pick?.folder != true) Row(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 2.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -340,7 +344,7 @@ fun FileManagerScreen(
                         TextButton(onClick = { StorageAccess.openAllFilesSettings(ctx) }) { Text("Open storage settings") }
                     }
                     list.isEmpty() && !vm.loading -> Text(
-                        if (vm.query.isNotBlank()) "No matches" else if (vm.browseMode == BrowseMode.Media) "No media files found" else "Empty folder",
+                        if (vm.query.isNotBlank()) "No matches" else if (vm.browseMode == BrowseMode.Media) "No media files found" else if (pick?.folder == true) "No subfolders here" else "Empty folder",
                         Modifier.fillMaxWidth().padding(24.dp), color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -387,6 +391,26 @@ fun FileManagerScreen(
                 ScrollDebugOverlay(lines)
             }
         }
+        }
+
+        // Folder picker: browse like the file picker, then take the folder you are standing in.
+        if (pick?.folder == true) Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Use this folder", style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        vm.currentPath, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2, overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Button(
+                    onClick = {
+                        val dir = File(vm.currentPath)
+                        pick.onPicked(listOf(PickedFile(dir.toUri(), dir.name.ifEmpty { "/" })))
+                    },
+                    shape = CircleShape,
+                ) { Text("Select") }
+            }
         }
 
         // Picker with several files: the running selection and the Select button.

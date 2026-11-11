@@ -339,36 +339,18 @@ fun TerminalScreen(vm: TerminalViewModel, onBack: () -> Unit) {
         }
     }
 
+    // "Go to folder" browses with the same picker as files; no typing.
+    val launchFolderPicker = com.mounsokdara.zyphvert.ui.files.rememberFilePicker(
+        onUseSystem = {},
+        onPicked = { picked -> picked.firstOrNull()?.uri?.path?.let { vm.cdTo(java.io.File(it)) } },
+    )
     if (folderPicker) {
-        // Type the folder path instead of browsing for it.
-        var path by remember { mutableStateOf(s.cwd.path) }
-        var bad by remember { mutableStateOf(false) }
-        fun go() {
-            val dir = vm.resolveDir(path)
-            if (dir == null) {
-                bad = true
-            } else {
-                folderPicker = false
-                vm.cdTo(dir)
-            }
+        LaunchedEffect(Unit) {
+            folderPicker = false
+            launchFolderPicker(
+                com.mounsokdara.zyphvert.ui.files.PickRequest(InKind.Any, false, "Go to folder", folder = true, startPath = s.cwd.path),
+            )
         }
-        AlertDialog(
-            onDismissRequest = { folderPicker = false },
-            title = { Text("Go to folder") },
-            text = {
-                Column {
-                    OutlinedTextField(
-                        value = path, onValueChange = { path = it; bad = false },
-                        label = { Text("Folder path") }, singleLine = true, isError = bad,
-                        supportingText = { Text(if (bad) "No such folder" else "Type a path, like /storage/emulated/0/Movies") },
-                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Go),
-                        keyboardActions = androidx.compose.foundation.text.KeyboardActions(onGo = { go() }),
-                    )
-                }
-            },
-            confirmButton = { TextButton(onClick = { go() }) { Text("Go") } },
-            dismissButton = { TextButton(onClick = { folderPicker = false }) { Text("Cancel") } },
-        )
     }
 
     val launchPicker = com.mounsokdara.zyphvert.ui.files.rememberFilePicker(

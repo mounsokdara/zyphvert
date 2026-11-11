@@ -97,6 +97,8 @@ class FileManagerViewModel @Inject constructor(@ApplicationContext private val a
     private var drives: Set<String> = emptySet()
     private var stopAtDrives = false
     private var fromRoot = false
+    /** Folder picker: only folders are listed. */
+    private var foldersOnly = false
     var clip by mutableStateOf<Clip?>(null)
         private set
     /** One-shot text for a Toast; the screen shows it and clears it. */
@@ -134,15 +136,17 @@ class FileManagerViewModel @Inject constructor(@ApplicationContext private val a
     val canGoUp: Boolean get() = currentPath != "/" && !(stopAtDrives && currentPath in drives && !fromRoot)
 
     /** Called when the browser is opened as a file picker for a tool input. */
-    fun configurePick(kind: InKind, driveRoots: Set<String>) {
+    fun configurePick(kind: InKind, driveRoots: Set<String>, foldersOnly: Boolean = false, startPath: String? = null) {
         typeKind = kind
         drives = driveRoots
         stopAtDrives = true
-        showAllTypes = kind.exts == null
+        this.foldersOnly = foldersOnly
+        showAllTypes = kind.exts == null || foldersOnly
         query = ""
         selected = null
-        sort = SortMode.DateDesc
-        reload()
+        sort = if (foldersOnly) SortMode.NameAsc else SortMode.DateDesc
+        val start = startPath?.takeIf { File(it).isDirectory }
+        if (start != null) navigateTo(start) else reload()
     }
 
     fun setMode(mode: BrowseMode) {
@@ -332,6 +336,7 @@ class FileManagerViewModel @Inject constructor(@ApplicationContext private val a
         val kind = typeKind
         val exts = kind?.exts
         if (exts != null && !showAllTypes) list = list.filter { it.isDirectory || it.extension in exts || (kind?.acceptsLive == true && it.live) }
+        if (foldersOnly) list = list.filter { it.isDirectory }
         if (!showHidden) list = list.filter { !it.name.startsWith('.') }
         if (query.isNotBlank()) {
             val q = query.trim().lowercase()

@@ -31,7 +31,13 @@ import com.mounsokdara.zyphvert.ui.theme.ZyphvertTheme
 import dagger.hilt.android.AndroidEntryPoint
 
 /** What a tool asks the file picker for. */
-data class PickRequest(val kind: InKind, val multiple: Boolean, val title: String)
+data class PickRequest(
+    val kind: InKind, val multiple: Boolean, val title: String,
+    /** Pick a folder instead of files: only folders are listed and "Select" takes the folder you are in. */
+    val folder: Boolean = false,
+    /** Folder to open first. */
+    val startPath: String? = null,
+)
 
 sealed interface PickOutcome {
     data class Picked(val files: List<PickedFile>) : PickOutcome
@@ -44,6 +50,8 @@ private const val RESULT_USE_SYSTEM = Activity.RESULT_FIRST_USER
 private const val X_KIND = "kind"
 private const val X_MULTIPLE = "multiple"
 private const val X_TITLE = "title"
+private const val X_FOLDER = "folder"
+private const val X_START = "start"
 private const val X_URIS = "uris"
 private const val X_NAMES = "names"
 private const val X_COMPANIONS = "companions"
@@ -55,6 +63,8 @@ class PickFilesContract : ActivityResultContract<PickRequest, PickOutcome>() {
             .putExtra(X_KIND, input.kind.name)
             .putExtra(X_MULTIPLE, input.multiple)
             .putExtra(X_TITLE, input.title)
+            .putExtra(X_FOLDER, input.folder)
+            .putExtra(X_START, input.startPath)
 
     override fun parseResult(resultCode: Int, intent: Intent?): PickOutcome {
         if (resultCode == RESULT_USE_SYSTEM) return PickOutcome.UseSystem
@@ -95,6 +105,8 @@ class PickerActivity : ComponentActivity() {
         val kind = runCatching { InKind.valueOf(intent.getStringExtra(X_KIND).orEmpty()) }.getOrDefault(InKind.Any)
         val multiple = intent.getBooleanExtra(X_MULTIPLE, false)
         val title = intent.getStringExtra(X_TITLE) ?: "Choose files"
+        val folder = intent.getBooleanExtra(X_FOLDER, false)
+        val startPath = intent.getStringExtra(X_START)
         setContent {
             val s by settingsVm.settings.collectAsState()
             val dark = when (s.themeMode) {
@@ -115,7 +127,7 @@ class PickerActivity : ComponentActivity() {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
                     FileManagerScreen(
                         pick = PickConfig(
-                            kind = kind, multiple = multiple, title = title,
+                            kind = kind, multiple = multiple, title = title, folder = folder, startPath = startPath,
                             onDismiss = { finish() },
                             onUseSystem = { setResult(RESULT_USE_SYSTEM); finish() },
                             onPicked = { files ->
