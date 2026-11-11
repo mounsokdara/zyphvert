@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Terminal
@@ -19,7 +20,7 @@ import androidx.compose.ui.unit.dp
 import com.mounsokdara.zyphvert.ui.components.CenteredContent
 import com.mounsokdara.zyphvert.ui.components.MoreCard
 
-enum class MoreRoute { Settings, Terminal, About, Licenses, Changelog }
+enum class MoreRoute { Settings, Terminal, Converted, About, Licenses, Changelog }
 
 @Composable
 fun MoreScreen(bottomPadding: Dp, onOpen: (MoreRoute) -> Unit, modifier: Modifier = Modifier) {
@@ -38,6 +39,7 @@ fun MoreScreen(bottomPadding: Dp, onOpen: (MoreRoute) -> Unit, modifier: Modifie
             )
             MoreCard(Icons.Rounded.Settings, "Settings", "Theme, color, permissions, and data") { onOpen(MoreRoute.Settings) }
             MoreCard(Icons.Rounded.Terminal, "FFmpeg terminal", "Run ffmpeg and ffprobe commands") { onOpen(MoreRoute.Terminal) }
+            MoreCard(Icons.Rounded.Folder, "Converted files", "Open, share, rename, or delete results") { onOpen(MoreRoute.Converted) }
             MoreCard(Icons.Rounded.Info, "About", "Version, license, and source") { onOpen(MoreRoute.About) }
         }
     }

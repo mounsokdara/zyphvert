@@ -243,11 +243,24 @@ fun UpdateDialogs(flow: UpdateFlow) {
             dismissButton = { TextButton(onClick = flow::dismiss) { Text("Close") } },
             confirmButton = { Button(onClick = { flow.download(state.release) }) { Text("Try again") } },
         )
-        is UpdateUi.NeedsInstallPermission -> AlertDialog(
+        is UpdateUi.NeedsInstallPermission -> {
+            // Coming back from the "install unknown apps" screen with the permission granted: install straight away.
+            val owner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+            androidx.compose.runtime.DisposableEffect(owner, state.file) {
+                val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
+                    if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME &&
+                        (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || ctx.packageManager.canRequestPackageInstalls())
+                    ) flow.install(state.file)
+                }
+                owner.lifecycle.addObserver(obs)
+                onDispose { owner.lifecycle.removeObserver(obs) }
+            }
+        AlertDialog(
             onDismissRequest = flow::dismiss, title = { Text("Allow installing updates") },
             text = { Text("The update is downloaded. Android needs you to allow ${AboutInfo.NAME} to install apps. Turn on \"Allow from this source\", come back, then tap Install.") },
             dismissButton = { TextButton(onClick = flow::openInstallSettings) { Text("Open settings") } },
             confirmButton = { Button(onClick = { flow.install(state.file) }) { Text("Install") } },
         )
+        }
     }
 }

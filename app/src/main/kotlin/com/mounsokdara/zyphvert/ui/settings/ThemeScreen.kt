@@ -2,6 +2,9 @@
 
 package com.mounsokdara.zyphvert.ui.settings
 
+import com.mounsokdara.zyphvert.ui.components.SwitchTile
+import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.material.icons.rounded.DarkMode
 import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -89,24 +92,14 @@ fun ThemeScreen(vm: SettingsViewModel, onBack: () -> Unit) {
             }
 
             Spacer(Modifier.height(12.dp))
-            ListItem(
-                modifier = Modifier.clickable { vm.setExtraDark(!s.extraDark) },
-                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                headlineContent = { Text("Extra dark") },
-                supportingContent = { Text("Pure black backgrounds in the dark theme") },
-                trailingContent = { Switch(checked = s.extraDark, onCheckedChange = vm::setExtraDark) },
-            )
+            SwitchTile(Icons.Rounded.DarkMode, "Extra dark", "Pure black backgrounds in the dark theme", s.extraDark) { vm.setExtraDark(it) }
 
             Spacer(Modifier.height(8.dp))
-            ListItem(
-                modifier = Modifier.clickable(enabled = supportsDynamic) { vm.setDynamicColor(!s.dynamicColor) },
-                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                headlineContent = { Text("Dynamic color") },
-                supportingContent = {
-                    Text(if (supportsDynamic) "Use wallpaper colors when the device supports Material You" else "Needs Android 12 or newer")
-                },
-                trailingContent = { Switch(checked = dynamicOn, onCheckedChange = vm::setDynamicColor, enabled = supportsDynamic) },
-            )
+            SwitchTile(
+                Icons.Rounded.Palette, "Dynamic color",
+                if (supportsDynamic) "Use wallpaper colors when the device supports Material You" else "Needs Android 12 or newer",
+                dynamicOn, enabled = supportsDynamic,
+            ) { vm.setDynamicColor(it) }
 
             Spacer(Modifier.height(8.dp))
             // The color choices only matter when dynamic color is off.

@@ -1,5 +1,6 @@
 package com.mounsokdara.zyphvert.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,6 +17,8 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -34,7 +37,7 @@ import androidx.compose.ui.unit.dp
 
 private val TileShape = RoundedCornerShape(24.dp)
 
-/** Big hub card used on the More screen. */
+/** Hub row on the More screen. Same built-in list item as every other row, so nothing is hard coded to a big size. */
 @Composable
 fun MoreCard(
     icon: ImageVector,
@@ -42,24 +45,12 @@ fun MoreCard(
     subtitle: String,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
-) {
-    val shape = RoundedCornerShape(28.dp)
-    Surface(
-        shape = shape,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        modifier = modifier.fillMaxWidth().clip(shape).clickable(onClick = onClick),
-    ) {
-        Row(Modifier.padding(horizontal = 24.dp, vertical = 28.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(30.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            Column(Modifier.padding(start = 24.dp)) {
-                Text(title, style = MaterialTheme.typography.titleLarge)
-                Text(subtitle, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-    }
-}
+) = InfoTile(icon = icon, title = title, subtitle = subtitle, modifier = modifier, onClick = onClick)
 
-/** Settings/About row: tonal icon square, title, optional subtitle, optional trailing widget. */
+/**
+ * The one row used for Settings, About, More and toggles: a rounded card around Material 3's own [ListItem],
+ * a rounded-square tonal icon badge on the left, title and supporting text, and an optional trailing widget.
+ */
 @Composable
 fun InfoTile(
     icon: ImageVector,
@@ -67,31 +58,29 @@ fun InfoTile(
     subtitle: String? = null,
     modifier: Modifier = Modifier,
     shape: Shape = TileShape,
+    enabled: Boolean = true,
     onClick: (() -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
 ) {
     Surface(
         shape = shape,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        modifier = modifier.fillMaxWidth().clip(shape).then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
+        modifier = modifier.fillMaxWidth().clip(shape).then(if (onClick != null) Modifier.clickable(enabled = enabled, onClick = onClick) else Modifier),
     ) {
-        Row(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.secondaryContainer,
-                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                modifier = Modifier.size(48.dp),
-            ) {
-                Box(contentAlignment = Alignment.Center) { Icon(icon, contentDescription = null) }
-            }
-            Column(Modifier.weight(1f).padding(horizontal = 16.dp)) {
-                Text(title, style = MaterialTheme.typography.titleMedium)
-                if (subtitle != null) {
-                    Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        ListItem(
+            colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+            leadingContent = {
+                Box(
+                    modifier = Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
                 }
-            }
-            trailing?.invoke()
-        }
+            },
+            headlineContent = { Text(title, style = MaterialTheme.typography.titleMedium) },
+            supportingContent = subtitle?.let { { Text(it, style = MaterialTheme.typography.bodyMedium) } },
+            trailingContent = trailing,
+        )
     }
 }
 
@@ -101,7 +90,8 @@ fun SwitchTile(icon: ImageVector, title: String, subtitle: String, checked: Bool
         icon = icon,
         title = title,
         subtitle = subtitle,
-        onClick = if (enabled) ({ onChange(!checked) }) else null,
+        enabled = enabled,
+        onClick = { onChange(!checked) },
         trailing = { Switch(checked = checked, onCheckedChange = onChange, enabled = enabled) },
     )
 }

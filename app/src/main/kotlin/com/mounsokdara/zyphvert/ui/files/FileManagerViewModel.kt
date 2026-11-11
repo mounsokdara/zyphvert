@@ -172,11 +172,13 @@ class FileManagerViewModel @Inject constructor(@ApplicationContext private val a
             loading = true
             error = null
             if (browseMode == BrowseMode.Media) {
-                mediaItems = withContext(Dispatchers.IO) { queryMedia() }
+                val fresh = withContext(Dispatchers.IO) { queryMedia() }
+                // Same content: keep the old list so the scroll position and item layout stay untouched.
+                if (fresh != mediaItems) mediaItems = fresh
             } else {
                 val result = withContext(Dispatchers.IO) { listDir(currentPath) }
-                entries = result.entries
-                error = result.error
+                if (result.entries != entries) entries = result.entries
+                if (result.error != error) error = result.error
             }
             loading = false
         }

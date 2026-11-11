@@ -169,6 +169,7 @@ fun ZyphvertShell(settingsVm: SettingsViewModel, hapticsEnabled: Boolean) {
                     is Screen.MoreSub -> when (sc.route) {
                         MoreRoute.Settings -> SettingsScreen(settingsVm, onBack = { sub = null })
                         MoreRoute.Terminal -> TerminalScreen(hiltViewModel(), onBack = { sub = null })
+                        MoreRoute.Converted -> com.mounsokdara.zyphvert.ui.more.ConvertedFilesScreen(onBack = { sub = null })
                         MoreRoute.About -> AboutScreen(
                             onBack = { sub = null }, onLicenses = { sub = MoreRoute.Licenses },
                             onChangelog = { sub = MoreRoute.Changelog },
