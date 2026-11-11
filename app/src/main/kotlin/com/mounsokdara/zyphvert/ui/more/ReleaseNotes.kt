@@ -160,6 +160,8 @@ object ReleaseNotes {
             if (conn.responseCode != 200) throw java.io.IOException("GitHub answered ${conn.responseCode}")
             val arr = JSONArray(conn.inputStream.bufferedReader().use { it.readText() })
             val list = (0 until arr.length()).map { arr.getJSONObject(it) }.filter { !it.optBoolean("draft", false) }.map(ReleaseNote::fromJson)
+                // Only releases that carry an APK are app versions (the FFmpeg library release is not).
+                .filter { it.apkUrl != null }
                 // Only releases that carry an APK count as app versions (the FFmpeg library release has none).
                 .filter { it.apkUrl != null }
             save(ctx, list)
