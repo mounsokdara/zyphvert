@@ -115,7 +115,7 @@ internal fun convertImageNative(ctx: Context, uri: Uri, out: File, format: Strin
 }
 
 @Suppress("DEPRECATION")
-private fun decodeBitmap(ctx: Context, uri: Uri): Bitmap =
+internal fun decodeBitmap(ctx: Context, uri: Uri): Bitmap =
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
         ImageDecoder.decodeBitmap(ImageDecoder.createSource(ctx.contentResolver, uri)) { dec, _, _ ->
             dec.allocator = ImageDecoder.ALLOCATOR_SOFTWARE

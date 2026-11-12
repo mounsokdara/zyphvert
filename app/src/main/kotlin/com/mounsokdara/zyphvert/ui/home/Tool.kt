@@ -1,6 +1,8 @@
 package com.mounsokdara.zyphvert.ui.home
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AutoFixHigh
+import androidx.compose.material.icons.rounded.Brush
 import androidx.compose.material.icons.rounded.MotionPhotosOn
 import androidx.compose.material.icons.rounded.Compress
 import androidx.compose.material.icons.rounded.ContentCut
@@ -75,6 +77,23 @@ val allTools: List<Tool> = listOf(
         Icons.Rounded.Image,
         ToolCategory.Convert,
         formats = listOf("JPG", "PNG", "WebP", "BMP", "TIFF", "GIF", "JP2", "TGA", "ICO", "QOI", "Live Photo"),
+    ),
+
+    Tool(
+        "svg",
+        "SVG converter",
+        "Turn an SVG, even an animated one with CSS or scripts, into an image, video or GIF.",
+        Icons.Rounded.Brush,
+        ToolCategory.Convert,
+        formats = listOf("PNG", "JPG", "WebP", "MP4", "WebM", "GIF", "APNG", "Frames", "Static SVG", "Minify"),
+    ),
+    Tool(
+        "img2svg",
+        "Image to SVG",
+        "Trace a picture into a scalable SVG on your phone, with optional experimental shape redraw.",
+        Icons.Rounded.AutoFixHigh,
+        ToolCategory.Convert,
+        formats = listOf("SVG"),
     ),
 
     Tool("trim", "Trim & Cut", "Cut a clip down to the part you want", Icons.Rounded.ContentCut, ToolCategory.Edit),

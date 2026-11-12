@@ -332,7 +332,7 @@ private fun compressAudio(r: ToolRequest, f: PickedFile, lvl: String, limit: Lon
     return r.job(f, out, "-i ${r.saf(f)} -vn -map 0:a:0 ${audioCodecArgs(fmt, "cbr:$kbps", sr, ch, "auto")} ${fmt.mux} $strip${q(out.path)}")
 }
 
-val toolSpecs: Map<String, ToolSpec> = listOf(
+val toolSpecs: Map<String, ToolSpec> = (listOf(
 
     ToolSpec(
         id = "video",
@@ -700,4 +700,4 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
             }
         },
     ),
-).associateBy { it.id }
+) + svgToolSpecs).associateBy { it.id }

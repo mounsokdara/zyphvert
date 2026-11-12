@@ -10,6 +10,7 @@ enum class InKind(val mimes: Array<String>, val exts: Set<String>?) {
     Media(arrayOf("video/*", "audio/*"), VIDEO_EXTS + AUDIO_EXTS),
     Image(arrayOf("image/*"), IMAGE_EXTS),
     Visual(arrayOf("video/*", "image/*"), VIDEO_EXTS + IMAGE_EXTS),
+    Svg(arrayOf("image/svg+xml", "*/*"), setOf("svg", "svgz")),
     Any(arrayOf("*/*"), null),
     ;
 
