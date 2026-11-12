@@ -1,0 +1,131 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.10.2/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :app:buildKotlinToolingMetadata
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preReleaseBuild UP-TO-DATE
+> Task :app:compileReleaseAidl FROM-CACHE
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:generateReleaseBuildConfig FROM-CACHE
+> Task :app:generateReleaseResValues FROM-CACHE
+> Task :app:checkReleaseAarMetadata
+> Task :app:mapReleaseSourceSetPaths
+> Task :app:generateReleaseResources FROM-CACHE
+> Task :app:mergeReleaseResources FROM-CACHE
+> Task :app:packageReleaseResources FROM-CACHE
+> Task :app:parseReleaseLocalResources FROM-CACHE
+> Task :app:createReleaseCompatibleScreenManifests
+> Task :app:extractDeepLinksRelease FROM-CACHE
+> Task :app:processReleaseMainManifest FROM-CACHE
+> Task :app:processReleaseManifest FROM-CACHE
+> Task :app:processReleaseManifestForPackage FROM-CACHE
+> Task :app:processReleaseResources FROM-CACHE
+> Task :app:javaPreCompileRelease FROM-CACHE
+> Task :app:extractProguardFiles
+> Task :app:mergeReleaseJniLibFolders
+> Task :app:checkReleaseDuplicateClasses
+> Task :app:mergeReleaseStartupProfile
+> Task :app:mergeReleaseArtProfile
+> Task :app:mergeReleaseShaders
+> Task :app:compileReleaseShaders NO-SOURCE
+> Task :app:generateReleaseAssets UP-TO-DATE
+> Task :app:mergeReleaseNativeLibs
+> Task :app:mergeReleaseAssets
+> Task :app:compressReleaseAssets FROM-CACHE
+> Task :app:extractReleaseVersionControlInfo
+> Task :app:convertLinkedResourcesToProtoRelease FROM-CACHE
+> Task :app:collectReleaseDependencies
+
+> Task :app:stripReleaseDebugSymbols
+Unable to strip the following libraries, packaging them as they are: libandroidx.graphics.path.so, libavcodec.so, libavcodec_neon.so, libavdevice.so, libavdevice_neon.so, libavfilter.so, libavfilter_neon.so, libavformat.so, libavformat_neon.so, libavutil.so, libavutil_neon.so, libc++_shared.so, libdatastore_shared_counter.so, libffmpegkit.so, libffmpegkit_abidetect.so, libffmpegkit_armv7a_neon.so, libswresample.so, libswresample_neon.so, libswscale.so, libswscale_neon.so.
+
+> Task :app:sdkReleaseDependencyData
+> Task :app:extractReleaseNativeSymbolTables FROM-CACHE
+> Task :app:mergeReleaseNativeDebugMetadata NO-SOURCE
+> Task :app:validateSigningRelease
+> Task :app:writeReleaseAppMetadata
+> Task :app:writeReleaseSigningConfigVersions
+> Task :app:kspReleaseKotlin
+> Task :app:compileReleaseKotlin
+w: file:///home/runner/work/zyphvert/zyphvert/app/src/main/kotlin/com/mounsokdara/zyphvert/ui/components/SearchBar.kt:98:42 'val Icons.Rounded.ViewList: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Rounded.ViewList.
+w: file:///home/runner/work/zyphvert/zyphvert/app/src/main/kotlin/com/mounsokdara/zyphvert/ui/files/FileManagerScreen.kt:102:55 'val LocalLifecycleOwner: ProvidableCompositionLocal<LifecycleOwner>' is deprecated. Moved to lifecycle-runtime-compose library in androidx.lifecycle.compose package.
+w: file:///home/runner/work/zyphvert/zyphvert/app/src/main/kotlin/com/mounsokdara/zyphvert/ui/files/FileManagerScreen.kt:148:91 'val Icons.Rounded.ViewList: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Rounded.ViewList.
+w: file:///home/runner/work/zyphvert/zyphvert/app/src/main/kotlin/com/mounsokdara/zyphvert/ui/home/Tool.kt:85:86 'val Icons.Rounded.VolumeUp: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Rounded.VolumeUp.
+w: file:///home/runner/work/zyphvert/zyphvert/app/src/main/kotlin/com/mounsokdara/zyphvert/ui/more/ConvertedFilesScreen.kt:71:46 'val LocalLifecycleOwner: ProvidableCompositionLocal<LifecycleOwner>' is deprecated. Moved to lifecycle-runtime-compose library in androidx.lifecycle.compose package.
+w: file:///home/runner/work/zyphvert/zyphvert/app/src/main/kotlin/com/mounsokdara/zyphvert/ui/more/UpdateCheck.kt:235:54 'val LocalLifecycleOwner: ProvidableCompositionLocal<LifecycleOwner>' is deprecated. Moved to lifecycle-runtime-compose library in androidx.lifecycle.compose package.
+
+> Task :app:compileReleaseJavaWithJavac
+> Task :app:hiltAggregateDepsRelease FROM-CACHE
+> Task :app:hiltJavaCompileRelease
+> Task :app:generateReleaseLintVitalReportModel
+> Task :app:processReleaseJavaRes
+> Task :app:transformReleaseClassesWithAsm
+> Task :app:mergeReleaseGeneratedProguardFiles
+> Task :app:mergeReleaseJavaResource
+> Task :app:expandReleaseArtProfileWildcards
+
+> Task :app:minifyReleaseWithR8 FAILED
+ERROR: /home/runner/work/zyphvert/zyphvert/app/proguard-rules.pro:19:1-15: R8: Unknown option "-dontusemixins"
+
+> Task :app:lintVitalAnalyzeRelease
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/lifetime/KaDefaultLifetimeTokenProvider$Companion#getService(Lcom/intellij/openapi/project/Project;)Lorg/jetbrains/kotlin/analysis/api/lifetime/KaDefaultLifetimeTokenProvider;
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/lifetime/KaDefaultLifetimeTokenProvider#getDefaultLifetimeTokenFactory()Lorg/jetbrains/kotlin/analysis/api/lifetime/KaLifetimeTokenFactory;
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/session/KaSessionProvider#getAnalysisSession(Lorg/jetbrains/kotlin/psi/KtElement;Lorg/jetbrains/kotlin/analysis/api/lifetime/KaLifetimeTokenFactory;)Lorg/jetbrains/kotlin/analysis/api/KaSession;
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/session/KaSessionProvider#getNoWriteActionInAnalyseCallChecker()Lorg/jetbrains/kotlin/analysis/api/lifetime/impl/NoWriteActionInAnalyseCallChecker;
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/lifetime/impl/NoWriteActionInAnalyseCallChecker#beforeEnteringAnalysisContext()V
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/lifetime/KaLifetimeTokenFactory#beforeEnteringAnalysisContext(Lorg/jetbrains/kotlin/analysis/api/lifetime/KaLifetimeToken;)V
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/lifetime/KaLifetimeTokenFactory#afterLeavingAnalysisContext(Lorg/jetbrains/kotlin/analysis/api/lifetime/KaLifetimeToken;)V
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/session/KaSessionProvider#getNoWriteActionInAnalyseCallChecker()Lorg/jetbrains/kotlin/analysis/api/lifetime/impl/NoWriteActionInAnalyseCallChecker;
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/lifetime/impl/NoWriteActionInAnalyseCallChecker#afterLeavingAnalysisContext()V
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/lifetime/KaLifetimeTokenFactory#afterLeavingAnalysisContext(Lorg/jetbrains/kotlin/analysis/api/lifetime/KaLifetimeToken;)V
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/session/KaSessionProvider#getNoWriteActionInAnalyseCallChecker()Lorg/jetbrains/kotlin/analysis/api/lifetime/impl/NoWriteActionInAnalyseCallChecker;
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/lifetime/impl/NoWriteActionInAnalyseCallChecker#afterLeavingAnalysisContext()V
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/lifetime/KaLifetimeTokenFactory#afterLeavingAnalysisContext(Lorg/jetbrains/kotlin/analysis/api/lifetime/KaLifetimeToken;)V
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/session/KaSessionProvider#getNoWriteActionInAnalyseCallChecker()Lorg/jetbrains/kotlin/analysis/api/lifetime/impl/NoWriteActionInAnalyseCallChecker;
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/lifetime/impl/NoWriteActionInAnalyseCallChecker#afterLeavingAnalysisContext()V
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/lifetime/KaDefaultLifetimeTokenProvider$Companion#getService(Lcom/intellij/openapi/project/Project;)Lorg/jetbrains/kotlin/analysis/api/lifetime/KaDefaultLifetimeTokenProvider;
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/lifetime/KaDefaultLifetimeTokenProvider#getDefaultLifetimeTokenFactory()Lorg/jetbrains/kotlin/analysis/api/lifetime/KaLifetimeTokenFactory;
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/session/KaSessionProvider#getAnalysisSession(Lorg/jetbrains/kotlin/psi/KtElement;Lorg/jetbrains/kotlin/analysis/api/lifetime/KaLifetimeTokenFactory;)Lorg/jetbrains/kotlin/analysis/api/KaSession;
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/session/KaSessionProvider#getNoWriteActionInAnalyseCallChecker()Lorg/jetbrains/kotlin/analysis/api/lifetime/impl/NoWriteActionInAnalyseCallChecker;
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/lifetime/impl/NoWriteActionInAnalyseCallChecker#beforeEnteringAnalysisContext()V
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/lifetime/KaLifetimeTokenFactory#beforeEnteringAnalysisContext(Lorg/jetbrains/kotlin/analysis/api/lifetime/KaLifetimeToken;)V
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/lifetime/KaLifetimeTokenFactory#afterLeavingAnalysisContext(Lorg/jetbrains/kotlin/analysis/api/lifetime/KaLifetimeToken;)V
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/session/KaSessionProvider#getNoWriteActionInAnalyseCallChecker()Lorg/jetbrains/kotlin/analysis/api/lifetime/impl/NoWriteActionInAnalyseCallChecker;
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/lifetime/impl/NoWriteActionInAnalyseCallChecker#afterLeavingAnalysisContext()V
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/lifetime/KaLifetimeTokenFactory#afterLeavingAnalysisContext(Lorg/jetbrains/kotlin/analysis/api/lifetime/KaLifetimeToken;)V
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/session/KaSessionProvider#getNoWriteActionInAnalyseCallChecker()Lorg/jetbrains/kotlin/analysis/api/lifetime/impl/NoWriteActionInAnalyseCallChecker;
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/lifetime/impl/NoWriteActionInAnalyseCallChecker#afterLeavingAnalysisContext()V
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/lifetime/KaLifetimeTokenFactory#afterLeavingAnalysisContext(Lorg/jetbrains/kotlin/analysis/api/lifetime/KaLifetimeToken;)V
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/session/KaSessionProvider#getNoWriteActionInAnalyseCallChecker()Lorg/jetbrains/kotlin/analysis/api/lifetime/impl/NoWriteActionInAnalyseCallChecker;
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/lifetime/impl/NoWriteActionInAnalyseCallChecker#afterLeavingAnalysisContext()V
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/lifetime/KaDefaultLifetimeTokenProvider$Companion#getService(Lcom/intellij/openapi/project/Project;)Lorg/jetbrains/kotlin/analysis/api/lifetime/KaDefaultLifetimeTokenProvider;
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/lifetime/KaDefaultLifetimeTokenProvider#getDefaultLifetimeTokenFactory()Lorg/jetbrains/kotlin/analysis/api/lifetime/KaLifetimeTokenFactory;
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/session/KaSessionProvider#getAnalysisSession(Lorg/jetbrains/kotlin/psi/KtElement;Lorg/jetbrains/kotlin/analysis/api/lifetime/KaLifetimeTokenFactory;)Lorg/jetbrains/kotlin/analysis/api/KaSession;
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/session/KaSessionProvider#getNoWriteActionInAnalyseCallChecker()Lorg/jetbrains/kotlin/analysis/api/lifetime/impl/NoWriteActionInAnalyseCallChecker;
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/lifetime/impl/NoWriteActionInAnalyseCallChecker#beforeEnteringAnalysisContext()V
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/lifetime/KaLifetimeTokenFactory#beforeEnteringAnalysisContext(Lorg/jetbrains/kotlin/analysis/api/lifetime/KaLifetimeToken;)V
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/lifetime/KaLifetimeTokenFactory#afterLeavingAnalysisContext(Lorg/jetbrains/kotlin/analysis/api/lifetime/KaLifetimeToken;)V
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/session/KaSessionProvider#getNoWriteActionInAnalyseCallChecker()Lorg/jetbrains/kotlin/analysis/api/lifetime/impl/NoWriteActionInAnalyseCallChecker;
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/lifetime/impl/NoWriteActionInAnalyseCallChecker#afterLeavingAnalysisContext()V
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/lifetime/KaLifetimeTokenFactory#afterLeavingAnalysisContext(Lorg/jetbrains/kotlin/analysis/api/lifetime/KaLifetimeToken;)V
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/session/KaSessionProvider#getNoWriteActionInAnalyseCallChecker()Lorg/jetbrains/kotlin/analysis/api/lifetime/impl/NoWriteActionInAnalyseCallChecker;
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/lifetime/impl/NoWriteActionInAnalyseCallChecker#afterLeavingAnalysisContext()V
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/lifetime/KaLifetimeTokenFactory#afterLeavingAnalysisContext(Lorg/jetbrains/kotlin/analysis/api/lifetime/KaLifetimeToken;)V
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/session/KaSessionProvider#getNoWriteActionInAnalyseCallChecker()Lorg/jetbrains/kotlin/analysis/api/lifetime/impl/NoWriteActionInAnalyseCallChecker;
+WARNING: Missing analysis API method org/jetbrains/kotlin/analysis/api/lifetime/impl/NoWriteActionInAnalyseCallChecker#afterLeavingAnalysisContext()V
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_4-1794472291247.json
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:minifyReleaseWithR8'.
+> A failure occurred while executing com.android.build.gradle.internal.tasks.R8Task$R8Runnable
+   > Compilation failed to complete, position: Text range from: 'offset: 634, line: 19, column: 1', to: 'offset: 648, line: 19, column: 15', origin: /home/runner/work/zyphvert/zyphvert/app/proguard-rules.pro
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 1m 44s
+48 actionable tasks: 31 executed, 17 from cache
