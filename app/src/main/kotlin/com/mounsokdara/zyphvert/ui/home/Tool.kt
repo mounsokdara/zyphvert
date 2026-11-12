@@ -4,7 +4,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.MotionPhotosOn
 import androidx.compose.material.icons.rounded.Compress
 import androidx.compose.material.icons.rounded.ContentCut
-import androidx.compose.material.icons.rounded.CropRotate
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Info
@@ -79,7 +78,6 @@ val allTools: List<Tool> = listOf(
     ),
 
     Tool("trim", "Trim & Cut", "Cut a clip down to the part you want", Icons.Rounded.ContentCut, ToolCategory.Edit),
-    Tool("crop", "Crop & Rotate", "Crop the frame, rotate, or flip", Icons.Rounded.CropRotate, ToolCategory.Edit),
     Tool("speed", "Speed & Reverse", "Slow down, speed up, or reverse", Icons.Rounded.Speed, ToolCategory.Edit),
     Tool("compress", "Compress", "Make a file smaller or fit it under a size limit", Icons.Rounded.Compress, ToolCategory.Edit),
     Tool("volume", "Volume", "Make a clip louder, quieter, or silent", Icons.Rounded.VolumeUp, ToolCategory.Edit),

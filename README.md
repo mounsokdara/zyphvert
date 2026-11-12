@@ -16,8 +16,7 @@ request the `INTERNET` permission, so your files never leave your phone.
 ### Edit
 | Tool | What it does |
 |---|---|
-| **Trim & Cut** | Keep or remove any part of a video or audio file, lossless or precise |
-| **Crop & Rotate** | Crop to a ratio, rotate, flip |
+| **Trim & Cut** | Keep or remove any part of a video or audio file, lossless or precise, with a waveform, draggable handles and play/pause preview |
 | **Speed & Reverse** | Slow down, speed up or reverse, with natural audio pitch |
 | **Compress** | Shrink video, audio and photos, or fit them under a size limit you type in bytes, KB, MB or GB, with format, resolution, frame rate, bitrate, sample rate and channel controls |
 | **Volume** | Make a clip louder, quieter, normalized or silent |

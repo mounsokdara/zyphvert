@@ -40,8 +40,6 @@ import com.mounsokdara.zyphvert.ui.home.accent
 import com.mounsokdara.zyphvert.ui.files.PickRequest
 import com.mounsokdara.zyphvert.ui.files.rememberFilePicker
 import com.mounsokdara.zyphvert.util.StorageAccess
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.util.Locale
 
 private val CardShape = RoundedCornerShape(24.dp)
@@ -406,70 +404,6 @@ private fun PickerSheet(title: String, items: List<Item>, selected: String, onDi
                     }
                 }
             }
-        }
-    }
-}
-
-private fun clock(sec: Double): String {
-    val t = (sec * 10).toLong() / 10.0
-    val m = (t / 60).toInt()
-    val s = t - m * 60
-    return String.format(Locale.US, "%d:%04.1f", m, s)
-}
-
-@Composable
-private fun RangeCard(opt: Opt.Range, vm: ToolViewModel) {
-    val ctx = LocalContext.current
-    val first = vm.picked[opt.slot].orEmpty().firstOrNull()
-    var dur by remember(first?.uri) { mutableStateOf(0.0) }
-    LaunchedEffect(first?.uri) {
-        dur = if (first == null) 0.0 else withContext(Dispatchers.IO) { durationSec(ctx, first.uri) } ?: 0.0
-    }
-    Surface(shape = CardShape, color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(opt.label, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-            if (first == null || dur <= 0.0) {
-                Text(
-                    if (first == null) "Choose a file first, then pick the part you want." else "Couldn't read the length of this file. The whole file will be used.",
-                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                return@Column
-            }
-            val parts = (vm.values[opt.id] ?: "").split(",")
-            val s = (parts.getOrNull(0)?.toDoubleOrNull() ?: 0.0).coerceIn(0.0, dur)
-            val e = (parts.getOrNull(1)?.toDoubleOrNull() ?: dur).coerceIn(s, dur)
-            fun set(ns: Double, ne: Double) {
-                vm.values[opt.id] = String.format(Locale.US, "%.1f,%.1f", ns.coerceIn(0.0, dur), ne.coerceIn(ns.coerceIn(0.0, dur), dur))
-            }
-            if (opt.modes) {
-                val mode = vm.values["${opt.id}.mode"] ?: "keep"
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = mode == "keep", onClick = { vm.values["${opt.id}.mode"] = "keep" }, label = { Text("Keep selection") })
-                    FilterChip(selected = mode == "remove", onClick = { vm.values["${opt.id}.mode"] = "remove" }, label = { Text("Remove selection") })
-                }
-            }
-            RangeSlider(
-                value = s.toFloat()..e.toFloat(),
-                onValueChange = { set(it.start.toDouble(), it.endInclusive.toDouble()) },
-                valueRange = 0f..dur.toFloat(),
-            )
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                Stepper(clock(s), { set(s - 0.1, e) }, { set(s + 0.1, e) })
-                Text(clock(e - s), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleSmall)
-                Stepper(clock(e), { set(s, e - 0.1) }, { set(s, e + 0.1) })
-            }
-            Text("Total length ${clock(dur)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
-
-@Composable
-private fun Stepper(text: String, minus: () -> Unit, plus: () -> Unit) {
-    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.secondaryContainer) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = minus) { Icon(Icons.Rounded.Remove, "Earlier") }
-            Text(text, style = MaterialTheme.typography.titleSmall)
-            IconButton(onClick = plus) { Icon(Icons.Rounded.Add, "Later") }
         }
     }
 }

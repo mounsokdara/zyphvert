@@ -5,7 +5,6 @@ import kotlin.math.max
 
 private fun fail(msg: String): Nothing = throw IllegalArgumentException(msg)
 private fun items(vararg p: Pair<String, String>) = p.map { Item(it.first, it.second) }
-private val photoExts = setOf("jpg", "jpeg", "png", "webp")
 
 private fun atempoChain(s: Double): String = when {
     s < 0.5 -> "atempo=0.5,atempo=${num(s / 0.5)}"
@@ -484,39 +483,6 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
                 val out = r.out(cat, f, if (hasV) "mp4" else "m4a", "_cut")
                 val enc = if (hasV) smartH264(r, f) else "-c:a aac -b:a 192k"
                 listOf(r.job(f, out, "-i ${r.saf(f)} -filter_complex ${q(g.toString())} $maps$enc ${q(out.path)}"))
-            }
-        },
-    ),
-
-    ToolSpec(
-        id = "crop",
-        intro = "Crop to a ratio, rotate or flip videos and photos.",
-        inputs = listOf(InputSlot("media", "Videos or photos", InKind.Visual, multiple = true)),
-        options = listOf(
-            Opt.Choice("ar", "Crop to", items("keep" to "Keep original", "1:1" to "Square 1:1", "16:9" to "Wide 16:9", "9:16" to "Vertical 9:16", "4:3" to "4:3", "3:4" to "3:4")),
-            Opt.Choice("rot", "Rotate", items("0" to "None", "cw" to "90° right", "ccw" to "90° left", "180" to "180°")),
-            Opt.Choice("flip", "Flip", items("none" to "None", "h" to "Horizontal", "v" to "Vertical")),
-        ),
-        actionLabel = "Apply",
-        build = { r ->
-            val parts = buildList {
-                if (r.str("ar") != "keep") {
-                    val (a, b) = r.str("ar").split(":").map { it.toInt() }
-                    add("crop=w=(iw+ih*$a/$b-abs(iw-ih*$a/$b))/2:h=(ih+iw*$b/$a-abs(ih-iw*$b/$a))/2")
-                }
-                when (r.str("rot")) { "cw" -> add("transpose=1"); "ccw" -> add("transpose=2"); "180" -> { add("transpose=1"); add("transpose=1") } }
-                when (r.str("flip")) { "h" -> add("hflip"); "v" -> add("vflip") }
-            }
-            if (parts.isEmpty()) fail("Choose a crop, rotation or flip first.")
-            r.files("media").map { f ->
-                if (isImageName(f.name)) {
-                    val ext = nameExt(f.name).takeIf { it in photoExts } ?: "jpg"
-                    val out = r.out("Images", f, ext, "_edit")
-                    r.job(f, out, "-i ${r.saf(f)} -vf ${q(parts.joinToString(","))} -frames:v 1 -q:v 2 ${q(out.path)}")
-                } else {
-                    val out = r.out("Video", f, "mp4", "_edit")
-                    r.job(f, out, "-i ${r.saf(f)} -vf ${q((parts + VID_TAIL).joinToString(","))} ${smartH264(r, f)} ${q(out.path)}")
-                }
             }
         },
     ),
