@@ -16,7 +16,6 @@
 -optimizationpasses 5
 -allowaccessmodification
 -repackageclasses ''
--dontusemixins
 -assumenosideeffects class kotlin.jvm.internal.Intrinsics {
     public static void checkNotNull(...);
     public static void checkNotNullParameter(...);
