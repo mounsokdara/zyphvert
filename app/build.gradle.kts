@@ -38,8 +38,6 @@ android {
     namespace = "com.mounsokdara.zyphvert"
     compileSdk = 35
 
-    androidResources { localeFilters += "en" }
-
     defaultConfig {
         applicationId = "com.mounsokdara.zyphvert"
         minSdk = 24
@@ -47,6 +45,7 @@ android {
         // One version for every APK/AAB: straight from version.txt, no per-ABI multiplier.
         versionCode = verCode
         versionName = verName
+        resourceConfigurations += "en"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
