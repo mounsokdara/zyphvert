@@ -9,7 +9,10 @@ import androidx.exifinterface.media.ExifInterface
 import com.mounsokdara.zyphvert.engine.EngineEvent
 import com.mounsokdara.zyphvert.engine.MediaEngine
 import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 
 class MetaRow(val key: String, val value: String, val editTag: String? = null, val editValue: String? = null)
 class MetaSection(val title: String, val rows: List<MetaRow>)
@@ -27,6 +30,13 @@ class MetaInfo(
         s.title + "\n" + s.rows.joinToString("\n") { "${it.key}: ${it.value}" }
     }
 }
+
+internal fun isoUtc(ms: Long): String =
+    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Date(ms))
+
+internal fun parseIsoUtc(s: String): Long? = runCatching {
+    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC"); isLenient = false }.parse(s.trim())?.time
+}.getOrNull()
 
 private val readOnlyTags = setOf("major_brand", "minor_version", "compatible_brands")
 
@@ -77,7 +87,7 @@ internal suspend fun loadMetaInfo(ctx: Context, engine: MediaEngine, f: PickedFi
 }
 
 private fun loadGenericInfo(ctx: Context, f: PickedFile): MetaInfo {
-    val facts = loadFileFacts(ctx, f)
+    val facts = loadFileFacts(ctx, f, editable = true)
     val extra = extractorSections(ctx, f)
     val kind = facts.firstOrNull()?.rows?.firstOrNull { it.key == "Detected type" }?.value
     return MetaInfo(

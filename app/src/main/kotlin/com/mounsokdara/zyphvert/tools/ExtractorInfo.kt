@@ -4,7 +4,6 @@ import android.content.Context
 import com.drew.imaging.ImageMetadataReader
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.TimeZone
 
 /**
  * Reads photo, RAW, HEIF, WebP, MP4/MOV, AVI, WAV and other tags with the open source metadata-extractor
@@ -27,9 +26,6 @@ internal fun extractorSections(ctx: Context, f: PickedFile): List<MetaSection> =
 
 /** QuickTime stores one creation time for the whole file, so both rows edit the same `creation_time` tag. */
 private fun timeRow(name: String, shown: String): MetaRow {
-    val iso = runCatching {
-        val date = SimpleDateFormat("EEE MMM dd HH:mm:ss XXX yyyy", Locale.US).parse(shown)
-        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(date!!)
-    }.getOrNull()
+    val iso = runCatching { isoUtc(SimpleDateFormat("EEE MMM dd HH:mm:ss XXX yyyy", Locale.US).parse(shown)!!.time) }.getOrNull()
     return MetaRow(name, shown, editTag = iso?.let { "creation_time" }, editValue = iso)
 }

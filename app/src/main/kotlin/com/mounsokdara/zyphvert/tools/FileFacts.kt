@@ -185,7 +185,7 @@ private fun lastModified(ctx: Context, f: PickedFile): Long? {
 }
 
 /** Everything we can say about any file, whatever its format. */
-internal fun loadFileFacts(ctx: Context, f: PickedFile, summaryOnly: Boolean = false): List<MetaSection> {
+internal fun loadFileFacts(ctx: Context, f: PickedFile, summaryOnly: Boolean = false, editable: Boolean = false): List<MetaSection> {
     val sections = mutableListOf<MetaSection>()
     val size = fileSize(ctx, f)
     val ext = nameExt(f.name)
@@ -194,7 +194,8 @@ internal fun loadFileFacts(ctx: Context, f: PickedFile, summaryOnly: Boolean = f
         val head = if (src != null) readHead(src.path, HEAD) else (ByteArray(0) to 0)
         val sig = sniff(head.first, head.second, ext)
         val rows = mutableListOf<MetaRow>()
-        rows += MetaRow("Name", f.name)
+        val editable = f.path?.let { File(it).run { isFile && parentFile?.canWrite() == true } } == true
+        rows += if (editable) MetaRow("Name", f.name, editTag = "file.name", editValue = f.name) else MetaRow("Name", f.name)
         if (size >= 0) rows += MetaRow("Size", if (size < 1024) "$size bytes" else "${fmtSize(size)} (${String.format(Locale.US, "%,d", size)} bytes)")
         val mimeByExt = android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext)
         sig?.let { rows += MetaRow("Detected type", it.label); rows += MetaRow("MIME type", it.mime) }
@@ -203,7 +204,9 @@ internal fun loadFileFacts(ctx: Context, f: PickedFile, summaryOnly: Boolean = f
         if (sig != null && mimeByExt != null && !sameFamily(sig.mime, mimeByExt) && ext !in zipLikeExts) {
             rows += MetaRow("Warning", "The name says $mimeByExt but the content looks like ${sig.label}")
         }
-        lastModified(ctx, f)?.let { rows += MetaRow("Last modified", fmtDate(it)) }
+        lastModified(ctx, f)?.let {
+            rows += if (editable) MetaRow("Last modified", fmtDate(it), editTag = "file.lastModified", editValue = isoUtc(it)) else MetaRow("Last modified", fmtDate(it))
+        }
         f.path?.let { p ->
             rows += MetaRow("Location", p)
             val file = File(p)
@@ -651,3 +654,10 @@ private fun textSections(path: String, h: ByteArray, n: Int, ext: String): List<
     rows += MetaRow(if (got == cap) "Lines (first 1 MB)" else "Lines", (crlf + lf + cr + 1).toString())
     return listOf(MetaSection("Text file", rows))
 }
+
+internal fun isoUtc(millis: Long): String =
+    java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }.format(java.util.Date(millis))
+
+internal fun parseIsoUtc(text: String): Long? = runCatching {
+    java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US).parse(text.trim().replace("Z", "+00:00"))!!.time
+}.getOrNull()

@@ -29,17 +29,49 @@ private fun parseOps(json: String): List<Op> {
 internal fun buildMetadataJobs(r: ToolRequest): List<ToolJob> {
     val files = r.files("media")
     if (files.isEmpty()) fail("Choose a file first.")
+    val all = parseOps(r.str("meta.ops"))
+    val fileOps = all.filter { it.key.startsWith("file.") }
+    val ops = all - fileOps.toSet()
+    if (fileOps.any { it.key == "file.name" } && files.size > 1) fail("Renaming works on one file at a time.")
+    val fileJobs = if (fileOps.isEmpty()) emptyList() else files.map { fileJob(r, it, fileOps) }
+    val useName = r.bool("meta.useFilename") && !isImageName(files.first().name)
+    val cover = r.file("cover")
+    val removeCover = r.bool("meta.coverRemove")
+    if (ops.isEmpty() && !useName && cover == null && !removeCover) {
+        if (fileJobs.isEmpty()) fail("Change a tag or the cover art first.")
+        return fileJobs
+    }
+    val ops = parseOps(r.str("meta.ops"))
+    if (files.any { !isMetaEditable(r.ctx, it) }) {
+        if (ops.isNotEmpty() && ops.all { it.key.startsWith("file.") } && files.all { it.path != null }) return files.map { fileJob(r, it, ops) }
+    }
     files.firstOrNull { !isMetaEditable(r.ctx, it) }?.let {
-        fail("${it.name} can't be edited here. Photos, audio and video can be changed; for other files you can read every detail and copy it.")
+        fail("${it.name} can't be edited here. Photos, audio and video can be changed; for other files you can change the name and the last modified date.")
     }
     val photo = isImageName(files.first().name)
     if (files.any { isImageName(it.name) != photo }) fail("Pick photos, or audio and video files, but not both at once.")
-    val ops = parseOps(r.str("meta.ops"))
-    val useName = r.bool("meta.useFilename") && !photo
-    val cover = r.file("cover")
-    val removeCover = r.bool("meta.coverRemove")
-    if (ops.isEmpty() && !useName && cover == null && !removeCover) fail("Change a tag or the cover art first.")
-    return files.map { f -> if (photo) photoJob(r, f, ops) else mediaJob(r, f, ops, useName, cover, removeCover) }
+    return files.map { f -> if (photo) photoJob(r, f, ops) else mediaJob(r, f, ops, useName, cover, removeCover) } + fileJobs
+}
+
+/** Changes the original file in place. It runs after any tag job so the other jobs still find the old name. */
+private fun fileJob(r: ToolRequest, f: PickedFile, ops: List<Op>): ToolJob {
+    val path = f.path ?: fail("${f.name} has no file path here, so its name and date can't be changed. Pick it from the file browser.")
+    return ToolJob(r.toolTitle, f.name, null, native = { withContext(Dispatchers.IO) { applyFileOps(path, ops) } })
+}
+
+private fun applyFileOps(path: String, ops: List<Op>) {
+    val file = File(path)
+    if (!file.isFile) throw IllegalStateException("${file.name} isn't there any more.")
+    ops.firstOrNull { it.key == "file.lastModified" }?.value?.let { v ->
+        val ms = parseIsoUtc(v) ?: throw IllegalArgumentException("Date must look like 2024-05-31T14:30:00Z")
+        if (!file.setLastModified(ms)) throw IllegalStateException("Couldn't change the date. The folder may be read-only.")
+    }
+    ops.firstOrNull { it.key == "file.name" }?.value?.trim()?.let { name ->
+        if (name.isEmpty() || '/' in name) throw IllegalArgumentException("That file name isn't allowed.")
+        val target = File(file.parentFile, name)
+        if (target.exists() && target.path != file.path) throw IllegalStateException("A file called $name already exists there.")
+        if (target.path != file.path && !file.renameTo(target)) throw IllegalStateException("Couldn't rename the file. The folder may be read-only.")
+    }
 }
 
 private fun mediaJob(r: ToolRequest, f: PickedFile, ops: List<Op>, useName: Boolean, cover: PickedFile?, removeCover: Boolean): ToolJob {
@@ -89,4 +121,23 @@ private fun writeExif(r: ToolRequest, f: PickedFile, out: File, ops: List<Op>) {
         } else exif.setAttribute(op.key, v)
     }
     exif.saveAttributes()
+}
+
+/** Changes the file itself (its name or modified date) in place, so there is no output file. */
+private fun fileJob(r: ToolRequest, f: PickedFile, ops: List<Op>): ToolJob {
+    val newName = ops.firstOrNull { it.key == "file.name" }?.value?.trim()
+    val time = ops.firstOrNull { it.key == "file.lastModified" }?.value?.let { parseIsoUtc(it) ?: fail("Date must look like 2024-05-31T14:30:00Z") }
+    if (newName != null && r.files("media").size > 1) fail("Rename one file at a time.")
+    if (newName != null && (newName.isEmpty() || '/' in newName)) fail("That file name isn't valid.")
+    return ToolJob(r.toolTitle, f.name, null, native = {
+        withContext(Dispatchers.IO) {
+            val file = File(f.path!!)
+            if (time != null && !file.setLastModified(time)) throw IllegalStateException("Couldn't change the date of ${f.name}.")
+            if (newName != null && newName != file.name) {
+                val target = File(file.parentFile, newName)
+                if (target.exists()) throw IllegalStateException("A file called $newName already exists there.")
+                if (!file.renameTo(target)) throw IllegalStateException("Couldn't rename ${f.name}.")
+            }
+        }
+    })
 }
