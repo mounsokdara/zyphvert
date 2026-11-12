@@ -48,7 +48,7 @@ internal fun MetadataEditor(vm: ToolViewModel) {
         if (files.size > 1) {
             Surface(shape = MetaShape, color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.fillMaxWidth()) {
                 Text(
-                    "Showing ${files.first().name}. Your changes apply to all ${files.size} files; tags you don't touch stay as they are.",
+                    "Changes apply to all ${files.size} files.",
                     Modifier.padding(16.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSecondaryContainer,
                 )
             }
@@ -130,10 +130,6 @@ private fun TagsCard(vm: ToolViewModel, photo: Boolean, audio: Boolean) {
                 Text(if (photo) "Photo details" else "Tags", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
                 Text("${vm.metaTags.count { it.value.isNotBlank() }}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Text(
-                if (audio) "Fill in or change any tag, like title, artist and album. Tap × to remove a tag from the file." else "Every tag the file has is listed. Change a value to edit it, or tap × to remove the tag.",
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
             if (!photo) {
                 val on = vm.values["meta.useFilename"] == "true"
                 Row(
@@ -199,10 +195,6 @@ private fun ReadOnlyCard(info: MetaInfo) {
     Surface(shape = MetaShape, color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(info.kind ?: "File", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSecondaryContainer)
-            Text(
-                "Every detail Zyphvert can read from this file is listed below. Tap any value to edit or copy it, or copy everything with the button. Name and modified date can be changed; tags in photos, audio and video too.",
-                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSecondaryContainer,
-            )
         }
     }
 }
@@ -226,7 +218,6 @@ private fun DetailsCard(vm: ToolViewModel, info: MetaInfo, startOpen: Boolean = 
             }
             AnimatedVisibility(open) {
                 Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Tap any value to edit or copy it.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     info.sections.forEach { s ->
                         Text(s.title, Modifier.padding(top = 10.dp), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                         s.rows.forEach { row ->
@@ -262,14 +253,10 @@ private fun EditDetailDialog(row: MetaRow, onCopy: () -> Unit, onDismiss: () -> 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (editable) {
                     OutlinedTextField(value = text, onValueChange = { text = it }, label = { Text(if (name) "File name" else "Date and time (UTC)") }, singleLine = true, shape = RoundedCornerShape(16.dp))
-                    Text(
-                        if (name) "The file is renamed when you tap Save changes." else "Format: 2024-05-31T14:30:00Z. Applied when you tap Save changes.",
-                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                 } else {
                     Text(row.value, style = MaterialTheme.typography.bodyLarge)
                     Text(
-                        "This value is worked out from the file's content, so it can't be edited without corrupting the file.",
+                        "Can't be edited.",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }

@@ -543,7 +543,7 @@ val toolSpecs: Map<String, ToolSpec> = listOf(
 
     ToolSpec(
         id = "meta",
-        intro = "See everything stored in a file and change it: tags, dates, camera and location, and cover art. Pick one file or many; your changes apply to all of them.",
+        intro = "View and edit file details.",
         inputs = listOf(InputSlot("media", "Files", InKind.Any, multiple = true)),
         options = listOf(Opt.Metadata()),
         actionLabel = "Save changes",
