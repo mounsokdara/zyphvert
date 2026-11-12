@@ -121,6 +121,12 @@ class ToolViewModel @Inject constructor(
         if (k.isNotEmpty() && metaTags.none { it.key.equals(k, ignoreCase = true) }) metaTags += MetaTag(k, "", null)
     }
 
+    fun setTag(key: String, value: String, orig: String?) {
+        val v = value.trim()
+        val t = metaTags.firstOrNull { it.key.equals(key, ignoreCase = true) }
+        if (t != null) t.value = v else if (v.isNotEmpty()) metaTags += MetaTag(key, v, orig)
+    }
+
     fun removeTag(tag: MetaTag) { metaTags.remove(tag) }
 
     fun setCover(ctx: Context, f: PickedFile) {

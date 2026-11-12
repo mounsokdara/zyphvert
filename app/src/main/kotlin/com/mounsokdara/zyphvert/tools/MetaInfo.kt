@@ -11,7 +11,7 @@ import com.mounsokdara.zyphvert.engine.MediaEngine
 import org.json.JSONObject
 import java.util.Locale
 
-class MetaRow(val key: String, val value: String)
+class MetaRow(val key: String, val value: String, val editTag: String? = null, val editValue: String? = null)
 class MetaSection(val title: String, val rows: List<MetaRow>)
 
 class MetaInfo(

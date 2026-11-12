@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Info
@@ -71,7 +72,7 @@ internal fun MetadataEditor(vm: ToolViewModel) {
                 if (info?.audio == true) CoverCard(vm, info.cover)
                 TagsCard(vm, photo = info?.photo == true, audio = info?.audio == true)
             }
-            if (info != null) DetailsCard(info, startOpen = info.readOnly)
+            if (info != null) DetailsCard(vm, info, startOpen = info.readOnly)
         }
     }
 }
@@ -207,9 +208,10 @@ private fun ReadOnlyCard(info: MetaInfo) {
 }
 
 @Composable
-private fun DetailsCard(info: MetaInfo, startOpen: Boolean = false) {
+private fun DetailsCard(vm: ToolViewModel, info: MetaInfo, startOpen: Boolean = false) {
     if (info.sections.isEmpty()) return
     var open by remember { mutableStateOf(startOpen) }
+    var editing by remember { mutableStateOf<MetaRow?>(null) }
     val clipboard = LocalClipboardManager.current
     Surface(shape = MetaShape, color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
         Column {
@@ -224,15 +226,20 @@ private fun DetailsCard(info: MetaInfo, startOpen: Boolean = false) {
             }
             AnimatedVisibility(open) {
                 Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Tap a value to copy it.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(if (info.readOnly) "Tap a value to copy it." else "Tap a value to copy it. Values with a pencil can be edited.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     info.sections.forEach { s ->
                         Text(s.title, Modifier.padding(top = 10.dp), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                         s.rows.forEach { row ->
+                            val tag = row.editTag
+                            val pending = tag?.let { k -> vm.metaTags.firstOrNull { it.key.equals(k, ignoreCase = true) }?.value?.takeIf { it.isNotBlank() && it != row.editValue } }
                             Row(
-                                Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { clipboard.setText(AnnotatedString(row.value)) }.padding(vertical = 4.dp),
+                                Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                                    .clickable { if (tag != null) editing = row else clipboard.setText(AnnotatedString(row.value)) }.padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Text(row.key, Modifier.weight(0.4f), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(row.value, Modifier.weight(0.6f), style = MaterialTheme.typography.bodyMedium)
+                                Text(pending ?: row.value, Modifier.weight(0.6f), style = MaterialTheme.typography.bodyMedium)
+                                if (tag != null) Icon(Icons.Rounded.Edit, "Edit ${row.key}", Modifier.padding(start = 8.dp).size(18.dp), tint = MaterialTheme.colorScheme.primary)
                             }
                         }
                     }
@@ -240,4 +247,22 @@ private fun DetailsCard(info: MetaInfo, startOpen: Boolean = false) {
             }
         }
     }
+    editing?.let { row -> EditDetailDialog(row, onDismiss = { editing = null }) { v -> vm.setTag(row.editTag!!, v, null); editing = null } }
+}
+
+@Composable
+private fun EditDetailDialog(row: MetaRow, onDismiss: () -> Unit, onSave: (String) -> Unit) {
+    var text by remember { mutableStateOf(row.editValue.orEmpty()) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit ${row.key}") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(value = text, onValueChange = { text = it }, label = { Text("Date and time (UTC)") }, singleLine = true, shape = RoundedCornerShape(16.dp))
+                Text("Format: 2024-05-31T14:30:00Z. The file stores one time for both creation and modification.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        },
+        confirmButton = { TextButton(onClick = { onSave(text) }, enabled = text.isNotBlank()) { Text("Apply") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
