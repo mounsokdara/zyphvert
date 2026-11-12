@@ -654,10 +654,3 @@ private fun textSections(path: String, h: ByteArray, n: Int, ext: String): List<
     rows += MetaRow(if (got == cap) "Lines (first 1 MB)" else "Lines", (crlf + lf + cr + 1).toString())
     return listOf(MetaSection("Text file", rows))
 }
-
-internal fun isoUtc(millis: Long): String =
-    java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }.format(java.util.Date(millis))
-
-internal fun parseIsoUtc(text: String): Long? = runCatching {
-    java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US).parse(text.trim().replace("Z", "+00:00"))!!.time
-}.getOrNull()
