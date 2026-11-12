@@ -2,11 +2,16 @@ package com.mounsokdara.zyphvert.tools.svg
 
 import android.graphics.Bitmap
 import java.util.Random
+import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.atan2
+import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlin.math.sin
 import kotlin.math.sqrt
+import kotlin.math.tan
 
 class TraceOptions(
     val colors: Int = 8,
@@ -16,6 +21,8 @@ class TraceOptions(
     val removeBg: Boolean = false,
     /** Experimental: replace traced loops that look like circles, ellipses, rectangles or simple polygons with clean primitives. */
     val shapes: Boolean = false,
+    /** 1..100: how aggressively the shape redraw simplifies and snaps. */
+    val strength: Int = 60,
     val speck: Int = 3,
     val maxSide: Int = 1024,
     val minify: Boolean = true,
@@ -82,12 +89,14 @@ object Vectorizer {
             val holes = loops.filter { it.area < 0f }
             val path = StringBuilder()
             val shapes = StringBuilder()
+            val st = o.strength.coerceIn(1, 100) / 100f
             for (lp in loops) {
-                if (o.shapes && lp.area > 0f) {
-                    val s = fitShape(lp, scale, holes)
-                    if (s != null) { shapes.append(s).append(nl); continue }
+                val fit = if (o.shapes) fitShape(lp, st, rgb, scale) else null
+                if (fit != null) {
+                    if (lp.area > 0f && !holeInside(lp, holes)) { shapes.append(fit.elem).append(nl); continue }
+                    if (fit.pathD != null) { path.append(fit.pathD); continue }
                 }
-                appendLoop(path, lp, eps, o.curves, scale)
+                appendLoop(path, lp, if (o.shapes) eps * (1f + 1.8f * st) else eps, o.curves, scale, o.shapes)
             }
             sb.append("<g fill=\"").append(rgb).append("\">").append(nl)
             if (path.isNotEmpty()) sb.append("<path fill-rule=\"evenodd\" d=\"").append(path).append("\"/>").append(nl)
@@ -270,10 +279,26 @@ object Vectorizer {
         return if (r < 0) "-$s" else s
     }
 
-    private fun appendLoop(sb: StringBuilder, lp: Loop, eps: Float, curves: Boolean, s: Float) {
-        val (x, y) = simplify(lp.x, lp.y, eps)
+    private fun snapAxes(x: FloatArray, y: FloatArray, tolDeg: Float, minLen: Float): BooleanArray {
+        val n = x.size
+        val flat = BooleanArray(n)
+        val t = tan(tolDeg * PI.toFloat() / 180f)
+        for (i in 0 until n) {
+            val j = (i + 1) % n
+            val dx = x[j] - x[i]; val dy = y[j] - y[i]
+            if (sqrt(dx * dx + dy * dy) < minLen) continue
+            if (abs(dy) <= t * abs(dx)) { val m = (y[i] + y[j]) / 2f; y[i] = m; y[j] = m; flat[i] = true }
+            else if (abs(dx) <= t * abs(dy)) { val m = (x[i] + x[j]) / 2f; x[i] = m; x[j] = m; flat[i] = true }
+        }
+        return flat
+    }
+
+    private fun appendLoop(sb: StringBuilder, lp: Loop, eps: Float, curves: Boolean, s: Float, snap: Boolean) {
+        val (sx, sy) = simplify(lp.x, lp.y, eps)
+        val x = sx.copyOf(); val y = sy.copyOf()
         val n = x.size
         if (n < 3) return
+        val flat = if (snap) snapAxes(x, y, 4f, 6f) else BooleanArray(n)
         sb.append('M').append(f(x[0] * s)).append(' ').append(f(y[0] * s))
         if (!curves) {
             for (i in 1 until n) sb.append('L').append(f(x[i] * s)).append(' ').append(f(y[i] * s))
@@ -284,7 +309,11 @@ object Vectorizer {
             val p = (i + n - 1) % n; val q = (i + 1) % n
             val ax = x[i] - x[p]; val ay = y[i] - y[p]; val bx = x[q] - x[i]; val by = y[q] - y[i]
             val la = sqrt(ax * ax + ay * ay); val lb = sqrt(bx * bx + by * by)
-            la == 0f || lb == 0f || (ax * bx + ay * by) / (la * lb) < 0.5f
+            if (la == 0f || lb == 0f) true
+            else {
+                val c = (ax * bx + ay * by) / (la * lb)
+                c < 0.5f || ((flat[p] || flat[i]) && c < 0.94f)
+            }
         }
         for (i in 0 until n) {
             val i0 = (i + n - 1) % n; val i1 = i; val i2 = (i + 1) % n; val i3 = (i + 2) % n
@@ -305,42 +334,152 @@ object Vectorizer {
 
     // ---- experimental shape redraw -------------------------------------------------------------
 
-    private fun fitShape(lp: Loop, s: Float, holes: List<Loop>): String? {
-        if (lp.area < 40f) return null
+    private class Fit(val elem: String, val pathD: String?)
+
+    private class Frame(val ang: Float, val w: Float, val h: Float, val cu: Float, val cv: Float) {
+        val c = cos(ang); val s = sin(ang)
+        fun u(x: Float, y: Float) = x * c + y * s
+        fun v(x: Float, y: Float) = -x * s + y * c
+        fun wx(u: Float, v: Float) = u * c - v * s
+        fun wy(u: Float, v: Float) = u * s + v * c
+        val cx get() = wx(cu, cv)
+        val cy get() = wy(cu, cv)
+    }
+
+    private fun frameOf(lp: Loop, ang: Float): Frame {
+        val c = cos(ang); val s = sin(ang)
+        var minU = Float.MAX_VALUE; var maxU = -Float.MAX_VALUE; var minV = Float.MAX_VALUE; var maxV = -Float.MAX_VALUE
+        for (i in lp.x.indices) {
+            val u = lp.x[i] * c + lp.y[i] * s; val v = -lp.x[i] * s + lp.y[i] * c
+            minU = min(minU, u); maxU = max(maxU, u); minV = min(minV, v); maxV = max(maxV, v)
+        }
+        return Frame(ang, maxU - minU, maxV - minV, (minU + maxU) / 2f, (minV + maxV) / 2f)
+    }
+
+    /** Principal axis of the filled polygon (exact area moments, not boundary samples). */
+    private fun pcaAngle(lp: Loop): Float {
+        val n = lp.x.size
+        var a = 0f; var sx = 0f; var sy = 0f
+        for (i in 0 until n) {
+            val j = (i + 1) % n
+            val cr = lp.x[i] * lp.y[j] - lp.x[j] * lp.y[i]
+            a += cr; sx += (lp.x[i] + lp.x[j]) * cr; sy += (lp.y[i] + lp.y[j]) * cr
+        }
+        if (abs(a) < 1e-3f) return 0f
+        val cx = sx / (3f * a); val cy = sy / (3f * a)
+        var ixx = 0f; var iyy = 0f; var ixy = 0f
+        for (i in 0 until n) {
+            val j = (i + 1) % n
+            val x0 = lp.x[i] - cx; val y0 = lp.y[i] - cy; val x1 = lp.x[j] - cx; val y1 = lp.y[j] - cy
+            val cr = x0 * y1 - x1 * y0
+            iyy += (x0 * x0 + x0 * x1 + x1 * x1) * cr
+            ixx += (y0 * y0 + y0 * y1 + y1 * y1) * cr
+            ixy += (x0 * y1 + 2f * x0 * y0 + 2f * x1 * y1 + x1 * y0) * cr
+        }
+        val varX = iyy / 12f; val varY = ixx / 12f; val cov = ixy / 24f
+        return 0.5f * atan2(2f * cov, varX - varY)
+    }
+
+    private fun holeInside(lp: Loop, holes: List<Loop>): Boolean {
+        if (holes.isEmpty()) return false
         var minX = Float.MAX_VALUE; var minY = Float.MAX_VALUE; var maxX = -Float.MAX_VALUE; var maxY = -Float.MAX_VALUE
         for (i in lp.x.indices) { minX = min(minX, lp.x[i]); maxX = max(maxX, lp.x[i]); minY = min(minY, lp.y[i]); maxY = max(maxY, lp.y[i]) }
-        val bw = maxX - minX; val bh = maxY - minY
-        if (bw < 4f || bh < 4f) return null
         for (hl in holes) {
             var hx = 0f; var hy = 0f
             for (i in hl.x.indices) { hx += hl.x[i]; hy += hl.y[i] }
             hx /= hl.x.size; hy /= hl.y.size
-            if (hx in minX..maxX && hy in minY..maxY) return null
+            if (hx in minX..maxX && hy in minY..maxY) return true
         }
-        val ratio = lp.area / (bw * bh)
-        if (ratio > 0.97f) {
-            return "<rect x=\"${f(minX * s)}\" y=\"${f(minY * s)}\" width=\"${f(bw * s)}\" height=\"${f(bh * s)}\"/>"
-        }
-        if (ratio in 0.74f..0.83f && lp.x.size >= 12) {
-            val cx = (minX + maxX) / 2f; val cy = (minY + maxY) / 2f; val rx = bw / 2f; val ry = bh / 2f
-            var sum = 0f; var worst = 0f
-            for (i in lp.x.indices) {
-                val ux = (lp.x[i] - cx) / rx; val uy = (lp.y[i] - cy) / ry
-                val e = abs(sqrt(ux * ux + uy * uy) - 1f)
-                sum += e; worst = max(worst, e)
+        return false
+    }
+
+    private fun rot(fr: Frame, s: Float): String {
+        val deg = Math.round(fr.ang * 1800f / PI.toFloat()) / 10f
+        return if (abs(deg) < 0.05f) "" else " transform=\"rotate(${f(deg)} ${f(fr.cx * s)} ${f(fr.cy * s)})\""
+    }
+
+    private fun fitShape(lp: Loop, st: Float, rgb: String, s: Float): Fit? {
+        val n = lp.x.size
+        val absA = abs(lp.area)
+        if (absA < 30f || n < 4) return null
+        val frames = ArrayList<Frame>()
+        frames.add(frameOf(lp, 0f))
+        val ang0 = pcaAngle(lp)
+        val dm = (((ang0 * 180f / PI.toFloat()) % 90f) + 90f) % 90f
+        if (dm > 2f && dm < 88f) frames.add(frameOf(lp, ang0))
+        val tolR = 0.025f + 0.045f * st
+        val tolW = 0.015f + 0.03f * st
+
+        for (fr in frames) {
+            if (fr.w < 4f || fr.h < 4f) continue
+            val ratio = absA / (fr.w * fr.h)
+            if (ratio > 0.965f) {
+                val x0 = fr.cu - fr.w / 2f; val x1 = fr.cu + fr.w / 2f; val y0 = fr.cv - fr.h / 2f; val y1 = fr.cv + fr.h / 2f
+                val d = StringBuilder("M")
+                for ((i, uv) in listOf(x0 to y0, x1 to y0, x1 to y1, x0 to y1).withIndex()) {
+                    if (i > 0) d.append('L')
+                    d.append(f(fr.wx(uv.first, uv.second) * s)).append(' ').append(f(fr.wy(uv.first, uv.second) * s))
+                }
+                d.append('Z')
+                val el = "<rect x=\"${f((fr.cx - fr.w / 2f) * s)}\" y=\"${f((fr.cy - fr.h / 2f) * s)}\" width=\"${f(fr.w * s)}\" height=\"${f(fr.h * s)}\"${rot(fr, s)}/>"
+                return Fit(el, d.toString())
             }
-            if (sum / lp.x.size < 0.04f && worst < 0.14f) {
-                return if (abs(rx - ry) < 0.06f * max(rx, ry))
-                    "<circle cx=\"${f(cx * s)}\" cy=\"${f(cy * s)}\" r=\"${f((rx + ry) / 2f * s)}\"/>"
-                else "<ellipse cx=\"${f(cx * s)}\" cy=\"${f(cy * s)}\" rx=\"${f(rx * s)}\" ry=\"${f(ry * s)}\"/>"
+            if (ratio in 0.72f..0.84f && n >= 8) {
+                val rx = fr.w / 2f; val ry = fr.h / 2f
+                var sum = 0f; var worst = 0f
+                for (i in 0 until n) {
+                    val du = (fr.u(lp.x[i], lp.y[i]) - fr.cu) / rx; val dv = (fr.v(lp.x[i], lp.y[i]) - fr.cv) / ry
+                    val e = abs(sqrt(du * du + dv * dv) - 1f)
+                    sum += e; worst = max(worst, e)
+                }
+                if (sum / n < tolR && worst < 0.1f + 0.15f * st) {
+                    val round = abs(rx - ry) < 0.06f * max(rx, ry)
+                    val rr = (rx + ry) / 2f
+                    val ax = if (round) rr else rx; val ay = if (round) rr else ry
+                    val p1x = fr.cx + ax * fr.c; val p1y = fr.cy + ax * fr.s
+                    val p2x = fr.cx - ax * fr.c; val p2y = fr.cy - ax * fr.s
+                    val deg = f(fr.ang * 180f / PI.toFloat())
+                    val arc = "A${f(ax * s)} ${f(ay * s)} $deg 0 1 "
+                    val d = "M${f(p1x * s)} ${f(p1y * s)}" + arc + "${f(p2x * s)} ${f(p2y * s)}" + arc + "${f(p1x * s)} ${f(p1y * s)}Z"
+                    val el = if (round) "<circle cx=\"${f(fr.cx * s)}\" cy=\"${f(fr.cy * s)}\" r=\"${f(rr * s)}\"/>"
+                    else "<ellipse cx=\"${f(fr.cx * s)}\" cy=\"${f(fr.cy * s)}\" rx=\"${f(rx * s)}\" ry=\"${f(ry * s)}\"${rot(fr, s)}/>"
+                    return Fit(el, d)
+                }
+            }
+            if (ratio in 0.78f..0.965f) {
+                val r = sqrt((1f - ratio) * fr.w * fr.h / (4f - PI.toFloat()))
+                if (r >= 1.5f && r <= min(fr.w, fr.h) / 2f + 0.5f) {
+                    val hw = fr.w / 2f - r; val hh = fr.h / 2f - r
+                    var sum = 0f
+                    for (i in 0 until n) {
+                        val qx = abs(fr.u(lp.x[i], lp.y[i]) - fr.cu) - hw; val qy = abs(fr.v(lp.x[i], lp.y[i]) - fr.cv) - hh
+                        val sd = sqrt(max(qx, 0f) * max(qx, 0f) + max(qy, 0f) * max(qy, 0f)) + min(max(qx, qy), 0f) - r
+                        sum += abs(sd)
+                    }
+                    if (sum / n < tolW * min(fr.w, fr.h)) {
+                        val el = "<rect x=\"${f((fr.cx - fr.w / 2f) * s)}\" y=\"${f((fr.cy - fr.h / 2f) * s)}\" width=\"${f(fr.w * s)}\" height=\"${f(fr.h * s)}\" rx=\"${f(r * s)}\"${rot(fr, s)}/>"
+                        return Fit(el, null)
+                    }
+                }
             }
         }
-        val diag = sqrt(bw * bw + bh * bh)
-        val (px, py) = simplify(lp.x, lp.y, diag * 0.012f)
-        if (px.size in 3..8) {
-            val pts = StringBuilder()
-            for (i in px.indices) { if (i > 0) pts.append(' '); pts.append(f(px[i] * s)).append(',').append(f(py[i] * s)) }
-            return "<polygon points=\"$pts\"/>"
+
+        val diag = sqrt(frames[0].w * frames[0].w + frames[0].h * frames[0].h)
+        val (sx, sy) = simplify(lp.x, lp.y, diag * (0.008f + 0.03f * st))
+        val maxV = 6 + (st * 6f).toInt()
+        if (sx.size in 3..maxV) {
+            val px = sx.copyOf(); val py = sy.copyOf()
+            snapAxes(px, py, 4f, 4f)
+            if (abs(abs(area(px, py)) - absA) / absA < 0.1f) {
+                val pts = StringBuilder(); val d = StringBuilder("M")
+                for (i in px.indices) {
+                    if (i > 0) { pts.append(' '); d.append('L') }
+                    pts.append(f(px[i] * s)).append(',').append(f(py[i] * s))
+                    d.append(f(px[i] * s)).append(' ').append(f(py[i] * s))
+                }
+                d.append('Z')
+                return Fit("<polygon points=\"$pts\"/>", d.toString())
+            }
         }
         return null
     }
