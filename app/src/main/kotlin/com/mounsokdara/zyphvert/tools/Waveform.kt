@@ -8,7 +8,6 @@ import android.net.Uri
 import java.nio.ByteOrder
 import kotlin.math.abs
 
-/** Decodes the first audio track and returns [bars] peak levels from 0 to 1, or null when there is no audio. */
 internal fun loadPeaks(ctx: Context, uri: Uri, bars: Int, alive: () -> Boolean): FloatArray? = runCatching {
     val ex = MediaExtractor()
     var codec: MediaCodec? = null

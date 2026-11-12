@@ -24,7 +24,6 @@ class MetaInfo(
     val sections: List<MetaSection>,
     val cover: Bitmap?,
     val readOnly: Boolean = false,
-    val kind: String? = null,
 ) {
     fun asText(): String = sections.joinToString("\n\n") { s ->
         s.title + "\n" + s.rows.joinToString("\n") { "${it.key}: ${it.value}" }
@@ -89,10 +88,9 @@ internal suspend fun loadMetaInfo(ctx: Context, engine: MediaEngine, f: PickedFi
 private fun loadGenericInfo(ctx: Context, f: PickedFile): MetaInfo {
     val facts = loadFileFacts(ctx, f, editable = true)
     val extra = extractorSections(ctx, f)
-    val kind = facts.firstOrNull()?.rows?.firstOrNull { it.key == "Detected type" }?.value
     return MetaInfo(
         photo = false, audio = false, tags = emptyList(), sections = facts + extra, cover = null,
-        readOnly = true, kind = kind,
+        readOnly = true,
     )
 }
 

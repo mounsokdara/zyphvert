@@ -30,11 +30,6 @@ class SvgSource(val text: String, val width: Float, val height: Float)
 
 class RenderSpec(val width: Int, val height: Int, val background: Int)
 
-/**
- * Renders SVG (including CSS animations, SMIL and scripts) with an offscreen WebView, fully offline.
- * A virtual clock is injected so every frame is deterministic: performance.now, Date.now,
- * requestAnimationFrame, setTimeout/setInterval, CSS/Web animations and SMIL all follow the frame time.
- */
 object SvgRenderer {
 
     private const val CLOCK = """
@@ -263,7 +258,6 @@ window.__bake=function(){
         withContext(Dispatchers.IO) { out.parentFile?.mkdirs(); out.writeText(text) }
     }
 
-    /** Writes f_00001.ext, f_00002.ext ... into [dir]. */
     suspend fun framesTo(
         ctx: Context, uri: Uri, dir: File, ext: String, widthOpt: Int, bg: Int, scripts: Boolean,
         fps: Int, durationSec: Int, quality: Int, even: Boolean, cap: Float,

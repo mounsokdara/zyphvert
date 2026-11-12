@@ -42,7 +42,6 @@ android {
         applicationId = "com.mounsokdara.zyphvert"
         minSdk = 24
         targetSdk = 35
-        // One version for every APK/AAB: straight from version.txt, no per-ABI multiplier.
         versionCode = verCode
         versionName = verName
         resourceConfigurations += "en"
@@ -91,7 +90,6 @@ android {
     }
 
     packaging {
-        // Compressed native libs: much smaller APK (libs are extracted at install).
         jniLibs { useLegacyPackaging = true }
         resources {
             excludes += setOf(

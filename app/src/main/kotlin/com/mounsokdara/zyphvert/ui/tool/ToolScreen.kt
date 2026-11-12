@@ -36,7 +36,6 @@ import com.mounsokdara.zyphvert.ui.components.AppSheet
 import com.mounsokdara.zyphvert.tools.*
 import com.mounsokdara.zyphvert.ui.components.SectionLabel
 import com.mounsokdara.zyphvert.ui.home.Tool
-import com.mounsokdara.zyphvert.ui.home.accent
 import com.mounsokdara.zyphvert.ui.files.PickRequest
 import com.mounsokdara.zyphvert.ui.files.rememberFilePicker
 import com.mounsokdara.zyphvert.util.StorageAccess

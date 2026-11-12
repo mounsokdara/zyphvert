@@ -19,20 +19,15 @@ class TraceOptions(
     val curves: Boolean = true,
     val stacked: Boolean = true,
     val removeBg: Boolean = false,
-    /** Experimental: replace traced loops that look like circles, ellipses, rectangles or simple polygons with clean primitives. */
+
     val shapes: Boolean = false,
-    /** 1..100: how aggressively the shape redraw simplifies and snaps. */
+
     val strength: Int = 60,
     val speck: Int = 3,
     val maxSide: Int = 1024,
     val minify: Boolean = true,
 )
 
-/**
- * Offline raster to SVG tracer: k-means colour quantisation, per-colour boundary tracing,
- * Douglas-Peucker simplification and Catmull-Rom to Bezier curves.
- * "Redraw shapes" is classical geometric fitting (no neural network, no download), and is experimental.
- */
 object Vectorizer {
 
     private class Loop(val x: FloatArray, val y: FloatArray, val area: Float)
@@ -106,8 +101,6 @@ object Vectorizer {
         return sb.toString()
     }
 
-    // ---- colour quantisation -------------------------------------------------------------------
-
     private fun dist(c: FloatArray, r: Float, g: Float, b: Float): Float {
         val dr = c[0] - r; val dg = c[1] - g; val db = c[2] - b
         return 2f * dr * dr + 4f * dg * dg + 3f * db * db
@@ -178,8 +171,6 @@ object Vectorizer {
         }
     }
 
-    // ---- boundary tracing ----------------------------------------------------------------------
-
     private val DX = intArrayOf(1, 0, -1, 0)
     private val DY = intArrayOf(0, 1, 0, -1)
 
@@ -236,8 +227,6 @@ object Vectorizer {
         return s / 2f
     }
 
-    // ---- simplification and curves -------------------------------------------------------------
-
     private fun segDist(px: Float, py: Float, ax: Float, ay: Float, bx: Float, by: Float): Float {
         val dx = bx - ax; val dy = by - ay
         val l2 = dx * dx + dy * dy
@@ -247,7 +236,6 @@ object Vectorizer {
         return sqrt((px - qx) * (px - qx) + (py - qy) * (py - qy))
     }
 
-    /** Douglas-Peucker on a closed loop. Returns kept points in order. */
     private fun simplify(x: FloatArray, y: FloatArray, eps: Float): Pair<FloatArray, FloatArray> {
         val n = x.size
         if (n <= 4) return x to y
@@ -332,8 +320,6 @@ object Vectorizer {
         sb.append('Z')
     }
 
-    // ---- experimental shape redraw -------------------------------------------------------------
-
     private class Fit(val elem: String, val pathD: String?)
 
     private class Frame(val ang: Float, val w: Float, val h: Float, val cu: Float, val cv: Float) {
@@ -356,7 +342,6 @@ object Vectorizer {
         return Frame(ang, maxU - minU, maxV - minV, (minU + maxU) / 2f, (minV + maxV) / 2f)
     }
 
-    /** Principal axis of the filled polygon (exact area moments, not boundary samples). */
     private fun pcaAngle(lp: Loop): Float {
         val n = lp.x.size
         var a = 0f; var sx = 0f; var sy = 0f

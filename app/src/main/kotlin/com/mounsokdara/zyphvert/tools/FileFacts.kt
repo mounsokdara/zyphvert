@@ -184,7 +184,6 @@ private fun lastModified(ctx: Context, f: PickedFile): Long? {
     }.getOrNull()
 }
 
-/** Everything we can say about any file, whatever its format. */
 internal fun loadFileFacts(ctx: Context, f: PickedFile, summaryOnly: Boolean = false, editable: Boolean = false): List<MetaSection> {
     val sections = mutableListOf<MetaSection>()
     val size = fileSize(ctx, f)
@@ -259,8 +258,6 @@ private fun sameFamily(a: String, b: String): Boolean {
     if (major != "image" && major != "audio" && major != "video") return true
     return a == b || a.substringAfter('/').take(3) == b.substringAfter('/').take(3)
 }
-
-// ---- ZIP family -------------------------------------------------------------------------------------
 
 private fun zipSections(ctx: Context, f: PickedFile, path: String, ext: String): List<MetaSection> {
     val out = mutableListOf<MetaSection>()
@@ -420,8 +417,6 @@ private fun xmlLeafRows(ins: InputStream, skip: Set<String> = emptySet()): List<
     return rows
 }
 
-// ---- gzip / tar ---------------------------------------------------------------------------------------
-
 private fun gzipSections(path: String): List<MetaSection> = RandomAccessFile(path, "r").use { raf ->
     val h = ByteArray(10); raf.readFully(h)
     val flg = h[3].toInt() and 0xFF
@@ -478,8 +473,6 @@ private fun tarSections(path: String): List<MetaSection> = RandomAccessFile(path
     if (owner.length > 1) rows += MetaRow("First entry owner", owner)
     listOf(MetaSection("TAR", rows), MetaSection("Contents ($count)", names))
 }
-
-// ---- PDF --------------------------------------------------------------------------------------------
 
 private fun pdfDate(s: String): String {
     val m = Regex("""D:(\d{4})(\d{2})?(\d{2})?(\d{2})?(\d{2})?(\d{2})?([Z+\-].*)?""").find(s) ?: return s
@@ -560,8 +553,6 @@ private fun pdfSections(path: String, size: Long): List<MetaSection> {
     if (found == 0) rows += MetaRow("Document info", "None found. It may be stored in a compressed part of the file.")
     return listOf(MetaSection("PDF", rows))
 }
-
-// ---- SQLite, text, OLE2, Mach-O ----------------------------------------------------------------------------
 
 private fun sqliteSections(h: ByteArray, n: Int): List<MetaSection> {
     if (n < 100) return emptyList()

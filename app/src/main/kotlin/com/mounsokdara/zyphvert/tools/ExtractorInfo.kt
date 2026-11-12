@@ -5,10 +5,6 @@ import com.drew.imaging.ImageMetadataReader
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-/**
- * Reads photo, RAW, HEIF, WebP, MP4/MOV, AVI, WAV and other tags with the open source metadata-extractor
- * library (EXIF, XMP, IPTC, ICC profiles, maker notes). Returns nothing when the format isn't recognised.
- */
 internal fun extractorSections(ctx: Context, f: PickedFile): List<MetaSection> = runCatching {
     val md = ctx.contentResolver.openInputStream(f.uri)?.use { ImageMetadataReader.readMetadata(it.buffered(64 * 1024)) }
         ?: return@runCatching emptyList<MetaSection>()
@@ -24,7 +20,6 @@ internal fun extractorSections(ctx: Context, f: PickedFile): List<MetaSection> =
     }
 }.getOrDefault(emptyList())
 
-/** QuickTime stores one creation time for the whole file, so both rows edit the same `creation_time` tag. */
 private fun timeRow(name: String, shown: String): MetaRow {
     val iso = runCatching { isoUtc(SimpleDateFormat("EEE MMM dd HH:mm:ss XXX yyyy", Locale.US).parse(shown)!!.time) }.getOrNull()
     return MetaRow(name, shown, editTag = iso?.let { "creation_time" }, editValue = iso)

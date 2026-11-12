@@ -49,7 +49,6 @@ internal fun buildMetadataJobs(r: ToolRequest): List<ToolJob> {
     return files.map { f -> if (photo) photoJob(r, f, ops) else mediaJob(r, f, ops, useName, cover, removeCover) } + fileJobs
 }
 
-/** Changes the original file in place. It runs after any tag job so the other jobs still find the old name. */
 private fun fileJob(r: ToolRequest, f: PickedFile, ops: List<Op>): ToolJob {
     val path = f.path ?: fail("${f.name} has no file path here, so its name and date can't be changed. Pick it from the file browser.")
     return ToolJob(r.toolTitle, f.name, null, native = { withContext(Dispatchers.IO) { applyFileOps(path, ops) } })

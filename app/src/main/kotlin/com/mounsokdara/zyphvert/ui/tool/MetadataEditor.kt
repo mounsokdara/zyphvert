@@ -66,9 +66,7 @@ internal fun MetadataEditor(vm: ToolViewModel) {
                     Text("Couldn't read this file's metadata. You can still add tags.", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onErrorContainer)
                 }
             }
-            if (info?.readOnly == true) {
-                ReadOnlyCard(info)
-            } else {
+            if (info?.readOnly != true) {
                 if (info?.audio == true) CoverCard(vm, info.cover)
                 TagsCard(vm, photo = info?.photo == true, audio = info?.audio == true)
             }
@@ -186,15 +184,6 @@ private fun AddTagSheet(vm: ToolViewModel, photo: Boolean, audio: Boolean, onDis
                 }
             }
             Spacer(Modifier.height(16.dp))
-        }
-    }
-}
-
-@Composable
-private fun ReadOnlyCard(info: MetaInfo) {
-    Surface(shape = MetaShape, color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(info.kind ?: "File", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSecondaryContainer)
         }
     }
 }

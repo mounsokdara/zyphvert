@@ -1,6 +1,5 @@
 package com.mounsokdara.zyphvert.tools
 
-
 internal class AFmt(
     val key: String, val label: String, val ext: String, val codec: String,
     val lossy: Boolean = true, val cover: Boolean = false, val mux: String = "",
