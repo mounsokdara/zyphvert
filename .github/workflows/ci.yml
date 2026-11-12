@@ -133,6 +133,8 @@ jobs:
             KEY_PASS="${{ secrets.KEY_PASSWORD }}" \
             scripts/sign-apk.sh "$SRC" "dist/zyphvert-${{ matrix.abi }}.apk"
           fi
+          chmod +x scripts/check-version.sh
+          scripts/check-version.sh dist/*.apk
           ls -lh dist/
 
       - name: Remove key.properties and keystore

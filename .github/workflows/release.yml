@@ -179,6 +179,15 @@ jobs:
           echo "── dist contents ──"
           ls -lh dist/
 
+      - name: Version must match version.txt (all APKs and the tag)
+        run: |
+          chmod +x scripts/check-version.sh
+          scripts/check-version.sh dist/*.apk
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            WANT="v$(grep -m1 '^VERSION_NAME=' version.txt | cut -d= -f2 | tr -d '[:space:]')"
+            [ "${GITHUB_REF_NAME}" = "$WANT" ] || { echo "::error::tag ${GITHUB_REF_NAME} does not match version.txt ($WANT)"; exit 1; }
+          fi
+
       - name: Verify every APK with apksigner
         run: |
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/release.p12"

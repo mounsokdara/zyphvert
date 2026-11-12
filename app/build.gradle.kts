@@ -12,6 +12,10 @@ plugins {
 val versionProps = Properties().apply {
     rootProject.file("version.txt").inputStream().use { load(it) }
 }
+val verName = versionProps.getProperty("VERSION_NAME")?.trim().orEmpty()
+val verCode = versionProps.getProperty("VERSION_CODE")?.trim()?.toIntOrNull()
+require(Regex("""\d+\.\d+\.\d+""").matches(verName)) { "version.txt: VERSION_NAME must look like 1.2.3, got '$verName'" }
+require(verCode != null && verCode > 0) { "version.txt: VERSION_CODE must be a positive integer" }
 
 val keystorePropsFile = rootProject.file("key.properties")
 val keystoreProps = Properties()
@@ -34,12 +38,15 @@ android {
     namespace = "com.mounsokdara.zyphvert"
     compileSdk = 35
 
+    androidResources { localeFilters += "en" }
+
     defaultConfig {
         applicationId = "com.mounsokdara.zyphvert"
         minSdk = 24
         targetSdk = 35
-        versionCode = versionProps.getProperty("VERSION_CODE").trim().toInt()
-        versionName = versionProps.getProperty("VERSION_NAME").trim()
+        // One version for every APK/AAB: straight from version.txt, no per-ABI multiplier.
+        versionCode = verCode
+        versionName = verName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -85,8 +92,26 @@ android {
     }
 
     packaging {
-        jniLibs { useLegacyPackaging = false }
-        resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" }
+        // Compressed native libs: much smaller APK (libs are extracted at install).
+        jniLibs { useLegacyPackaging = true }
+        resources {
+            excludes += setOf(
+                "/META-INF/{AL2.0,LGPL2.1}",
+                "/META-INF/*.version",
+                "/META-INF/*.kotlin_module",
+                "/META-INF/DEPENDENCIES",
+                "/META-INF/INDEX.LIST",
+                "/META-INF/LICENSE*",
+                "/META-INF/NOTICE*",
+                "/META-INF/proguard/**",
+                "/META-INF/com.android.tools/**",
+                "/META-INF/versions/**",
+                "/META-INF/maven/**",
+                "/kotlin/**",
+                "DebugProbesKt.bin",
+                "kotlin-tooling-metadata.json",
+            )
+        }
     }
 
     compileOptions {
