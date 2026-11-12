@@ -508,7 +508,7 @@ private fun kindLabel(kind: InKind) = when (kind) {
     InKind.Media -> "Video & audio"
     InKind.Image -> "Images"
     InKind.Visual -> "Video & images"
-    InKind.Svg -> "SVG images"
+    InKind.Svg -> "SVG & images"
     InKind.Any -> "All files"
 }
 

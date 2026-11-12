@@ -10,7 +10,7 @@ enum class InKind(val mimes: Array<String>, val exts: Set<String>?) {
     Media(arrayOf("video/*", "audio/*"), VIDEO_EXTS + AUDIO_EXTS),
     Image(arrayOf("image/*"), IMAGE_EXTS),
     Visual(arrayOf("video/*", "image/*"), VIDEO_EXTS + IMAGE_EXTS),
-    Svg(arrayOf("image/svg+xml", "*/*"), setOf("svg", "svgz")),
+    Svg(arrayOf("image/*", "*/*"), IMAGE_EXTS + setOf("svg", "svgz")),
     Any(arrayOf("*/*"), null),
     ;
 
@@ -64,7 +64,7 @@ sealed class Opt(
         showIf: ((Map<String, String>) -> Boolean)? = null, advanced: Boolean = false,
     ) : Opt(id, label, showIf, advanced) { override val default = "" }
 
-    class Presets(id: String, label: String, val presets: List<Preset>) : Opt(id, label) { override val default = "" }
+    class Presets(id: String, label: String, val presets: List<Preset>, showIf: ((Map<String, String>) -> Boolean)? = null) : Opt(id, label, showIf) { override val default = "" }
 
     class Name(id: String = "name", label: String = "Save as") : Opt(id, label) { override val default = "" }
 

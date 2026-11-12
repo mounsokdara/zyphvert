@@ -25,6 +25,7 @@ private val svgTargets = it2(
     Triple("frames", "PNG frames", "One image per frame, in a folder"),
     Triple("svg_static", "Static SVG", "Bakes CSS and scripts into plain shapes at one moment"),
     Triple("svg_min", "Minified SVG", "Removes comments, metadata and extra whitespace"),
+    Triple("trace", "Trace picture to SVG", "Pick a PNG, JPG or any picture to get a scalable SVG"),
 )
 
 private val svgWidths = listOf(Item("0", "Auto (at least 512 px)")) +
@@ -120,49 +121,38 @@ private val tracePresets = listOf(
 val svgToolSpecs: List<ToolSpec> = listOf(
     ToolSpec(
         id = "svg",
-        intro = "Turn any SVG into an image, a video or a clean static SVG. Animated SVGs with CSS, SMIL or JavaScript are rendered frame by frame, fully offline.",
-        hint = "Scripts run in a sandbox with no network access. Turn them off under Advanced if you don't trust the file.",
-        inputs = listOf(InputSlot("media", "SVG files", InKind.Svg, multiple = true)),
+        intro = "One place for everything SVG. Turn an SVG, even an animated one with CSS, SMIL or JavaScript, into an image, video, GIF or clean static SVG. Or trace any picture into an SVG. All offline.",
+        hint = "Scripts run in a sandbox with no network access. Turn them off under Advanced if you don't trust the file. Redraw shapes is experimental and uses on-device geometry, not a neural network.",
+        inputs = listOf(InputSlot("media", "SVG files or pictures", InKind.Svg, multiple = true)),
         options = listOf(
             Opt.Name(),
             Opt.Choice("sfmt", "Convert to", svgTargets),
-            Opt.Choice("sw", "Size", svgWidths, showIf = { it["sfmt"] != "svg_min" }),
+            Opt.Choice("sw", "Size", svgWidths, showIf = { it["sfmt"] != "svg_min" && it["sfmt"] != "trace" }),
             Opt.Choice("sbg", "Background", listOf(
                 Item("transparent", "Transparent", "JPG and MP4 use white"), Item("white", "White"), Item("black", "Black"), Item("custom", "Custom color"),
-            ), showIf = { it["sfmt"] != "svg_min" && it["sfmt"] != "svg_static" }),
-            Opt.Text("sbgc", "Color (hex)", "#ffcc00", showIf = { it["sbg"] == "custom" && it["sfmt"] != "svg_min" }),
+            ), showIf = { it["sfmt"] != "svg_min" && it["sfmt"] != "svg_static" && it["sfmt"] != "trace" }),
+            Opt.Text("sbgc", "Color (hex)", "#ffcc00", showIf = { it["sbg"] == "custom" && it["sfmt"] != "svg_min" && it["sfmt"] != "trace" }),
             Opt.Choice("sfps", "Frame rate", listOf(Item("30", "30 fps"), Item("24", "24 fps"), Item("60", "60 fps"), Item("12", "12 fps")),
                 showIf = { it["sfmt"] in animatedSvg }),
             Opt.Slider("sdur", "Duration (0 = detect automatically)", 0, 60, 0, " s", showIf = { it["sfmt"] in animatedSvg }),
             Opt.Slider("sat", "Capture at", 0, 60, 0, " s", showIf = { it["sfmt"] in stillSvg }),
             Opt.Slider("sq", "Quality", 1, 100, 90, "%", showIf = { it["sfmt"] == "jpg" || it["sfmt"] == "webp" }),
             Opt.Toggle("sloop", "Loop forever", true, showIf = { it["sfmt"] == "gif" || it["sfmt"] == "apng" || it["sfmt"] == "awebp" }, advanced = true),
-            Opt.Toggle("sjs", "Run scripts inside the SVG", true, "Needed for JavaScript animations", showIf = { it["sfmt"] != "svg_min" }, advanced = true),
-        ),
-        build = { r -> r.files("media").flatMap { svgJobs(r, it) } },
-    ),
-
-    ToolSpec(
-        id = "img2svg",
-        intro = "Turn a PNG, JPG or any picture into a scalable SVG. Everything runs on your phone, with colors, detail and layering you control.",
-        hint = "Redraw shapes is experimental. It uses on-device geometry to snap circles, ellipses, rectangles and simple polygons, and may miss or misjudge shapes.",
-        inputs = listOf(InputSlot("media", "Images", InKind.Image, multiple = true)),
-        options = listOf(
-            Opt.Name(),
-            Opt.Presets("vpreset", "Quick preset", tracePresets),
-            Opt.Choice("vcol", "Colors", traceItems),
-            Opt.Slider("vdet", "Detail", 1, 100, 60, "%"),
-            Opt.Choice("vmode", "Edges", listOf(Item("spline", "Smooth curves"), Item("polygon", "Straight lines"))),
-            Opt.Toggle("vbg", "Remove background", false, "Drops the color that touches the image border"),
+            Opt.Toggle("sjs", "Run scripts inside the SVG", true, "Needed for JavaScript animations", showIf = { it["sfmt"] != "svg_min" && it["sfmt"] != "trace" }, advanced = true),
+            Opt.Presets("vpreset", "Quick preset", tracePresets, showIf = { it["sfmt"] == "trace" }),
+            Opt.Choice("vcol", "Colors", traceItems, showIf = { it["sfmt"] == "trace" }),
+            Opt.Slider("vdet", "Detail", 1, 100, 60, "%", showIf = { it["sfmt"] == "trace" }),
+            Opt.Choice("vmode", "Edges", listOf(Item("spline", "Smooth curves"), Item("polygon", "Straight lines")), showIf = { it["sfmt"] == "trace" }),
+            Opt.Toggle("vbg", "Remove background", false, "Drops the color that touches the image border", showIf = { it["sfmt"] == "trace" }),
             Opt.Toggle("vshape", "Redraw shapes with AI (experimental)", false,
-                "Offline, on-device. Replaces shapes that look like circles, ellipses, rectangles or polygons with clean ones."),
-            Opt.Choice("vlayer", "Layering", listOf(Item("stacked", "Stacked", "No gaps between colors"), Item("cutout", "Cutout", "Separate pieces")), advanced = true),
-            Opt.Slider("vspk", "Remove specks", 0, 30, 3, " px", advanced = true),
-            Opt.Choice("vmax", "Trace resolution", listOf(1024, 512, 768, 1536).map { Item("$it", "$it px") }, advanced = true),
-            Opt.Toggle("vmin", "Minify output", true, advanced = true),
+                "Offline, on-device. Replaces shapes that look like circles, ellipses, rectangles or polygons with clean ones.", showIf = { it["sfmt"] == "trace" }),
+            Opt.Choice("vlayer", "Layering", listOf(Item("stacked", "Stacked", "No gaps between colors"), Item("cutout", "Cutout", "Separate pieces")), showIf = { it["sfmt"] == "trace" }, advanced = true),
+            Opt.Slider("vspk", "Remove specks", 0, 30, 3, " px", showIf = { it["sfmt"] == "trace" }, advanced = true),
+            Opt.Choice("vmax", "Trace resolution", listOf(1024, 512, 768, 1536).map { Item("$it", "$it px") }, showIf = { it["sfmt"] == "trace" }, advanced = true),
+            Opt.Toggle("vmin", "Minify output", true, showIf = { it["sfmt"] == "trace" }, advanced = true),
         ),
-        actionLabel = "Trace",
         build = { r ->
+            if (r.str("sfmt") == "trace") {
             val o = TraceOptions(
                 colors = r.str("vcol").toIntOrNull() ?: 8,
                 detail = r.int("vdet").takeIf { it > 0 } ?: 60,
@@ -175,6 +165,7 @@ val svgToolSpecs: List<ToolSpec> = listOf(
                 minify = r.str("vmin") != "false",
             )
             r.files("media").map { f ->
+                if (nameExt(f.name) in setOf("svg", "svgz")) throw IllegalArgumentException("Tracing needs a picture. Pick a PNG, JPG or similar, or choose another format for an SVG.")
                 val out = r.out("SVG", f, "svg")
                 ToolJob(r.toolTitle, f.name, out.path, native = {
                     val bmp = decodeBitmap(r.ctx, f.uri)
@@ -186,6 +177,13 @@ val svgToolSpecs: List<ToolSpec> = listOf(
                     }
                 })
             }
+            } else {
+                r.files("media").flatMap { f ->
+                    if (nameExt(f.name) !in setOf("svg", "svgz")) throw IllegalArgumentException("Pick an SVG file for this format, or choose Trace picture to SVG for a picture.")
+                    svgJobs(r, f)
+                }
+            }
         },
     ),
 )
+
