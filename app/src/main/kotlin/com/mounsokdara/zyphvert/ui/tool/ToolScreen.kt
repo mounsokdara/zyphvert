@@ -101,8 +101,6 @@ fun ToolScreen(tool: Tool, seedPath: String?, onBack: () -> Unit, onQueued: () -
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                IntroCard(tool, spec)
-
                 spec.inputs.forEach { slot ->
                     SlotCard(slot, vm.picked[slot.id].orEmpty()) { vm.setFiles(slot.id, it) }
                 }
@@ -164,17 +162,6 @@ fun ToolScreen(tool: Tool, seedPath: String?, onBack: () -> Unit, onQueued: () -
 
 @Composable private fun BackButton(onBack: () -> Unit) {
     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") }
-}
-
-@Composable
-private fun IntroCard(tool: Tool, spec: ToolSpec) {
-    val accent = tool.category.accent()
-    Surface(shape = CardShape, color = accent.container, contentColor = accent.content, modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(20.dp), verticalAlignment = Alignment.Top) {
-            Icon(tool.icon, null, Modifier.size(32.dp))
-            Text(spec.intro, Modifier.padding(start = 16.dp), style = MaterialTheme.typography.bodyLarge)
-        }
-    }
 }
 
 @Composable
