@@ -69,7 +69,7 @@ internal fun MetadataEditor(vm: ToolViewModel) {
                 ReadOnlyCard(info)
             } else {
                 if (info?.audio == true) CoverCard(vm, info.cover)
-                TagsCard(vm, photo = info?.photo == true)
+                TagsCard(vm, photo = info?.photo == true, audio = info?.audio == true)
             }
             if (info != null) DetailsCard(info, startOpen = info.readOnly)
         }
@@ -121,16 +121,16 @@ private fun CoverCard(vm: ToolViewModel, current: android.graphics.Bitmap?) {
 }
 
 @Composable
-private fun TagsCard(vm: ToolViewModel, photo: Boolean) {
+private fun TagsCard(vm: ToolViewModel, photo: Boolean, audio: Boolean) {
     var adding by remember { mutableStateOf(false) }
     Surface(shape = MetaShape, color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(if (photo) "Photo details" else "Tags", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-                Text("${vm.metaTags.size}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("${vm.metaTags.count { it.value.isNotBlank() }}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Text(
-                "Every tag the file has is listed. Change a value to edit it, or tap × to remove the tag.",
+                if (audio) "Fill in or change any tag, like title, artist and album. Tap × to remove a tag from the file." else "Every tag the file has is listed. Change a value to edit it, or tap × to remove the tag.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (!photo) {
@@ -143,7 +143,7 @@ private fun TagsCard(vm: ToolViewModel, photo: Boolean) {
                     Text("Use file name as title")
                 }
             }
-            if (vm.metaTags.isEmpty()) {
+            if (vm.metaTags.isEmpty() && !audio) {
                 Text("Nothing stored yet.", style = MaterialTheme.typography.bodyMedium)
             }
             vm.metaTags.forEach { t ->
@@ -159,14 +159,14 @@ private fun TagsCard(vm: ToolViewModel, photo: Boolean) {
             }
         }
     }
-    if (adding) AddTagSheet(vm, photo) { adding = false }
+    if (adding) AddTagSheet(vm, photo, audio) { adding = false }
 }
 
 @Composable
-private fun AddTagSheet(vm: ToolViewModel, photo: Boolean, onDismiss: () -> Unit) {
+private fun AddTagSheet(vm: ToolViewModel, photo: Boolean, audio: Boolean, onDismiss: () -> Unit) {
     var custom by remember { mutableStateOf("") }
     val have = vm.metaTags.map { it.key.lowercase() }.toSet()
-    val options = (if (photo) exifSuggestions else mediaTagSuggestions).filter { it.lowercase() !in have }
+    val options = (if (photo) exifSuggestions else if (audio) audioTagSuggestions else mediaTagSuggestions).filter { it.lowercase() !in have }
     AppSheet(onDismiss) { close ->
         Column(
             Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).navigationBarsPadding().imePadding(),

@@ -38,6 +38,21 @@ internal val mediaTagSuggestions = listOf(
 
 internal val standardMediaTags = mediaTagSuggestions.toSet()
 
+internal val audioTagDefaults = listOf(
+    "title", "artist", "album_artist", "album", "track", "disc", "date", "genre", "composer", "comment", "lyrics",
+)
+
+internal val audioTagSuggestions = audioTagDefaults + listOf("performer", "publisher", "copyright", "language", "grouping", "compilation")
+
+internal fun canonAudioKey(k: String): String = when (k.lowercase().replace(" ", "")) {
+    "albumartist", "album_artist" -> "album_artist"
+    "tracknumber", "track" -> "track"
+    "discnumber", "disc" -> "disc"
+    "year", "date" -> "date"
+    "unsyncedlyrics", "lyrics" -> "lyrics"
+    else -> k.lowercase()
+}
+
 internal val exifSuggestions = listOf(
     "ImageDescription", "Make", "Model", "Software", "Artist", "Copyright", "DateTime", "DateTimeOriginal",
     "DateTimeDigitized", "UserComment", "LensMake", "LensModel", "CameraOwnerName", "BodySerialNumber",
@@ -81,9 +96,13 @@ private suspend fun loadMediaInfo(ctx: Context, engine: MediaEngine, f: PickedFi
     }
     val root = runCatching { JSONObject(text.substring(text.indexOf('{').coerceAtLeast(0))) }.getOrNull()
     val fmt = root?.optJSONObject("format")
-    val tags = fmt?.optJSONObject("tags")?.strings().orEmpty()
+    val probed = fmt?.optJSONObject("tags")?.strings().orEmpty()
         .filterKeys { it.lowercase() !in readOnlyTags }
         .map { MetaRow(it.key, it.value) }
+    val tags = if (isAudioName(f.name)) {
+        val have = probed.map { canonAudioKey(it.key) }.toSet()
+        probed + readAudioTags(ctx, f).filter { canonAudioKey(it.key) !in have }
+    } else probed
 
     val sections = mutableListOf<MetaSection>()
     if (fmt != null) {
@@ -205,4 +224,81 @@ private fun decodeBitmap(bytes: ByteArray, max: Int): Bitmap? {
     var sample = 1
     while (bounds.outWidth / (sample * 2) >= max && bounds.outHeight / (sample * 2) >= max) sample *= 2
     return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
+}
+
+private fun readAudioTags(ctx: Context, f: PickedFile): List<MetaRow> {
+    val out = LinkedHashMap<String, String>()
+    if (nameExt(f.name) == "mp3") runCatching { readId3(ctx, f.uri) }.getOrNull()?.forEach { (k, v) -> out[k] = v }
+    runCatching {
+        val r = MediaMetadataRetriever()
+        try {
+            r.setDataSource(ctx, f.uri)
+            fun put(k: String, code: Int) {
+                if (k in out) return
+                r.extractMetadata(code)?.trim()?.takeIf { it.isNotEmpty() }?.let { out[k] = it }
+            }
+            put("title", MediaMetadataRetriever.METADATA_KEY_TITLE)
+            put("artist", MediaMetadataRetriever.METADATA_KEY_ARTIST)
+            put("album_artist", MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST)
+            put("album", MediaMetadataRetriever.METADATA_KEY_ALBUM)
+            put("track", MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER)
+            put("disc", MediaMetadataRetriever.METADATA_KEY_DISC_NUMBER)
+            put("date", MediaMetadataRetriever.METADATA_KEY_YEAR)
+            put("genre", MediaMetadataRetriever.METADATA_KEY_GENRE)
+            put("composer", MediaMetadataRetriever.METADATA_KEY_COMPOSER)
+        } finally { r.release() }
+    }
+    return out.map { MetaRow(it.key, it.value) }
+}
+
+private fun readId3(ctx: Context, uri: Uri): Map<String, String> {
+    val out = LinkedHashMap<String, String>()
+    ctx.contentResolver.openInputStream(uri)?.use { raw ->
+        val ins = java.io.DataInputStream(raw.buffered(64 * 1024))
+        val h = ByteArray(10)
+        ins.readFully(h)
+        if (h[0] != 'I'.code.toByte() || h[1] != 'D'.code.toByte() || h[2] != '3'.code.toByte()) return out
+        val ver = h[3].toInt()
+        if (ver != 3 && ver != 4) return out
+        fun synch(b: ByteArray, o: Int) = (b[o].toInt() and 0x7f shl 21) or (b[o + 1].toInt() and 0x7f shl 14) or (b[o + 2].toInt() and 0x7f shl 7) or (b[o + 3].toInt() and 0x7f)
+        fun plain(b: ByteArray, o: Int) = (b[o].toInt() and 0xff shl 24) or (b[o + 1].toInt() and 0xff shl 16) or (b[o + 2].toInt() and 0xff shl 8) or (b[o + 3].toInt() and 0xff)
+        val total = synch(h, 6)
+        if (total <= 0 || total > 24 * 1024 * 1024) return out
+        val body = ByteArray(total)
+        ins.readFully(body)
+        var pos = 0
+        if (h[5].toInt() and 0x40 != 0 && total >= 4) pos = if (ver == 4) synch(body, 0) else plain(body, 0) + 4
+        fun term(d: ByteArray, from: Int, enc: Int): Int {
+            var i = from
+            if (enc == 1 || enc == 2) { while (i + 1 < d.size) { if (d[i].toInt() == 0 && d[i + 1].toInt() == 0) return i; i += 2 }; return d.size }
+            while (i < d.size && d[i].toInt() != 0) i++
+            return i
+        }
+        fun text(d: ByteArray, from: Int, enc: Int): String {
+            if (from >= d.size) return ""
+            val cs = when (enc) { 0 -> Charsets.ISO_8859_1; 1 -> Charsets.UTF_16; 2 -> Charsets.UTF_16BE; else -> Charsets.UTF_8 }
+            return String(d, from, d.size - from, cs).split('\u0000').map { it.trim() }.filter { it.isNotEmpty() }.joinToString("; ")
+        }
+        while (pos + 10 <= total) {
+            if (body[pos].toInt() == 0) break
+            val id = String(body, pos, 4, Charsets.ISO_8859_1)
+            val size = if (ver == 4) synch(body, pos + 4) else plain(body, pos + 4)
+            val start = pos + 10
+            if (size <= 0 || start + size > total) break
+            val d = body.copyOfRange(start, start + size)
+            pos = start + size
+            val enc = d[0].toInt()
+            val key = when (id) {
+                "TIT2" -> "title"; "TPE1" -> "artist"; "TPE2" -> "album_artist"; "TALB" -> "album"
+                "TRCK" -> "track"; "TPOS" -> "disc"; "TDRC", "TYER" -> "date"; "TCON" -> "genre"; "TCOM" -> "composer"
+                "COMM" -> "comment"; "USLT" -> "lyrics"
+                else -> continue
+            }
+            val v = if (id == "COMM" || id == "USLT") {
+                if (d.size < 5) "" else text(d, term(d, 4, enc) + (if (enc == 1 || enc == 2) 2 else 1), enc)
+            } else text(d, 1, enc)
+            if (v.isNotEmpty() && key !in out) out[key] = v
+        }
+    }
+    return out
 }

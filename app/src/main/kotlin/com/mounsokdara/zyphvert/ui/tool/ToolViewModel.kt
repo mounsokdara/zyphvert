@@ -19,6 +19,8 @@ import com.mounsokdara.zyphvert.tools.ToolSpec
 import com.mounsokdara.zyphvert.tools.MetaInfo
 import com.mounsokdara.zyphvert.tools.cleanMetaKey
 import com.mounsokdara.zyphvert.tools.loadImageBitmap
+import com.mounsokdara.zyphvert.tools.audioTagDefaults
+import com.mounsokdara.zyphvert.tools.canonAudioKey
 import com.mounsokdara.zyphvert.tools.loadMetaInfo
 import com.mounsokdara.zyphvert.tools.resolveLive
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -99,7 +101,16 @@ class ToolViewModel @Inject constructor(
             val info = withContext(Dispatchers.IO) { runCatching { loadMetaInfo(ctx.applicationContext, manager.engine, f) }.getOrNull() }
             if (metaFor == f.uri) {
                 meta = info
-                info?.tags?.forEach { metaTags += MetaTag(it.key, it.value, it.value) }
+                if (info?.audio == true) {
+                    val byKey = info.tags.associateBy { canonAudioKey(it.key) }
+                    audioTagDefaults.forEach { k ->
+                        val e = byKey[k]
+                        metaTags += MetaTag(e?.key ?: k, e?.value.orEmpty(), e?.value)
+                    }
+                    info.tags.filter { canonAudioKey(it.key) !in audioTagDefaults }.forEach { metaTags += MetaTag(it.key, it.value, it.value) }
+                } else {
+                    info?.tags?.forEach { metaTags += MetaTag(it.key, it.value, it.value) }
+                }
                 metaLoading = false
             }
         }
