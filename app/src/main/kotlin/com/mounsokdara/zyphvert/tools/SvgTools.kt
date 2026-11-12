@@ -14,6 +14,7 @@ private val stillSvg = setOf("png", "jpg", "webp", "svg_static")
 private fun it2(vararg p: Triple<String, String, String?>) = p.map { Item(it.first, it.second, it.third) }
 
 private val svgTargets = it2(
+    Triple("trace", "Picture to SVG", "Turns PNG, JPG and other pictures into a scalable SVG"),
     Triple("png", "PNG", "Sharp, keeps transparency"),
     Triple("jpg", "JPG", null),
     Triple("webp", "WebP", null),
@@ -25,7 +26,6 @@ private val svgTargets = it2(
     Triple("frames", "PNG frames", "One image per frame, in a folder"),
     Triple("svg_static", "Static SVG", "Bakes CSS and scripts into plain shapes at one moment"),
     Triple("svg_min", "Minified SVG", "Removes comments, metadata and extra whitespace"),
-    Triple("trace", "Trace picture to SVG", "Pick a PNG, JPG or any picture to get a scalable SVG"),
 )
 
 private val svgWidths = listOf(Item("0", "Auto (at least 512 px)")) +
@@ -34,8 +34,7 @@ private val svgWidths = listOf(Item("0", "Auto (at least 512 px)")) +
 private fun hexColor(s: String, fallback: Int): Int =
     runCatching { Color.parseColor(if (s.startsWith("#")) s.trim() else "#" + s.trim()) }.getOrDefault(fallback)
 
-private fun svgJobs(r: ToolRequest, f: PickedFile): List<ToolJob> {
-    val fmt = r.str("sfmt").ifEmpty { "png" }
+private fun svgJobs(r: ToolRequest, f: PickedFile, fmt: String): List<ToolJob> {
     val scripts = r.str("sjs") != "false"
     val bgKey = r.str("sbg").ifEmpty { "transparent" }
     val opaque = fmt == "jpg" || fmt == "mp4"
@@ -121,8 +120,8 @@ private val tracePresets = listOf(
 val svgToolSpecs: List<ToolSpec> = listOf(
     ToolSpec(
         id = "svg",
-        intro = "One place for everything SVG. Turn an SVG, even an animated one with CSS, SMIL or JavaScript, into an image, video, GIF or clean static SVG. Or trace any picture into an SVG. All offline.",
-        hint = "Scripts run in a sandbox with no network access. Turn them off under Advanced if you don't trust the file. Redraw shapes is experimental and uses on-device geometry, not a neural network.",
+        intro = "One place for everything SVG. Pick a picture (PNG, JPG, WebP...) to turn it into an SVG, or pick an SVG, even an animated one with CSS or JavaScript, to turn it into an image, video, GIF or clean static SVG. All offline.",
+        hint = "Pictures are always traced into SVG. To export an SVG, pick it and choose a format below. Scripts run in a sandbox with no network access. Turn them off under Advanced if you don't trust the file. Redraw shapes is experimental and uses on-device geometry, not a neural network.",
         inputs = listOf(InputSlot("media", "SVG files or pictures", InKind.Svg, multiple = true)),
         options = listOf(
             Opt.Name(),
@@ -153,7 +152,6 @@ val svgToolSpecs: List<ToolSpec> = listOf(
             Opt.Toggle("vmin", "Minify output", true, showIf = { it["sfmt"] == "trace" }, advanced = true),
         ),
         build = { r ->
-            if (r.str("sfmt") == "trace") {
             val o = TraceOptions(
                 colors = r.str("vcol").toIntOrNull() ?: 8,
                 detail = r.int("vdet").takeIf { it > 0 } ?: 60,
@@ -166,23 +164,21 @@ val svgToolSpecs: List<ToolSpec> = listOf(
                 maxSide = r.str("vmax").toIntOrNull() ?: 1024,
                 minify = r.str("vmin") != "false",
             )
-            r.files("media").map { f ->
-                if (nameExt(f.name) in setOf("svg", "svgz")) throw IllegalArgumentException("Tracing needs a picture. Pick a PNG, JPG or similar, or choose another format for an SVG.")
-                val out = r.out("SVG", f, "svg")
-                ToolJob(r.toolTitle, f.name, out.path, native = {
-                    val bmp = decodeBitmap(r.ctx, f.uri)
-                    try {
-                        val svg = withContext(Dispatchers.Default) { Vectorizer.trace(bmp, o) }
-                        withContext(Dispatchers.IO) { out.parentFile?.mkdirs(); out.writeText(svg) }
-                    } finally {
-                        bmp.recycle()
-                    }
-                })
-            }
-            } else {
-                r.files("media").flatMap { f ->
-                    if (nameExt(f.name) !in setOf("svg", "svgz")) throw IllegalArgumentException("Pick an SVG file for this format, or choose Trace picture to SVG for a picture.")
-                    svgJobs(r, f)
+            val fmt = r.str("sfmt").ifEmpty { "trace" }
+            r.files("media").flatMap { f ->
+                val isSvg = nameExt(f.name) in setOf("svg", "svgz")
+                if (isSvg) svgJobs(r, f, if (fmt == "trace") "png" else fmt)
+                else {
+                    val out = r.out("SVG", f, "svg")
+                    listOf(ToolJob(r.toolTitle, f.name, out.path, native = {
+                        val bmp = decodeBitmap(r.ctx, f.uri)
+                        try {
+                            val svg = withContext(Dispatchers.Default) { Vectorizer.trace(bmp, o) }
+                            withContext(Dispatchers.IO) { out.parentFile?.mkdirs(); out.writeText(svg) }
+                        } finally {
+                            bmp.recycle()
+                        }
+                    }))
                 }
             }
         },
