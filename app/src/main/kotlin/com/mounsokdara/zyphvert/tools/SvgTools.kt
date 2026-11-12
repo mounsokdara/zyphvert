@@ -151,6 +151,29 @@ val svgToolSpecs: List<ToolSpec> = listOf(
             Opt.Name(),
             Opt.Presets("vpreset", "Quick preset", tracePresets),
             Opt.Choice("vcol", "Colors", traceItems),
+            Opt.Slider("vdet", "Detail", 1, 100, 60, "%"),
+            Opt.Choice("vmode", "Edges", listOf(Item("spline", "Smooth curves"), Item("polygon", "Straight lines"))),
+            Opt.Toggle("vbg", "Remove background", false, "Drops the color that touches the image border"),
+            Opt.Toggle("vshape", "Redraw shapes with AI (experimental)", false,
+                "Offline, on-device. Replaces shapes that look like circles, ellipses, rectangles or polygons with clean ones."),
+            Opt.Choice("vlayer", "Layering", listOf(Item("stacked", "Stacked", "No gaps between colors"), Item("cutout", "Cutout", "Separate pieces")), advanced = true),
+            Opt.Slider("vspk", "Remove specks", 0, 30, 3, " px", advanced = true),
+            Opt.Choice("vmax", "Trace resolution", listOf(1024, 512, 768, 1536).map { Item("$it", "$it px") }, advanced = true),
+            Opt.Toggle("vmin", "Minify output", true, advanced = true),
+        ),
+        actionLabel = "Trace",
+        build = { r ->
+            val o = TraceOptions(
+                colors = r.str("vcol").toIntOrNull() ?: 8,
+                detail = r.int("vdet").takeIf { it > 0 } ?: 60,
+                curves = r.str("vmode") != "polygon",
+                stacked = r.str("vlayer") != "cutout",
+                removeBg = r.bool("vbg"),
+                shapes = r.bool("vshape"),
+                speck = r.int("vspk"),
+                maxSide = r.str("vmax").toIntOrNull() ?: 1024,
+                minify = r.str("vmin") != "false",
+            )
             r.files("media").map { f ->
                 val out = r.out("SVG", f, "svg")
                 ToolJob(r.toolTitle, f.name, out.path, native = {
