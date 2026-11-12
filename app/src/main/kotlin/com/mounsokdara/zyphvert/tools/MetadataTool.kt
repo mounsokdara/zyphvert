@@ -41,10 +41,6 @@ internal fun buildMetadataJobs(r: ToolRequest): List<ToolJob> {
         if (fileJobs.isEmpty()) fail("Change a tag or the cover art first.")
         return fileJobs
     }
-    val ops = parseOps(r.str("meta.ops"))
-    if (files.any { !isMetaEditable(r.ctx, it) }) {
-        if (ops.isNotEmpty() && ops.all { it.key.startsWith("file.") } && files.all { it.path != null }) return files.map { fileJob(r, it, ops) }
-    }
     files.firstOrNull { !isMetaEditable(r.ctx, it) }?.let {
         fail("${it.name} can't be edited here. Photos, audio and video can be changed; for other files you can change the name and the last modified date.")
     }
@@ -121,23 +117,4 @@ private fun writeExif(r: ToolRequest, f: PickedFile, out: File, ops: List<Op>) {
         } else exif.setAttribute(op.key, v)
     }
     exif.saveAttributes()
-}
-
-/** Changes the file itself (its name or modified date) in place, so there is no output file. */
-private fun fileJob(r: ToolRequest, f: PickedFile, ops: List<Op>): ToolJob {
-    val newName = ops.firstOrNull { it.key == "file.name" }?.value?.trim()
-    val time = ops.firstOrNull { it.key == "file.lastModified" }?.value?.let { parseIsoUtc(it) ?: fail("Date must look like 2024-05-31T14:30:00Z") }
-    if (newName != null && r.files("media").size > 1) fail("Rename one file at a time.")
-    if (newName != null && (newName.isEmpty() || '/' in newName)) fail("That file name isn't valid.")
-    return ToolJob(r.toolTitle, f.name, null, native = {
-        withContext(Dispatchers.IO) {
-            val file = File(f.path!!)
-            if (time != null && !file.setLastModified(time)) throw IllegalStateException("Couldn't change the date of ${f.name}.")
-            if (newName != null && newName != file.name) {
-                val target = File(file.parentFile, newName)
-                if (target.exists()) throw IllegalStateException("A file called $newName already exists there.")
-                if (!file.renameTo(target)) throw IllegalStateException("Couldn't rename ${f.name}.")
-            }
-        }
-    })
 }
